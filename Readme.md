@@ -1,12 +1,15 @@
 
-## py-clearmot - CLEAR MOT metrics for multiple object tracker evaluation
+![](etc/mot.png)
+*Pictures courtesy of [1]*
 
-This library provides a Python implementation of CLEAR MOT metrics for evaluation object tracker performances based on 
+## CLEAR MOT metrics for multiple object tracker evaluation
+
+The **py-clearmot** library provides a Python implementation of CLEAR MOT metrics for evaluation object tracker performances based on 
 
 > Bernardin, Keni, and Rainer Stiefelhagen.
 > "Evaluating multiple object tracking performance: the CLEAR MOT metrics." 
 
-Main features are
+Features at a glance
 - Distance agnostic. Supports Euclidean, Intersection over Union and other distances measures.
 - Complete event history. Tracks all relevant per-frame events suchs as correspondences, misses, false alarms and switches. 
 - Uses Python [pandas][1] for data structures and analysis.
@@ -38,6 +41,9 @@ Branch  | Status
 master  | ![](https://travis-ci.org/cheind/py-clearmot.svg?branch=master)
 develop | ![](https://travis-ci.org/cheind/py-clearmot.svg?branch=develop)
 
+### References
+1. Bernardin, Keni, and Rainer Stiefelhagen."Evaluating multiple object tracking performance: the CLEAR MOT metrics." 
+
 ### License
 MIT License
 
@@ -60,5 +66,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+
 
 [1]: http://pandas.pydata.org/
