@@ -11,6 +11,7 @@ if __name__ == '__main__':
     # is passed to the accumulator. Assume that distance matrix given for 
     # now to us.
 
+    # 2 Matches, 1 FP
     cm.update_mot(acc,
         ['a', 'b'],                 # Object ids in this frame reported by ground truth
         [1, 2, 3],                  # Hypothesis ids in this frame reported by detector
@@ -19,6 +20,7 @@ if __name__ == '__main__':
     )
     print(acc.events)
 
+    # 1 Match, 1 Miss
     cm.update_mot(acc,
         ['a', 'b'],
         [1],
@@ -26,6 +28,7 @@ if __name__ == '__main__':
     )
     print(acc.events)
 
+    # 1 Match, 1 Switch
     cm.update_mot(acc,
         ['a', 'b'],
         [1, 3],
@@ -35,5 +38,7 @@ if __name__ == '__main__':
     print(acc.events)
 
     print(cm.compute_stats(acc))
+
+    
 
     
