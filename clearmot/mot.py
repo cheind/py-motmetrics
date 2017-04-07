@@ -16,7 +16,7 @@ from itertools import count
 from scipy.optimize import linear_sum_assignment
 
 
-MOTAccumulator = namedtuple('MOTAccumulator', ['events', 'm', 'auto_id'])
+MOTAccumulator = namedtuple('MOTAccumulator', ['events', 'm', 'auto_id'], verbose=False)
 """Defines the data type for storing MOT related events"""
 
 def new_dataframe():
@@ -33,7 +33,7 @@ def new_dataframe():
     )
     return df
 
-def new_mot(auto_id=False):
+def new_accumulator(auto_id=False):
     """Returns a new accumulator to store MOT related data."""
     return MOTAccumulator(events=new_dataframe(), m={}, auto_id=auto_id)      
 

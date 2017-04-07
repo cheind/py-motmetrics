@@ -18,7 +18,7 @@ from clearmot.metrics import MOTA, MOTP
 def compute_stats(accs, names=None):
     """Compute event statistics of one or more MOT accumulators."""
     
-    if not isinstance(accs, Iterable):
+    if isinstance(accs, MOTAccumulator):
         accs = [accs]
 
     if names is None:

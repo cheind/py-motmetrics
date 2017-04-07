@@ -4,7 +4,7 @@ import pandas as pd
 import clearmot as cm
 
 def test_events():
-    acc = cm.new_mot()
+    acc = cm.new_accumulator()
 
     # All FP
     cm.update_mot(acc, [], ['a', 'b'], [], frameid=0)
@@ -39,7 +39,7 @@ def test_events():
 
 def test_correct_average():
     # Tests what is being depicted in figure 3 of 'Evaluating MOT Performance'
-    acc = cm.new_mot(auto_id=True)
+    acc = cm.new_accumulator(auto_id=True)
     
     # No track
     cm.update_mot(acc, [1, 2, 3, 4], [], [])

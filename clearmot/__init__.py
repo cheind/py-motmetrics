@@ -1,9 +1,9 @@
 
-from .mot import new_mot, new_dataframe, update_mot
+from .mot import new_dataframe, new_accumulator, update_mot
+from .stats import compute_stats, print_stats
 
 import clearmot.metrics
 import clearmot.distances
-import clearmot.stats
 
 
 # Needs to be last line
