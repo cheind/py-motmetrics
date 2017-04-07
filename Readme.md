@@ -1,8 +1,7 @@
-
 ![](etc/mot.png)<br/>
 *Pictures courtesy of Bernardin, Keni, and Rainer Stiefelhagen [1](#1)*
 
-## CLEAR MOT metrics for multiple object tracker evaluation
+## CLEAR MOT metrics
 
 The **py-clearmot** library provides a Python implementation of CLEAR MOT metrics for evaluation object tracker performances based on 
 
