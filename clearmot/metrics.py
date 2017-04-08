@@ -27,6 +27,10 @@ def compute_metrics(data):
     nc = float(nmatch + nswitch)
     ng = float(data['OId'].count())
 
+    objs = data['OId'].value_counts()
+    tracked = data[data['Type'] !='MISS']['OId'].value_counts()   
+    track_ratio = tracked.div(objs).fillna(1.)
+
     metr = OrderedDict()
     metr['Frames'] = nframes
     metr['MATCH'] = nmatch
@@ -39,6 +43,9 @@ def compute_metrics(data):
     metr['PREC'] = savediv(nc, nfp + nc)
     metr['RECALL'] = savediv(nc, ng)
     metr['FAR'] = savediv(nfp, nframes)
+    metr['ML'] = track_ratio[track_ratio < 0.2].count()
+    metr['PT'] = track_ratio[(track_ratio >= 0.2) & (track_ratio < 0.8)].count()
+    metr['MT'] = track_ratio[track_ratio >= 0.8].count()
 
     return metr
 
