@@ -1,6 +1,5 @@
 
-from .mot import new_dataframe, new_accumulator, update_mot
-from .stats import compute_stats, print_stats
+from .mot import new_dataframe, new_accumulator, update
 
 import clearmot.metrics
 import clearmot.distances

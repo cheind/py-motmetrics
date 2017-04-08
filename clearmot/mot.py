@@ -37,7 +37,7 @@ def new_accumulator(auto_id=False):
     """Returns a new accumulator to store MOT related data."""
     return MOTAccumulator(events=new_dataframe(), m={}, auto_id=auto_id)      
 
-def update_mot(acc, oids, hids, dists, frameid=None):
+def update(acc, oids, hids, dists, frameid=None):
     """Update the accumulator with frame specific objects/detections."""
         
     oids = ma.array(oids, mask=np.zeros(len(oids)))

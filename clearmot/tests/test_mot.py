@@ -7,17 +7,17 @@ def test_events():
     acc = cm.new_accumulator()
 
     # All FP
-    cm.update_mot(acc, [], ['a', 'b'], [], frameid=0)
+    cm.update(acc, [], ['a', 'b'], [], frameid=0)
     # All miss
-    cm.update_mot(acc, [1, 2], [], [], frameid=1)
+    cm.update(acc, [1, 2], [], [], frameid=1)
     # Match
-    cm.update_mot(acc, [1, 2], ['a', 'b'], [[1, 0.5], [0.3, 1]], frameid=2)
+    cm.update(acc, [1, 2], ['a', 'b'], [[1, 0.5], [0.3, 1]], frameid=2)
     # Switch
-    cm.update_mot(acc, [1, 2], ['a', 'b'], [[0.2, np.nan], [np.nan, 0.1]], frameid=3)
+    cm.update(acc, [1, 2], ['a', 'b'], [[0.2, np.nan], [np.nan, 0.1]], frameid=3)
     # Match. Better new match is available but should prefer history
-    cm.update_mot(acc, [1, 2], ['a', 'b'], [[5, 1], [1, 5]], frameid=4)
+    cm.update(acc, [1, 2], ['a', 'b'], [[5, 1], [1, 5]], frameid=4)
     # No data
-    cm.update_mot(acc, [], [], [], frameid=5)
+    cm.update(acc, [], [], [], frameid=5)
 
     expect = cm.new_dataframe()
     expect.loc[(0, 0), :] = ['FP', np.nan, 'a', np.nan]
@@ -33,8 +33,10 @@ def test_events():
     # frame 5 generates no events
 
     assert pd.DataFrame.equals(acc.events, expect)
-    assert cm.metrics.MOTP(acc) == approx(11.1 / 6)
-    assert cm.metrics.MOTA(acc) == approx(1. - (2 + 2 + 2) / 8)
+    
+    metr = cm.metrics.compute_metrics(acc)
+    assert metr['MOTP'] == approx(11.1 / 6)
+    assert metr['MOTA'] == approx(1. - (2 + 2 + 2) / 8)
 
 
 def test_correct_average():
@@ -42,15 +44,16 @@ def test_correct_average():
     acc = cm.new_accumulator(auto_id=True)
     
     # No track
-    cm.update_mot(acc, [1, 2, 3, 4], [], [])
-    cm.update_mot(acc, [1, 2, 3, 4], [], [])
-    cm.update_mot(acc, [1, 2, 3, 4], [], [])
-    cm.update_mot(acc, [1, 2, 3, 4], [], [])
+    cm.update(acc, [1, 2, 3, 4], [], [])
+    cm.update(acc, [1, 2, 3, 4], [], [])
+    cm.update(acc, [1, 2, 3, 4], [], [])
+    cm.update(acc, [1, 2, 3, 4], [], [])
 
     # Track single
-    cm.update_mot(acc, [4], [4], [0])
-    cm.update_mot(acc, [4], [4], [0])
-    cm.update_mot(acc, [4], [4], [0])
-    cm.update_mot(acc, [4], [4], [0])
+    cm.update(acc, [4], [4], [0])
+    cm.update(acc, [4], [4], [0])
+    cm.update(acc, [4], [4], [0])
+    cm.update(acc, [4], [4], [0])
 
-    assert cm.metrics.MOTA(acc) == approx(0.2)
+    metr = cm.metrics.compute_metrics(acc)
+    assert metr['MOTA'] == approx(0.2)

@@ -21,6 +21,6 @@ if __name__== '__main__':
 
             dists = cm.distances.iou_matrix(orects, hrects, max_iou=0.5)
 
-            cm.update_mot(acc, oids, hids, dists, frameid=frameid)
+            cm.update(acc, oids, hids, dists, frameid=frameid)
 
-    cm.print_stats(acc)
+    cm.metrics.print_summary(acc)
