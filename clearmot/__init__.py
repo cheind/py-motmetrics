@@ -4,6 +4,7 @@ from .stats import compute_stats, print_stats
 
 import clearmot.metrics
 import clearmot.distances
+import clearmot.io
 
 
 # Needs to be last line
