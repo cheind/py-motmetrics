@@ -2,6 +2,7 @@ from pytest import approx
 import numpy as np
 import pandas as pd
 import clearmot as cm
+import os
 
 def test_events():
     acc = cm.new_accumulator()
@@ -57,3 +58,45 @@ def test_correct_average():
 
     metr = cm.metrics.compute_metrics(acc)
     assert metr['MOTA'] == approx(0.2)
+
+def compute_motchallenge(dname):
+
+    df_gt = cm.io.loadtxt(os.path.join(dname,'gt.txt'))
+    df_test = cm.io.loadtxt(os.path.join(dname,'test.txt'))
+
+    acc = cm.new_accumulator()
+
+    for frameid, dff_gt in df_gt.groupby(level=0):
+        dff_gt = dff_gt.loc[frameid]
+        if frameid in df_test.index:
+            dff_test = df_test.loc[frameid]
+
+            hids = dff_test.index.values
+            oids = dff_gt.index.values
+
+            hrects = dff_test[['x', 'y', 'w', 'h']].values
+            orects = dff_gt[['x', 'y', 'w', 'h']].values
+
+            dists = cm.distances.iou_matrix(orects, hrects, max_iou=0.5)
+            cm.update(acc, oids, hids, dists, frameid=frameid)
+
+    return acc
+
+
+def test_motchallenge_files():
+    dnames = [
+        'TUD-Campus',
+        'TUD-Stadtmitte',
+    ]
+    reldir = os.path.join(os.path.dirname(__file__), '../../etc/data')
+    accs = [compute_motchallenge(os.path.join(reldir, d)) for d in dnames]
+    df = cm.metrics.summarize(accs, dnames)    
+
+    expected = pd.DataFrame([
+        [372, 202, 7, 13, 150, 0.277, 0.526, 0.941, 0.582, 7, 8, 1, 6, 1],
+        [1201, 697, 7, 45, 452, 0.345, 0.564, 0.939, 0.608, 6, 10, 5, 4, 1],
+    ])
+
+    print(df)
+    print(expected)
+    np.testing.assert_allclose(df, expected, atol=1e-3)

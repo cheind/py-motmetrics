@@ -11,7 +11,7 @@ https://github.com/cheind/py-clearmot
 import pandas as pd
 import numpy as np
 from clearmot.mot import MOTAccumulator
-from collections import OrderedDict
+from collections import OrderedDict, Iterable
 
 def compute_metrics(data):
     if isinstance(data, MOTAccumulator):
@@ -32,7 +32,7 @@ def compute_metrics(data):
     tracked = data[data['Type'] !='MISS']['OId'].value_counts()   
     track_ratio = tracked.div(objs).fillna(1.)
 
-    # Compute FRA
+    # Compute fragmentation
     fra = 0
     for o in objs.index:
         dfo = data[data.OId == o]
@@ -40,50 +40,24 @@ def compute_metrics(data):
         last = dfo[dfo.Type != 'MISS'].index[-1]
         diffs = dfo.loc[first:last].Type.apply(lambda x: 1 if x == 'MISS' else 0).diff()
         fra += diffs[diffs == 1].count()
-
-
-
-
+        
     metr = OrderedDict()
     metr['Frames'] = int(nframes)
-    metr['MATCH'] = int(nmatch)
-    metr['SWITCH'] = int(nswitch)
-    metr['FP'] = int(nfp)
-    metr['MISS'] = int(nmiss)
+    metr['Matches'] = int(nmatch)
+    metr['Switches'] = int(nswitch)
+    metr['FalsePos'] = int(nfp)
+    metr['Misses'] = int(nmiss)
     metr['MOTP'] = savediv(data['D'].sum(), nc)
     metr['MOTA'] = 1. - savediv(nmiss + nswitch + nfp, ng)
-    metr['PREC'] = savediv(nc, nfp + nc)
-    metr['RECALL'] = savediv(nc, ng)
-    metr['FRA'] = fra
-    metr['GT'] = len(data['OId'].value_counts())
-    metr['ML'] = track_ratio[track_ratio < 0.2].count()
-    metr['PT'] = track_ratio[(track_ratio >= 0.2) & (track_ratio < 0.8)].count()
+    metr['Precision'] = savediv(nc, nfp + nc)
+    metr['Recall'] = savediv(nc, ng)
+    metr['Frag'] = fra
+    metr['Objs'] = len(data['OId'].value_counts())        
     metr['MT'] = track_ratio[track_ratio >= 0.8].count()
+    metr['PT'] = track_ratio[(track_ratio >= 0.2) & (track_ratio < 0.8)].count()
+    metr['ML'] = track_ratio[track_ratio < 0.2].count()
 
     return metr
-
-"""
-recall=sum(c)/sum(g)*100;
-precision=sum(c)/(sum(fp)+sum(c))*100;
-
-percentage of detected targets
-
-% [1]   recall	- recall = percentage of detected targets
-% [2]   precision	- precision = percentage of correctly detected targets
-% [3]   FAR		- number of false alarms per frame
-% [4]   GT        - number of ground truth trajectories
-% [5-7] MT, PT, ML	- number of mostly tracked, partially tracked and mostly lost trajectories
-% [8]   falsepositives- number of false positives (FP)
-% [9]   missed        - number of missed targets (FN)
-% [10]  idswitches	- number of id switches     (IDs)
-% [11]  FRA       - number of fragmentations
-% [12]  MOTA	- Multi-object tracking accuracy in [0,100]
-% [13]  MOTP	- Multi-object tracking precision in [0,100] (3D) / [td,100] (2D)
-% [14]  MOTAL	- Multi-object tracking accuracy in [0,100] with log10(idswitches)
-
-"""
-
-
 
 def summarize(accs, names=None):
     """Compute event statistics of one or more MOT accumulators."""
@@ -106,11 +80,9 @@ def summarize(accs, names=None):
         dfs.append(pd.DataFrame(compute_metrics(ev), index=[name]))
     return pd.concat(dfs)
 
-def print_summary(data, names=None, buf=None):
+def print_summary(summary):
     """Print event statistics for one or more accumulators."""
-
-    df = summarize(data, names=names)
-    output = df.to_string(
+    output = summary.to_string(
         buf=buf,
         formatters={
             'MOTA': '{:,.3f}'.format,
@@ -120,5 +92,4 @@ def print_summary(data, names=None, buf=None):
         }
     )
     print(output)
-
 
