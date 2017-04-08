@@ -1,9 +1,9 @@
 
 from .mot import new_dataframe, new_accumulator, update
 
-import clearmot.metrics
-import clearmot.distances
-import clearmot.io
+import motmetrics.metrics
+import motmetrics.distances
+import motmetrics.io
 
 
 # Needs to be last line

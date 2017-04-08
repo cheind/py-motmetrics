@@ -10,8 +10,8 @@ https://github.com/cheind/py-clearmot
 
 import pandas as pd
 import numpy as np
-from clearmot.mot import MOTAccumulator
 from collections import OrderedDict, Iterable
+from motmetrics.mot import MOTAccumulator
 
 def compute_metrics(data):
     if isinstance(data, MOTAccumulator):
@@ -36,8 +36,11 @@ def compute_metrics(data):
     fra = 0
     for o in objs.index:
         dfo = data[data.OId == o]
-        first = dfo[dfo.Type != 'MISS'].index[0]
-        last = dfo[dfo.Type != 'MISS'].index[-1]
+        notmiss = dfo[dfo.Type != 'MISS']
+        if len(notmiss) == 0:
+            continue
+        first = notmiss.index[0]
+        last = notmiss.index[-1]
         diffs = dfo.loc[first:last].Type.apply(lambda x: 1 if x == 'MISS' else 0).diff()
         fra += diffs[diffs == 1].count()
         

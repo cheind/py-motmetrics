@@ -1,7 +1,7 @@
 from pytest import approx
 import numpy as np
 
-import clearmot as cm
+import motmetrics as mm
 
 def test_norm2squared():
     a = np.array([
@@ -15,7 +15,7 @@ def test_norm2squared():
         [1., 1],      
     ])
 
-    C = cm.distances.norm2squared_matrix(a, b)
+    C = mm.distances.norm2squared_matrix(a, b)
     np.testing.assert_allclose(
         C,
         [
@@ -25,7 +25,7 @@ def test_norm2squared():
         ]
     )
 
-    C = cm.distances.norm2squared_matrix(a, b, max_d2=5)
+    C = mm.distances.norm2squared_matrix(a, b, max_d2=5)
     np.testing.assert_allclose(
         C,
         [
@@ -38,9 +38,9 @@ def test_norm2squared():
 def test_norm2squared_empty():
     a = []
     b = np.array([[0., 0],[1., 1]])
-    C = cm.distances.norm2squared_matrix(a, b)
+    C = mm.distances.norm2squared_matrix(a, b)
     assert C.size == 0
-    C = cm.distances.norm2squared_matrix(b, a)
+    C = mm.distances.norm2squared_matrix(b, a)
     assert C.size == 0
 
 def test_iou_matrix():
@@ -56,13 +56,13 @@ def test_iou_matrix():
         [0, 1, 1, 1],
     ])
     np.testing.assert_allclose(
-        cm.distances.iou_matrix(a, b),
+        mm.distances.iou_matrix(a, b),
         [[0, 0.5, 1, 0.8, 0.5]],
         atol=1e-4
     )
 
     np.testing.assert_allclose(
-        cm.distances.iou_matrix(a, b, max_iou=0.5),
+        mm.distances.iou_matrix(a, b, max_iou=0.5),
         [[0, 0.5, np.nan, np.nan, 0.5]],
         atol=1e-4
     )
