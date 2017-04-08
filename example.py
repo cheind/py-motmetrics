@@ -3,8 +3,8 @@ import clearmot as cm
 
 if __name__== '__main__':
     
-    df_gt = cm.io.loadtxt('etc/data/TUD-Stadtmitte/gt.txt')
-    df_test = cm.io.loadtxt('etc/data/TUD-Stadtmitte/test.txt')
+    df_gt = cm.io.loadtxt('etc/data/TUD-Campus/gt.txt')
+    df_test = cm.io.loadtxt('etc/data/TUD-Campus/test.txt')
 
     acc = cm.new_accumulator()
 

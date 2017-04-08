@@ -19,7 +19,7 @@ def compute_metrics(data):
 
     savediv = lambda a,b: a / b if b != 0 else np.nan
 
-    nframes = float(data.index.levels[0].shape[0])
+    nframes = float(data.index.get_level_values(0).shape[0])
     nmatch = float(data['Type'].isin(['MATCH']).sum())
     nswitch = float(data['Type'].isin(['SWITCH']).sum())
     nfp = float(data['Type'].isin(['FP']).sum())
@@ -27,22 +27,35 @@ def compute_metrics(data):
     nc = float(nmatch + nswitch)
     ng = float(data['OId'].count())
 
+    # Compute MT, PT, ML
     objs = data['OId'].value_counts()
     tracked = data[data['Type'] !='MISS']['OId'].value_counts()   
     track_ratio = tracked.div(objs).fillna(1.)
 
+    # Compute FRA
+    fra = 0
+    for o in objs.index:
+        dfo = data[data.OId == o]
+        first = dfo[dfo.Type != 'MISS'].index[0]
+        last = dfo[dfo.Type != 'MISS'].index[-1]
+        diffs = dfo.loc[first:last].Type.apply(lambda x: 1 if x == 'MISS' else 0).diff()
+        fra += diffs[diffs == 1].count()
+
+
+
+
     metr = OrderedDict()
-    metr['Frames'] = nframes
-    metr['MATCH'] = nmatch
-    metr['SWITCH'] = nswitch
-    metr['FP'] = nfp
-    metr['MISS'] = nmiss
-    metr['GT'] = len(data['OId'].value_counts())
+    metr['Frames'] = int(nframes)
+    metr['MATCH'] = int(nmatch)
+    metr['SWITCH'] = int(nswitch)
+    metr['FP'] = int(nfp)
+    metr['MISS'] = int(nmiss)
     metr['MOTP'] = savediv(data['D'].sum(), nc)
     metr['MOTA'] = 1. - savediv(nmiss + nswitch + nfp, ng)
     metr['PREC'] = savediv(nc, nfp + nc)
     metr['RECALL'] = savediv(nc, ng)
-    metr['FAR'] = savediv(nfp, nframes)
+    metr['FRA'] = fra
+    metr['GT'] = len(data['OId'].value_counts())
     metr['ML'] = track_ratio[track_ratio < 0.2].count()
     metr['PT'] = track_ratio[(track_ratio >= 0.2) & (track_ratio < 0.8)].count()
     metr['MT'] = track_ratio[track_ratio >= 0.8].count()
@@ -102,6 +115,8 @@ def print_summary(data, names=None, buf=None):
         formatters={
             'MOTA': '{:,.3f}'.format,
             'MOTP': '{:,.3f}'.format,
+            'PREC': '{:,.3f}'.format,
+            'RECALL': '{:,.3f}'.format,
         }
     )
     print(output)
