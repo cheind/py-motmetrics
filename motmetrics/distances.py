@@ -1,11 +1,7 @@
-"""CLEAR MOT - metrics for multiple object tracker evaluation.
-
-This library provides CLEAR MOT metrics for multiple object tracker evaluation
-in Python. The evaluation process is distance metric agnostic making it applicable
-to various scenearios (centroid distance, intersection over union and more).
+"""py-motmetrics - metrics for multiple object tracker (MOT) benchmarking.
 
 Christoph Heindl, 2017
-https://github.com/cheind/py-clearmot
+https://github.com/cheind/py-motmetrics
 """
 
 import numpy as np
