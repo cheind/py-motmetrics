@@ -3,5 +3,11 @@ python:
     - "3.5"
     - "3.6"
 install:
+    - sudo pip install conda  
+    - sudo conda init
+    - sudo conda update conda --yes
+    - deps='pip numpy pandas scipy'
+    - conda create -p $HOME/py --yes $deps "python=$TRAVIS_PYTHON_VERSION"
+    - export PATH=$HOME/py/bin:$PATH
     - pip install .
 script: pytest
