@@ -1,7 +1,7 @@
 language: python
-python:
-    - "3.5"
-    - "3.6"
+env:
+  - PYTHON=3.5 PANDAS=0.19.2
+  - PYTHON=3.6 PANDAS=0.19.2
 install:
     # Install conda
     - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
@@ -13,12 +13,13 @@ install:
     - export PATH="$HOME/miniconda/bin:$PATH"
     - hash -r
     - conda config --set always_yes yes --set changeps1 no
+    - conda config --add channels pandas
     - conda update -q conda
     - conda info -a
 
     # Install deps
-    - deps='pip numpy pandas scipy'
-    - conda create -q -n pyenv python=$TRAVIS_PYTHON_VERSION $deps
+    - deps='pip numpy scipy'
+    - conda create -q -n pyenv python=$PYTHON pandas=$PANDAS
     - source activate pyenv
     - pip install .
 
