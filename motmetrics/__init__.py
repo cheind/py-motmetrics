@@ -3,6 +3,7 @@ from .mot import MOTAccumulator
 import motmetrics.metrics
 import motmetrics.distances
 import motmetrics.io
+import motmetrics.utils
 
 
 # Needs to be last line

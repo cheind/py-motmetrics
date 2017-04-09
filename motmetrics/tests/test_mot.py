@@ -59,38 +59,18 @@ def test_correct_average():
     metr = mm.metrics.compute_metrics(acc)
     assert metr['MOTA'] == approx(0.2)
 
-def compute_motchallenge(dname):
-
-    df_gt = mm.io.loadtxt(os.path.join(dname,'gt.txt'))
-    df_test = mm.io.loadtxt(os.path.join(dname,'test.txt'))
-
-    acc = mm.MOTAccumulator()
-
-    for frameid, dff_gt in df_gt.groupby(level=0):
-        dff_gt = dff_gt.loc[frameid]
-        if frameid in df_test.index:
-            dff_test = df_test.loc[frameid]
-
-            hids = dff_test.index.values
-            oids = dff_gt.index.values
-
-            hrects = dff_test[['X', 'Y', 'Width', 'Height']].values
-            orects = dff_gt[['X', 'Y', 'Width', 'Height']].values
-
-            dists = mm.distances.iou_matrix(orects, hrects, max_iou=0.5)
-            acc.update(oids, hids, dists, frameid=frameid)
-        else:
-            acc.update(oids, [], [], frameid=frameid)
-
-    return acc
-
-
 def test_motchallenge_files():
     dnames = [
         'TUD-Campus',
         'TUD-Stadtmitte',
     ]
     reldir = os.path.join(os.path.dirname(__file__), '../../etc/data')
+
+    def compute_motchallenge(dname):
+        df_gt = mm.io.loadtxt(os.path.join(dname,'gt.txt'))
+        df_test = mm.io.loadtxt(os.path.join(dname,'test.txt'))
+        return mm.utils.compare_to_groundtruth(df_gt, df_test, 'iou', distth=0.5)
+
     accs = [compute_motchallenge(os.path.join(reldir, d)) for d in dnames]
     df = mm.metrics.summarize(accs, dnames)    
 
