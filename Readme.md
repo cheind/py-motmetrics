@@ -2,7 +2,7 @@
 
 The **py-motmetrics** library provides a Python implementation of metrics for benchmarking multiple object trackers (MOT).
 
-While benchmarking single object trackers is rather straightforward, measuring the performance of multiple object trackers needs careful thinking as multiple correspondence constellation can arise (see image below). A variety of methods have been proposed in the past and while there is no general agreement, the methods of [[1,2,3]](#References) have received considerable attention in recent years. **py-motmetrics** implementes the metrics of [[1,2,3]](#References).
+While benchmarking single object trackers is rather straightforward, measuring the performance of multiple object trackers needs careful thinking as multiple correspondence constellation can arise (see image below). A variety of methods have been proposed in the past and while there is no general agreement, the methods of [[1,2,3]](#References) have received considerable attention in recent years. **py-motmetrics** implements these metrics.
 
 The results are compatible with popular [MOTChallenge][MOTChallenge] benchmarks (see [compatibility note](#MOTChallengeCompatibility)).
 
