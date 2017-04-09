@@ -41,9 +41,8 @@ def update(acc, oids, hids, dists, frameid=None):
     dists = np.atleast_2d(dists).astype(float).reshape(oids.shape[0], hids.shape[0])
 
     if frameid is None:
-        assert acc.auto_id, 'Auto-increment not enabled'
-        # Handle auto increment of frame ids        
-        frameid = acc.events.index.levels[0].shape[0]
+        assert acc.auto_id, 'Auto-increment is not enabled'
+        frameid = acc.events.index.get_level_values(0).shape[0]
     
     eid = count()
     dists, INVDIST = _sanitize_dists(dists)
