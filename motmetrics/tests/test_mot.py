@@ -74,8 +74,8 @@ def compute_motchallenge(dname):
             hids = dff_test.index.values
             oids = dff_gt.index.values
 
-            hrects = dff_test[['x', 'y', 'w', 'h']].values
-            orects = dff_gt[['x', 'y', 'w', 'h']].values
+            hrects = dff_test[['X', 'Y', 'Width', 'Height']].values
+            orects = dff_gt[['X', 'Y', 'Width', 'Height']].values
 
             dists = mm.distances.iou_matrix(orects, hrects, max_iou=0.5)
             mm.update(acc, oids, hids, dists, frameid=frameid)
