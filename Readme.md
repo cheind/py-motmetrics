@@ -1,5 +1,5 @@
 ![](etc/mot.png)<br/>
-*Pictures courtesy of Bernardin, Keni, and Rainer Stiefelhagen [1](#1)*
+*Pictures courtesy of Bernardin, Keni, and Rainer Stiefelhagen [1](#References)*
 
 ## py-motmetrics
 
@@ -23,7 +23,36 @@ import motmetrics as mm
 # TODO
 ```
 
+<a name="Metrics"></a>
 ### Metrics
+
+**py-motmetrics** implements the following metrics. The metrics have been aligned with what is reported by [MOTChallenge][MOTChallenge] benchmarks.
+
+Metric  | Unit   | Description |
+------- | ------ | ----------- |
+Frames  | Count  | Total number of frames|
+Match  | Count  | Total number matches|
+Switch  | Count  | Total number track switches (see [[1]](#References))|
+FalsePos  | Count  | Total number false positive hypothesis (see [[1]](#References))|
+Miss  | Count  | Total number missed objects (see [[1]](#References))|
+MOTP  | Distance  | Multiple Object Tracking Precision. Average distance error of correctly detected objects (see [[1]](#References)). Note, MOTChallenge compatibility is given by `MOTP=1-MOTP`, distance IoU with threshold 0.5|
+MOTA  | Percentage  | Multiple object tracking accuracy (see [[1]](#References)). Accounts for object configuration errors of tracker.|
+|Precision | Percentage | Percent of correct detections to total tracker detections (see [[2]](#References)).|
+|Recall | Percentage | Percent of correct detections to total number of objects (see [[2]](#References)).|
+|Frag | Count | Total number of track fragmentations (see [[2,3]](#References)). |
+|Objs | Count | Total number unique objects. |
+|MT | Count | Mostly tracked objects (see [[2,3]](#References)). Count of trajectories covered by hypothesis for at least 80% of track-lifespan.|
+|PT | Count | Partially tracked objects (see [[2,3]](#References)). Count of trajectories covered by hypothesis between 20% and 80% of track-lifespan. |
+|ML | Count | Mostly lost objects (see [[2,3]](#References)). Count of trajectories covered by hypothesis for less than 20% of track-lifespan.|
+
+<a name="References"></a>
+### References
+1. Bernardin, Keni, and Rainer Stiefelhagen. "Evaluating multiple object tracking performance: the CLEAR MOT metrics." 
+EURASIP Journal on Image and Video Processing 2008.1 (2008): 1-10.
+2. Milan, Anton, et al. "Mot16: A benchmark for multi-object tracking." arXiv preprint arXiv:1603.00831 (2016).
+3. Li, Yuan, Chang Huang, and Ram Nevatia. "Learning to associate: Hybridboosted multi-target tracker for crowded scene." 
+Computer Vision and Pattern Recognition, 2009. CVPR 2009. IEEE Conference on. IEEE, 2009.
+
 
 ### Installation
 To install **py-motmetrics** clone this repository and use `pip` to install
@@ -42,9 +71,6 @@ Branch  | Status
 master  | ![](https://travis-ci.org/cheind/py-motmetrics.svg?branch=master)
 develop | ![](https://travis-ci.org/cheind/py-motmetrics.svg?branch=develop)
 
-### References
-<a name="1"></a>
-1. Bernardin, Keni, and Rainer Stiefelhagen."Evaluating multiple object tracking performance: the CLEAR MOT metrics." 
 
 ### License
 MIT License
