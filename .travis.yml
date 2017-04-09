@@ -3,6 +3,7 @@ python:
     - "3.5"
     - "3.6"
 install:
+    # Install dependencies
     - sudo pip install conda  
     - sudo conda init
     - sudo conda update conda --yes
