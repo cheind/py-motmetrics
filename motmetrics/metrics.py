@@ -136,7 +136,6 @@ def summarize(accs, names=None):
 
     events = []
     for idx, d in enumerate(accs):
-        print(d)
         events.append(d.events if isinstance(d, MOTAccumulator) else d)  
         
     dfs = []
