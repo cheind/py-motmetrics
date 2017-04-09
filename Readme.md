@@ -182,22 +182,6 @@ mm.distances.iou_matrix(a, b, max_iou=0.5)
 """
 ```
 
-### Installation
-To install **py-motmetrics** clone this repository and use `pip` to install
-from local sources.
-
-```
-pip install -e <path/to/setup.py>
-```
-
-Python 3.5/3.6 and numpy, pandas and scipy is required.
-
-### Continuous Integration
-
-Branch  | Status
-------- | ------
-master  | ![](https://travis-ci.org/cheind/py-motmetrics.svg?branch=master)
-
 <a name="MOTChallengeCompatibility"></a>
 ### MOTChallenge compatibility
 
@@ -229,6 +213,22 @@ All results are asserted by unit tests.
 
 ### Running tests
 **py-motmetrics** uses the pytest framework. To run the tests, simply `cd` into the source directy and run `pytest`.
+
+### Installation
+To install **py-motmetrics** clone this repository and use `pip` to install
+from local sources.
+
+```
+pip install -e <path/to/setup.py>
+```
+
+Python 3.5/3.6 and numpy, pandas and scipy is required.
+
+### Continuous Integration
+
+Branch  | Status
+------- | ------
+master  | ![](https://travis-ci.org/cheind/py-motmetrics.svg?branch=master)
 
 
 <a name="References"></a>
