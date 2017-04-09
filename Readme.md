@@ -71,10 +71,10 @@ acc.update(
 )
 ```
 
-In the above code an event accumulator is created and updated for one frame. To inspect the current state simple print the events associated with the accumulator
+The code above updates an event accumulator with data from a single frame. Here we assume that pairwise object / hypothesis distance have already been computed. Note the `np.nan` inside the distance matrix. It signals that `a` cannot be paired with hypothesis `2`. To inspect the current event state simple print the events associated with the accumulator
 
 ```python
-print(acc.events)
+print(acc.events) # a pandas DataFrame
 """
                 Type  OId HId    D
 FrameId Event
@@ -86,7 +86,7 @@ FrameId Event
 
 Meaning object `a` was matched to hypothesis `1` with distance 0.1. Similarily, `b` was matched to `2` with distance 0.2. Hypothesis `3` could not be matched to any remaining object and generated a false positive (FP).
 
-Continuing
+Continuing from above
 ```python
 df = acc.update(
     ['a', 'b'],
@@ -140,6 +140,53 @@ print(mm.io.render_summary(summaries))
       Frames  Match  Switch  FalsePos  Miss  MOTP   MOTA Precision Recall  Frag  Objs  MT  PT  ML
 full       3      4       1         1     1 0.340 50.00%    83.33% 83.33%     1     2   1   1   0
 part       2      3       0         1     1 0.167 50.00%    75.00% 75.00%     0     2   1   1   0
+"""
+```
+
+#### Computing distances
+Up until this point we assumed the pairwise object/hypothesis distances to be known. Usually this is not the case. You are mostly given either rectangles or points (centroids) of related
+objects. To compute a distance matrix from them you can use `motmetrics.distance` module as shown below.
+
+##### Euclidean norm squared on points
+
+```python
+# Object related points
+o = np.array([
+    [1., 2],
+    [2., 2],
+    [3., 2],
+])
+
+# Hypothesis related points
+h = np.array([
+    [0., 0],
+    [1., 1],      
+])
+
+C = mm.distances.norm2squared_matrix(o, h, max_d2=5.)
+"""
+[[  5.   1.]
+ [ nan   2.]
+ [ nan   5.]]
+"""
+```
+
+##### Intersection over union norm for 2D rectangles
+```python
+a = np.array([
+    [0, 0, 20, 100],    # Format X, Y, Width, Height
+    [0, 0, 0.8, 1.5],
+])
+
+b = np.array([
+    [0, 0, 1, 2],
+    [0, 0, 1, 1],
+    [0.1, 0.2, 2, 2],
+])
+mm.distances.iou_matrix(a, b, max_iou=0.5)
+"""
+[[ 0.          0.5                nan]
+ [ 0.4         0.42857143         nan]]
 """
 ```
 
