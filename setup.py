@@ -12,5 +12,5 @@ setup(
     description='Metrics for multiple object tracker benchmarking.',
     author='Christoph Heindl',
     url='https://github.com/cheind/py-motmetrics',
-    packages=['motmetrics', 'motmetrics.test', 'motmetrics.apps'],
+    packages=['motmetrics', 'motmetrics.tests', 'motmetrics.apps'],
 )
