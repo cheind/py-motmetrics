@@ -18,9 +18,10 @@ install:
     - conda info -a
 
     # Install deps
-    - deps='pip numpy scipy pytest'
+    - deps='pip numpy scipy'
     - conda create -q -n pyenv python=$PYTHON pandas=$PANDAS
     - source activate pyenv
+    - pip install pytest
     - pip install .
 
 script: pytest
