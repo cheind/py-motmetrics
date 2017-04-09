@@ -197,8 +197,6 @@ Python 3.5/3.6 and numpy, pandas and scipy is required.
 Branch  | Status
 ------- | ------
 master  | ![](https://travis-ci.org/cheind/py-motmetrics.svg?branch=master)
-develop | ![](https://travis-ci.org/cheind/py-motmetrics.svg?branch=develop)
-
 
 <a name="MOTChallengeCompatibility"></a>
 ### MOTChallenge compatibility
