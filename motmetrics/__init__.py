@@ -1,6 +1,5 @@
 
-from .mot import new_dataframe, new_accumulator, update
-
+from .mot import MOTAccumulator
 import motmetrics.metrics
 import motmetrics.distances
 import motmetrics.io

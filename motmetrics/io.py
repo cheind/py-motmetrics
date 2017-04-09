@@ -18,6 +18,8 @@ class Format(Enum):
     """Leal-Taixé, Laura, et al. "MOTChallenge 2015: Towards a benchmark for multi-target tracking." arXiv preprint arXiv:1504.01942 (2015)."""
 
 def _load_motchallenge(fname, **kwargs):
+    """Load MOT challenge data."""
+
     sep = kwargs.pop('sep', '\s+|\t+|,')
     df = pd.read_csv(
         fname, 
@@ -29,7 +31,7 @@ def _load_motchallenge(fname, **kwargs):
         engine='python'
     )
         
-    # Account for matlab convention start is (1, 1)
+    # Account for matlab convention.
     df[['X', 'Y']] -= (1, 1)
 
     # Removed trailing column
@@ -38,6 +40,7 @@ def _load_motchallenge(fname, **kwargs):
     return df
 
 def loadtxt(fname, fmt='mot15-2D', **kwargs):
+    """Load data from any known format."""
     fmt = Format(fmt)
 
     switcher = {
@@ -47,7 +50,33 @@ def loadtxt(fname, fmt='mot15-2D', **kwargs):
     func = switcher.get(fmt)
     return func(fname, **kwargs)
 
+def render_summary(summary, buf=None):
+    """Render metrics summary to console friendly tabular output.
+    
+    Params
+    ------
+    summary : pd.DataFrame
+        Dataframe containing summaries in rows.
+    
+    Kwargs
+    ------
+    buf : StringIO-like, optional
+        Buffer to write to
 
-
+    Returns
+    -------
+    string
+        Formatted string
+    """
+    output = summary.to_string(
+        buf=buf,
+        formatters={
+            'MOTA': '{:.2%}'.format,
+            'MOTP': '{:.3f}'.format,
+            'Precision': '{:.2%}'.format,
+            'Recall': '{:.2%}'.format,
+        }
+    )
+    return output
 
 

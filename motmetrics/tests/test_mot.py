@@ -5,22 +5,22 @@ import motmetrics as mm
 import os
 
 def test_events():
-    acc = mm.new_accumulator()
+    acc = mm.MOTAccumulator()
 
     # All FP
-    mm.update(acc, [], ['a', 'b'], [], frameid=0)
+    acc.update([], ['a', 'b'], [], frameid=0)
     # All miss
-    mm.update(acc, [1, 2], [], [], frameid=1)
+    acc.update([1, 2], [], [], frameid=1)
     # Match
-    mm.update(acc, [1, 2], ['a', 'b'], [[1, 0.5], [0.3, 1]], frameid=2)
+    acc.update([1, 2], ['a', 'b'], [[1, 0.5], [0.3, 1]], frameid=2)
     # Switch
-    mm.update(acc, [1, 2], ['a', 'b'], [[0.2, np.nan], [np.nan, 0.1]], frameid=3)
+    acc.update([1, 2], ['a', 'b'], [[0.2, np.nan], [np.nan, 0.1]], frameid=3)
     # Match. Better new match is available but should prefer history
-    mm.update(acc, [1, 2], ['a', 'b'], [[5, 1], [1, 5]], frameid=4)
+    acc.update([1, 2], ['a', 'b'], [[5, 1], [1, 5]], frameid=4)
     # No data
-    mm.update(acc, [], [], [], frameid=5)
+    acc.update([], [], [], frameid=5)
 
-    expect = mm.new_dataframe()
+    expect = mm.MOTAccumulator.new_event_dataframe()
     expect.loc[(0, 0), :] = ['FP', np.nan, 'a', np.nan]
     expect.loc[(0, 1), :] = ['FP', np.nan, 'b', np.nan]
     expect.loc[(1, 0), :] = ['MISS', 1, np.nan, np.nan]
@@ -42,19 +42,19 @@ def test_events():
 
 def test_correct_average():
     # Tests what is being depicted in figure 3 of 'Evaluating MOT Performance'
-    acc = mm.new_accumulator(auto_id=True)
+    acc = mm.MOTAccumulator(auto_id=True)
     
     # No track
-    mm.update(acc, [1, 2, 3, 4], [], [])
-    mm.update(acc, [1, 2, 3, 4], [], [])
-    mm.update(acc, [1, 2, 3, 4], [], [])
-    mm.update(acc, [1, 2, 3, 4], [], [])
+    acc.update([1, 2, 3, 4], [], [])
+    acc.update([1, 2, 3, 4], [], [])
+    acc.update([1, 2, 3, 4], [], [])
+    acc.update([1, 2, 3, 4], [], [])
 
     # Track single
-    mm.update(acc, [4], [4], [0])
-    mm.update(acc, [4], [4], [0])
-    mm.update(acc, [4], [4], [0])
-    mm.update(acc, [4], [4], [0])
+    acc.update([4], [4], [0])
+    acc.update([4], [4], [0])
+    acc.update([4], [4], [0])
+    acc.update([4], [4], [0])
 
     metr = mm.metrics.compute_metrics(acc)
     assert metr['MOTA'] == approx(0.2)
@@ -64,7 +64,7 @@ def compute_motchallenge(dname):
     df_gt = mm.io.loadtxt(os.path.join(dname,'gt.txt'))
     df_test = mm.io.loadtxt(os.path.join(dname,'test.txt'))
 
-    acc = mm.new_accumulator()
+    acc = mm.MOTAccumulator()
 
     for frameid, dff_gt in df_gt.groupby(level=0):
         dff_gt = dff_gt.loc[frameid]
@@ -78,7 +78,9 @@ def compute_motchallenge(dname):
             orects = dff_gt[['X', 'Y', 'Width', 'Height']].values
 
             dists = mm.distances.iou_matrix(orects, hrects, max_iou=0.5)
-            mm.update(acc, oids, hids, dists, frameid=frameid)
+            acc.update(oids, hids, dists, frameid=frameid)
+        else:
+            acc.update(oids, [], [], frameid=frameid)
 
     return acc
 
@@ -93,10 +95,9 @@ def test_motchallenge_files():
     df = mm.metrics.summarize(accs, dnames)    
 
     expected = pd.DataFrame([
-        [372, 202, 7, 13, 150, 0.277, 0.526, 0.941, 0.582, 7, 8, 1, 6, 1],
-        [1201, 697, 7, 45, 452, 0.345, 0.564, 0.939, 0.608, 6, 10, 5, 4, 1],
+        [71, 202, 7, 13, 150, 0.277, 0.526, 0.941, 0.582, 7, 8, 1, 6, 1],
+        [179, 697, 7, 45, 452, 0.345, 0.564, 0.939, 0.608, 6, 10, 5, 4, 1],
     ])
 
-    print(df)
-    print(expected)
+    print('Result:\n{}'.format(mm.io.render_summary(df)))
     np.testing.assert_allclose(df, expected, atol=1e-3)
