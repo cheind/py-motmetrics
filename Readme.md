@@ -41,14 +41,6 @@ MOTA  | Percentage  | Multiple object tracking accuracy (see [[1]](#References))
 |PT | Count | Partially tracked objects (see [[2,3]](#References)). Count of trajectories covered by hypothesis between 20% and 80% of track-lifespan. |
 |ML | Count | Mostly lost objects (see [[2,3]](#References)). Count of trajectories covered by hypothesis for less than 20% of track-lifespan.|
 
-<a name="References"></a>
-### References
-1. Bernardin, Keni, and Rainer Stiefelhagen. "Evaluating multiple object tracking performance: the CLEAR MOT metrics." 
-EURASIP Journal on Image and Video Processing 2008.1 (2008): 1-10.
-2. Milan, Anton, et al. "Mot16: A benchmark for multi-object tracking." arXiv preprint arXiv:1603.00831 (2016).
-3. Li, Yuan, Chang Huang, and Ram Nevatia. "Learning to associate: Hybridboosted multi-target tracker for crowded scene." 
-Computer Vision and Pattern Recognition, 2009. CVPR 2009. IEEE Conference on. IEEE, 2009.
-
 ### Usage
 
 #### Populating the accumulator
@@ -206,6 +198,14 @@ Branch  | Status
 ------- | ------
 master  | ![](https://travis-ci.org/cheind/py-motmetrics.svg?branch=master)
 develop | ![](https://travis-ci.org/cheind/py-motmetrics.svg?branch=develop)
+
+<a name="References"></a>
+### References
+1. Bernardin, Keni, and Rainer Stiefelhagen. "Evaluating multiple object tracking performance: the CLEAR MOT metrics." 
+EURASIP Journal on Image and Video Processing 2008.1 (2008): 1-10.
+2. Milan, Anton, et al. "Mot16: A benchmark for multi-object tracking." arXiv preprint arXiv:1603.00831 (2016).
+3. Li, Yuan, Chang Huang, and Ram Nevatia. "Learning to associate: Hybridboosted multi-target tracker for crowded scene." 
+Computer Vision and Pattern Recognition, 2009. CVPR 2009. IEEE Conference on. IEEE, 2009.
 
 
 ### License
