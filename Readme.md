@@ -64,10 +64,11 @@ acc.update(
 )
 ```
 
-The code above updates an event accumulator with data from a single frame. Here we assume that pairwise object / hypothesis distance have already been computed. Note the `np.nan` inside the distance matrix. It signals that `a` cannot be paired with hypothesis `2`. To inspect the current event state simple print the events associated with the accumulator
+The code above updates an event accumulator with data from a single frame. Here we assume that pairwise object / hypothesis distances have already been computed. Note `np.nan` inside the distance matrix. It signals that `a` cannot be paired with hypothesis `2`. To inspect the current event history simple print the events associated with the accumulator.
 
 ```python
 print(acc.events) # a pandas DataFrame
+
 """
                 Type  OId HId    D
 FrameId Event
@@ -77,7 +78,7 @@ FrameId Event
 """
 ```
 
-Meaning object `a` was matched to hypothesis `1` with distance 0.1. Similarily, `b` was matched to `2` with distance 0.2. Hypothesis `3` could not be matched to any remaining object and generated a false positive (FP).
+Meaning object `a` was matched to hypothesis `1` with distance 0.1. Similarily, `b` was matched to `2` with distance 0.2. Hypothesis `3` could not be matched to any remaining object and generated a false positive (FP). Possible assignments are computed by minimizing the total assignment distance (Kuhn-Munkres algorithm).
 
 Continuing from above
 ```python
@@ -90,13 +91,14 @@ df = acc.update(
     ]
 )
 print(df)
+
 """
 0      MATCH   a    1  0.2
 1       MISS   b  NaN  NaN
 """
 ```
 
-While `a` was matched, `b` couldn't be matched because of lacking hypotheses.
+While `a` was matched, `b` couldn't be matched because no hypotheses are left to pair with.
 
 ```python
 df = acc.update(
@@ -108,12 +110,14 @@ df = acc.update(
     ]
 )
 print(df)
+
 """
 0       MATCH   a   1  0.6
 1      SWITCH   b   3  0.6
 """
 ```
-`b` is now tracked by hypothesis `3` leading to a track switch.
+
+`b` is now tracked by hypothesis `3` leading to a track switch. Note, although a pairing `(a, 3)` with cost less than 0.6 is possible, the algorithm prefers prefers to continue track assignments from past frames.
 
 #### Computing metrics
 Once the accumulator has been populated you can compute and display metrics. Continuing the example from above
@@ -121,6 +125,7 @@ Once the accumulator has been populated you can compute and display metrics. Con
 ```python
 summary = mm.metrics.summarize(acc)
 print(mm.io.render_summary(summary))
+
 """
    Frames  Match  Switch  FalsePos  Miss  MOTP   MOTA Precision Recall  Frag  Objs  MT  PT  ML
 0       3      4       1         1     1 0.340 50.00%    83.33% 83.33%     1     2   1   1   0
@@ -129,6 +134,7 @@ print(mm.io.render_summary(summary))
 # Summarize multiple accumulators or accumulator parts
 summaries = mm.metrics.summarize([acc, acc.events.loc[0:1]], names=['full', 'part'])
 print(mm.io.render_summary(summaries))
+
 """
       Frames  Match  Switch  FalsePos  Miss  MOTP   MOTA Precision Recall  Frag  Objs  MT  PT  ML
 full       3      4       1         1     1 0.340 50.00%    83.33% 83.33%     1     2   1   1   0
@@ -157,6 +163,7 @@ h = np.array([
 ])
 
 C = mm.distances.norm2squared_matrix(o, h, max_d2=5.)
+
 """
 [[  5.   1.]
  [ nan   2.]
@@ -177,6 +184,7 @@ b = np.array([
     [0.1, 0.2, 2, 2],
 ])
 mm.distances.iou_matrix(a, b, max_iou=0.5)
+
 """
 [[ 0.          0.5                nan]
  [ 0.4         0.42857143         nan]]
