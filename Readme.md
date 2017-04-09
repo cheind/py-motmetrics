@@ -214,7 +214,7 @@ TUD-Campus          71    202       7        13   150 0.277 52.65%    94.14% 58.
 TUD-Stadtmitte     179    697       7        45   452 0.346 56.40%    93.99% 60.90%     6    10   5   4   1
 ```
 
-Besides naming differences, the only obvious differences are
+Besides naming conventions, the only obvious differences are
 - Metric `FAR` is missing. This metric is given implicitly and can be recovered by `FalsePos / Frames * 100`.
 - Metric `MOTP` seems to be off. To convert compute `(1 - MOTP) * 100`. [MOTChallenge][MOTChallenge] benchmarks compute `MOTP` as percentage, while **py-motmetrics** sticks to the original average distance of assigned objects definition [[1]](#References).
 
