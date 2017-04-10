@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import motmetrics as mm
 import os
+import pytest
 
 def test_events():
     acc = mm.MOTAccumulator()
@@ -39,6 +40,20 @@ def test_events():
     assert metr['MOTP'] == approx(11.1 / 6)
     assert metr['MOTA'] == approx(1. - (2 + 2 + 2) / 8)
 
+def test_auto_id():
+    acc = mm.MOTAccumulator(auto_id=True)
+    acc.update([1, 2, 3, 4], [], [])
+    acc.update([1, 2, 3, 4], [], [])
+    assert acc.events.index.levels[0][-1] == 1
+    acc.update([1, 2, 3, 4], [], [])
+    assert acc.events.index.levels[0][-1] == 2
+
+    with pytest.raises(AssertionError):
+        acc.update([1, 2, 3, 4], [], [], frameid=5)
+    
+    acc = mm.MOTAccumulator(auto_id=False)
+    with pytest.raises(AssertionError):
+        acc.update([1, 2, 3, 4], [], [])
 
 def test_correct_average():
     # Tests what is being depicted in figure 3 of 'Evaluating MOT Performance'

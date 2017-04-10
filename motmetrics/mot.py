@@ -118,9 +118,11 @@ class MOTAccumulator(object):
         hids = ma.array(hids, mask=np.zeros(len(hids)))  
         dists = np.atleast_2d(dists).astype(float).reshape(oids.shape[0], hids.shape[0])
 
-        if frameid is None:
-            assert self.auto_id, 'Auto-increment is not enabled'
-            frameid = self.events.index.get_level_values(0).unique().shape[0]    
+        if frameid is None:            
+            assert self.auto_id, 'auto-id is not enabled'
+            frameid = self.events.index.get_level_values(0).unique().shape[0]   
+        else:
+            assert not self.auto_id, 'Cannot provide frame id when auto-id is enabled'
         
         eid = count()
         dists, INVDIST = self._sanitize_dists(dists)
