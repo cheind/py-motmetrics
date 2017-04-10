@@ -55,17 +55,29 @@ class MOTAccumulator(object):
     Computer Vision and Pattern Recognition, 2009. CVPR 2009. IEEE Conference on. IEEE, 2009.
     """
 
-    def __init__(self, auto_id=False):
+    def __init__(self, auto_id=False, max_switch_time=float('inf')):
         """Create a MOTAccumulator.
 
         Params
         ------
         auto_id : bool, optional
             Whether or not frame indices are auto-incremented or provided upon
-            updating. Defaults to false.            
+            updating. Defaults to false. Not specifying a frame-id when this value
+            is true results in an error. Specifying a frame-id when this value is
+            false also results in an error.
+
+        max_switch_time : scalar, optional
+            Allows specifying an upper bound on the timespan an unobserved but 
+            tracked object is allowed to generate track switch events. Useful if groundtruth 
+            objects leaving the field of view keep their ID when they reappear, 
+            but your tracker is not capable of recognizing this (resulting in 
+            track switch events). The default is that there is no upper bound
+            on the timespan. In units of frame timestamps. When using auto_id
+            in units of count.
         """
 
         self.auto_id = auto_id
+        self.max_switch_time = max_switch_time
         self.reset()       
 
     def reset(self):
@@ -73,6 +85,7 @@ class MOTAccumulator(object):
 
         self.events = MOTAccumulator.new_event_dataframe()
         self.m = {} # Pairings up to current timestamp  
+        self.last_occurrence = {} # Tracks most recent occurance of object
 
     def update(self, oids, hids, dists, frameid=None):
         """Updates the accumulator with frame specific objects/detections.
@@ -150,16 +163,20 @@ class MOTAccumulator(object):
             dists[:, hids.mask] = INVDIST
         
             rids, cids = linear_sum_assignment(dists)
-            for i, j in zip(rids, cids):
-
-                if oids[i] is ma.masked or hids[j] is ma.masked or dists[i, j] == INVDIST:
+            for i, j in zip(rids, cids):                
+                if dists[i, j] == INVDIST:
                     continue
                 
-                cat = 'SWITCH' if oids[i] in self.m and not self.m[oids[i]] == hids.data[j] else 'MATCH'
+                o = oids[i]
+                h = hids.data[j]
+                is_switch = o in self.m and \
+                            self.m[o] != h and \
+                            abs(frameid - self.last_occurrence[o]) <= self.max_switch_time
+                cat = 'SWITCH' if is_switch else 'MATCH'
                 self.events.loc[(frameid, next(eid)), :] = [cat, oids.data[i], hids.data[j], dists[i, j]]
                 oids[i] = ma.masked
                 hids[j] = ma.masked
-                self.m[oids.data[i]] = hids.data[j]
+                self.m[o] = h
 
         # 3. All remaining objects are missed
         for o in oids[~oids.mask]:
@@ -168,6 +185,10 @@ class MOTAccumulator(object):
         # 4. All remaining hypotheses are false alarms
         for h in hids[~hids.mask]:
             self.events.loc[(frameid, next(eid)), :] = ['FP', np.nan, h, np.nan]
+
+        # 5. Update occurance state
+        for o in oids.data:
+            self.last_occurrence[o] = frameid
 
         if frameid in self.events.index:
             return self.events.loc[frameid]

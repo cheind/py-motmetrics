@@ -40,6 +40,17 @@ def test_events():
     assert metr['MOTP'] == approx(11.1 / 6)
     assert metr['MOTA'] == approx(1. - (2 + 2 + 2) / 8)
 
+def test_max_switch_time():
+     acc = mm.MOTAccumulator(max_switch_time=1)
+     df = acc.update([1, 2], ['a', 'b'], [[1, 0.5], [0.3, 1]], frameid=1) # 1->a, 2->b
+     df = acc.update([1, 2], ['a', 'b'], [[0.5, np.nan], [np.nan, 0.5]], frameid=2) # 1->b, 2->a 
+     assert (df.Type == 'SWITCH').all()
+
+     acc = mm.MOTAccumulator(max_switch_time=1)
+     df = acc.update([1, 2], ['a', 'b'], [[1, 0.5], [0.3, 1]], frameid=1) # 1->a, 2->b
+     df = acc.update([1, 2], ['a', 'b'], [[0.5, np.nan], [np.nan, 0.5]], frameid=5) # Later frame 1->b, 2->a 
+     assert (df.Type == 'MATCH').all()
+
 def test_auto_id():
     acc = mm.MOTAccumulator(auto_id=True)
     acc.update([1, 2, 3, 4], [], [])
@@ -58,7 +69,7 @@ def test_auto_id():
 def test_correct_average():
     # Tests what is being depicted in figure 3 of 'Evaluating MOT Performance'
     acc = mm.MOTAccumulator(auto_id=True)
-    
+
     # No track
     acc.update([1, 2, 3, 4], [], [])
     acc.update([1, 2, 3, 4], [], [])
