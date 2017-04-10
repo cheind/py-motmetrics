@@ -98,7 +98,7 @@ def compute_metrics(data):
     metr['Precision'] = savediv(nc, nfp + nc)
     metr['Recall'] = savediv(nc, ng)
     metr['Frag'] = fra
-    metr['Objs'] = len(data['OId'].value_counts())        
+    metr['Objs'] = len(objs)        
     metr['MT'] = track_ratio[track_ratio >= 0.8].count()
     metr['PT'] = track_ratio[(track_ratio >= 0.2) & (track_ratio < 0.8)].count()
     metr['ML'] = track_ratio[track_ratio < 0.2].count()
