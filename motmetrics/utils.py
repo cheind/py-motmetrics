@@ -42,8 +42,8 @@ def compare_to_groundtruth(gt, dt, dist='iou', distfields=['X', 'Y', 'Width', 'H
         fgt = fgt.loc[frameid] 
         oids = fgt.index.values
         
-        hids = None
-        dists = None
+        hids = []
+        dists = []
 
         if frameid in dt.index:
             fdt = dt.loc[frameid]
