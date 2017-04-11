@@ -225,9 +225,6 @@ All results are asserted by unit tests.
 
 ### Installation
 
-#### PyPi
-
-
 #### Local
 To install **py-motmetrics** clone this repository and use `pip` to install from local sources.
 
