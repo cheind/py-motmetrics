@@ -1,3 +1,5 @@
+![](https://travis-ci.org/cheind/py-motmetrics.svg?branch=master)
+
 ## py-motmetrics
 
 The **py-motmetrics** library provides a Python implementation of metrics for benchmarking multiple object trackers (MOT).
@@ -257,13 +259,6 @@ conda install --file requirements.txt
 pip install .
 pytest
 ```
-
-### Continuous Integration
-
-Branch  | Status
-------- | ------
-master  | ![](https://travis-ci.org/cheind/py-motmetrics.svg?branch=master)
-
 
 <a name="References"></a>
 ### References
