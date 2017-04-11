@@ -224,14 +224,42 @@ All results are asserted by unit tests.
 **py-motmetrics** uses the pytest framework. To run the tests, simply `cd` into the source directy and run `pytest`.
 
 ### Installation
-To install **py-motmetrics** clone this repository and use `pip` to install
-from local sources.
+
+#### PyPi
+
+
+#### Local
+To install **py-motmetrics** clone this repository and use `pip` to install from local sources.
 
 ```
 pip install -e <path/to/setup.py>
 ```
 
-Python 3.5/3.6 and numpy, pandas and scipy is required.
+Python 3.5/3.6 and numpy, pandas and scipy is required. If no binary packages are available for your platform and building source packages fail, you might want to try a distribution like Conda (see below) to install dependencies.
+
+#### Conda
+In case you are using Conda, a simple way to run **py-motmetrics** is to create a virtual environment with all the necessary dependencies
+
+```
+conda env create -f environment.yml
+> activate motmetrics-env
+```
+
+Then activate / source the `motmetrics-env` and install **py-motmetrics** and run the tests.
+
+```
+activate motmetrics-env
+pip install .
+pytest
+```
+
+In case you already have an environment you install the dependencies from within your environment by
+
+```
+conda install --file requirements.txt
+pip install .
+pytest
+```
 
 ### Continuous Integration
 

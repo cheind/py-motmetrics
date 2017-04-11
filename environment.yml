@@ -1,0 +1,10 @@
+# conda env create -f environment.yml
+name: motmetrics-env
+dependencies:
+- python=3.6
+- numpy
+- scipy
+- pandas
+- pip
+- pip:
+    - pytest
