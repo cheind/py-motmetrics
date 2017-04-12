@@ -28,9 +28,9 @@ Events and summaries are utilizing [pandas][pandas] for data structures and anal
 **py-motmetrics** implements the following metrics. The metrics have been aligned with what is reported by [MOTChallenge][MOTChallenge] benchmarks.
 
 ```python
-import motmetrics
+import motmetrics as mm
 # List all default metrics
-mh = motmetrics.metrics.create()
+mh = mm.metrics.create()
 print(mh.list_metrics_markdown())
 ```
 
