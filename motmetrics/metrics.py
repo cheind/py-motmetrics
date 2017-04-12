@@ -78,46 +78,60 @@ class MetricsContainer:
         return minfo['fnc'](df, *vals)
 
 def num_frames(df):
+    """Total number of frames."""
     return float(df.index.get_level_values(0).unique().shape[0])
 
 def obj_frequencies(df):
+    """Total number of occurrences of individual objects."""
     return df.OId.value_counts()
 
 def num_unique_objects(df, obj_frequencies):
+    """Total number of unique object ids encountered."""
     return float(len(obj_frequencies))
 
 def num_matches(df):
+    """Total number matches."""
     return float(df.Type.isin(['MATCH']).sum())
 
 def num_switches(df):
+    """Total number of track switches."""
     return float(df.Type.isin(['SWITCH']).sum())
 
 def num_falsepositives(df):
+    """Total number of false positives (false-alarms)."""
     return float(df.Type.isin(['FP']).sum())
 
 def num_misses(df):
+    """Total number of misses."""
     float(df.Type.isin(['MISS']).sum())
 
 def num_detections(df, num_matches, num_switches):
+    """Total number of detected objects including matches and switches."""
     return num_matches + num_switches
 
 def num_objects(df):
+    """Total number of objects."""
     return float(df.OId.count())
 
-def track_ratios(df, obj_frequencies):    
+def track_ratios(df, obj_frequencies):
+    """Ratio of assigned to total appearance count per unique object id."""   
     tracked = data[df.Type !='MISS']['OId'].value_counts()   
     return tracked.div(obj_frequencies).fillna(1.)
 
 def mostly_tracked(df, track_ratios):
+    """Number of objects tracked for at least 80 percent of lifespan."""
     return track_ratio[track_ratios >= 0.8].count()
 
 def partially_tracked(df, track_ratios):
+    """Number of objects tracked between 20 and 80 percent of lifespan."""
     return track_ratios[(track_ratios >= 0.2) & (track_ratios < 0.8)].count()
 
 def mostly_lost(df, track_ratios):
+    """Number of objects tracked less than 20 percent of lifespan."""
     return track_ratio[track_ratio < 0.2].count()
 
 def num_fragmentation(df, obj_frequencies):
+    """Total number of switches from tracked to not tracked."""
     fra = 0
     for o in obj_frequencies.index:
         # Find first and last time object was not missed (track span). Then count
@@ -133,17 +147,20 @@ def num_fragmentation(df, obj_frequencies):
     return fra
 
 def motp(df, num_detections):
+    """Multiple object tracker precision."""
     return df['D'].sum() / num_detections
 
 def mota(df, num_misses, num_switches, num_falsepositives, num_objects):
+    """Multiple object tracker accuracy."""
     return 1. - (num_misses + num_switches + num_falsepositives) / num_objects
 
 def precision(df, num_detections, num_falsepositives):
+    """Number of detected objects over sum of detected and false positives."""
     return num_detections / (num_falsepositives + num_detections)
 
 def recall(df, num_detections, num_objects):
+    """Number of detections over number of objects."""
     return num_detections / num_objects
-
 
 def default_metrics():
     m = MetricsContainer()
