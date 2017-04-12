@@ -1,3 +1,8 @@
+"""py-motmetrics - metrics for multiple object tracker (MOT) benchmarking.
+
+Christoph Heindl, 2017
+https://github.com/cheind/py-motmetrics
+"""
 
 import motmetrics as mm
 import numpy as np
@@ -38,15 +43,32 @@ if __name__ == '__main__':
     
     # Compute metrics
 
-    mh = mm.metrics.default_metrics()
+    mh = mm.metrics.create()
     summary = mh.compute(acc, metrics=['num_frames', 'mota', 'motp'], name='acc')
     print(summary)
 
-    summary = mh.compute_many([acc, acc.events.loc[0:2]], metrics=mm.metrics.motchallenge_metrics, names=['full', 'part'])    
+    summary = mh.compute_many(
+        [acc, acc.events.loc[0:1]], 
+        metrics=['num_frames', 'mota', 'motp'], 
+        names=['full', 'part'])    
     print(summary)
 
-    print(mm.io.render_summary(summary, formatters=mh.formatters, namemap=mm.io.motchallenge_metric_names))
 
-    
+    strsummary = mm.io.render_summary(
+        summary, 
+        formatters={'mota' : '{:.2%}'.format}, 
+        namemap={'mota': 'MOTA', 'motp' : 'MOTP'}
+    )
+    print(strsummary)
 
-    
+
+    summary = mh.compute_many(
+        [acc, acc.events.loc[0:1]], 
+        metrics=mm.metrics.motchallenge_metrics, 
+        names=['full', 'part'])
+    strsummary = mm.io.render_summary(
+        summary, 
+        formatters=mh.formatters, 
+        namemap=mm.io.motchallenge_metric_names
+    )
+    print(strsummary)

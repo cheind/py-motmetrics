@@ -81,7 +81,7 @@ if __name__ == '__main__':
     ts = dict([(os.path.splitext(Path(f).parts[-1])[0], mm.io.loadtxt(f, fmt='mot15-2D')) for f in tsfiles])
     
     
-    mh = mm.metrics.default_metrics()
+    mh = mm.metrics.create()
     accs, names = evaluate_dataframes(gt, ts)
     
     logging.info('Running metrics')

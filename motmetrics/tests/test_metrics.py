@@ -75,7 +75,7 @@ def test_motchallenge_files():
 
     accs = [compute_motchallenge(os.path.join(reldir, d)) for d in dnames]
 
-    mh = mm.metrics.default_metrics()
+    mh = mm.metrics.create()
     partials = [mh.compute(df, metrics=mm.metrics.motchallenge_metrics, name=dname) for df, dname in zip(accs, dnames)]
 
     summary = pd.concat(partials)

@@ -58,7 +58,7 @@ class MetricsHost:
 
         return pd.DataFrame(data, columns=cols)
 
-    def to_markdown(self, include_deps=False):
+    def list_metrics_markdown(self, include_deps=False):
         df = self.list_metrics(include_deps=include_deps)
         fmt = [':---' for i in range(len(df.columns))]
         df_fmt = pd.DataFrame([fmt], columns=df.columns)
@@ -191,7 +191,7 @@ def recall(df, num_detections, num_objects):
     """Number of detections over number of objects."""
     return num_detections / num_objects
 
-def default_metrics():
+def create():
     m = MetricsHost()
 
     m.register(num_frames, formatter='{:d}'.format)

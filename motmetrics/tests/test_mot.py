@@ -36,7 +36,7 @@ def test_events():
 
     assert pd.DataFrame.equals(acc.events, expect)
     
-    mh = mm.metrics.default_metrics()
+    mh = mm.metrics.create()
     metr = mh.compute(acc, metrics=['motp', 'mota'], return_dataframe=False)
     assert metr['motp'] == approx(11.1 / 6)
     assert metr['mota'] == approx(1. - (2 + 2 + 2) / 8)
@@ -83,6 +83,6 @@ def test_correct_average():
     acc.update([4], [4], [0])
     acc.update([4], [4], [0])
 
-    mh = mm.metrics.default_metrics()
+    mh = mm.metrics.create()
     metr = mh.compute(acc, metrics='mota', return_dataframe=False)
     assert metr['mota'] == approx(0.2)
