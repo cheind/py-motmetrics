@@ -3,9 +3,10 @@ import numpy as np
 import pandas as pd
 import motmetrics as mm
 import pytest
+import os
 
 def test_metricscontainer_1():
-    m = mm.metrics.MetricsContainer()
+    m = mm.metrics.MetricsHost()
     m.register(lambda df: 1., name='a')
     m.register(lambda df: 2., name='b')
     m.register(lambda df, a, b: a+b, deps=['a', 'b'], name='add')
@@ -17,7 +18,7 @@ def test_metricscontainer_1():
     assert summary.iloc[0]['add'] == 3.
 
 def test_metricscontainer_autodep():
-    m = mm.metrics.MetricsContainer()
+    m = mm.metrics.MetricsHost()
     m.register(lambda df: 1., name='a')
     m.register(lambda df: 2., name='b')
     m.register(lambda df, a, b: a+b, name='add', deps='auto')
@@ -46,7 +47,7 @@ def test_metricscontainer_autoname():
     def mul(df, add, sub):
         return add * sub
 
-    m = mm.metrics.MetricsContainer()
+    m = mm.metrics.MetricsHost()
     m.register(constant_a, deps='auto')
     m.register(constant_b, deps='auto')
     m.register(add, deps='auto')
@@ -59,3 +60,29 @@ def test_metricscontainer_autoname():
     assert summary.columns.values.tolist() == ['mul','add']
     assert summary.iloc[0]['mul'] == -3.
     assert summary.iloc[0]['add'] == 3.
+
+def test_motchallenge_files():
+    dnames = [
+        'TUD-Campus',
+        'TUD-Stadtmitte',
+    ]
+    reldir = os.path.join(os.path.dirname(__file__), '../../etc/data')
+
+    def compute_motchallenge(dname):
+        df_gt = mm.io.loadtxt(os.path.join(dname,'gt.txt'))
+        df_test = mm.io.loadtxt(os.path.join(dname,'test.txt'))
+        return mm.utils.compare_to_groundtruth(df_gt, df_test, 'iou', distth=0.5)
+
+    accs = [compute_motchallenge(os.path.join(reldir, d)) for d in dnames]
+
+    mh = mm.metrics.default_metrics()
+    partials = [mh.compute(df, metrics=mm.metrics.motchallenge_metrics, name=dname) for df, dname in zip(accs, dnames)]
+
+    summary = pd.concat(partials)
+
+    expected = pd.DataFrame([
+        [0.582173, 0.941441, 8.0, 1, 6, 1, 13, 150, 7, 7, 0.526462, 0.277201],
+        [0.608997, 0.939920, 10.0, 5, 4, 1, 45, 452, 7, 6, 0.564014, 0.345904],
+    ])
+
+    np.testing.assert_allclose(summary, expected, atol=1e-3)

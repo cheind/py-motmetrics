@@ -36,9 +36,10 @@ def test_events():
 
     assert pd.DataFrame.equals(acc.events, expect)
     
-    metr = mm.metrics.compute_metrics(acc)
-    assert metr['MOTP'] == approx(11.1 / 6)
-    assert metr['MOTA'] == approx(1. - (2 + 2 + 2) / 8)
+    mh = mm.metrics.default_metrics()
+    metr = mh.compute(acc, metrics=['motp', 'mota'], return_dataframe=False)
+    assert metr['motp'] == approx(11.1 / 6)
+    assert metr['mota'] == approx(1. - (2 + 2 + 2) / 8)
 
 def test_max_switch_time():
      acc = mm.MOTAccumulator(max_switch_time=1)
@@ -82,28 +83,6 @@ def test_correct_average():
     acc.update([4], [4], [0])
     acc.update([4], [4], [0])
 
-    metr = mm.metrics.compute_metrics(acc)
-    assert metr['MOTA'] == approx(0.2)
-
-def test_motchallenge_files():
-    dnames = [
-        'TUD-Campus',
-        'TUD-Stadtmitte',
-    ]
-    reldir = os.path.join(os.path.dirname(__file__), '../../etc/data')
-
-    def compute_motchallenge(dname):
-        df_gt = mm.io.loadtxt(os.path.join(dname,'gt.txt'))
-        df_test = mm.io.loadtxt(os.path.join(dname,'test.txt'))
-        return mm.utils.compare_to_groundtruth(df_gt, df_test, 'iou', distth=0.5)
-
-    accs = [compute_motchallenge(os.path.join(reldir, d)) for d in dnames]
-    df = mm.metrics.summarize(accs, dnames)    
-
-    expected = pd.DataFrame([
-        [71, 202, 7, 13, 150, 0.277, 0.526, 0.941, 0.582, 7, 8, 1, 6, 1],
-        [179, 697, 7, 45, 452, 0.345, 0.564, 0.939, 0.608, 6, 10, 5, 4, 1],
-    ])
-
-    print('Result:\n{}'.format(mm.io.render_summary(df)))
-    np.testing.assert_allclose(df, expected, atol=1e-3)
+    mh = mm.metrics.default_metrics()
+    metr = mh.compute(acc, metrics='mota', return_dataframe=False)
+    assert metr['mota'] == approx(0.2)
