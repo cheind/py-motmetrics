@@ -36,11 +36,16 @@ if __name__ == '__main__':
     )
     print(df)
     
-    summary = mm.metrics.summarize(acc)
-    print(mm.io.render_summary(summary))
+    # Compute metrics
 
-    summaries = mm.metrics.summarize([acc, acc.events.loc[0:1]], names=['full', 'part'])
-    print(mm.io.render_summary(summaries))
+    mh = mm.metrics.default_metrics()
+    summary = mh.compute(acc, metrics=['num_frames', 'mota', 'motp'], name='acc')
+    print(summary)
+
+    summary = mh.compute_many([acc, acc.events.loc[0:2]], metrics=mm.metrics.motchallenge_metrics, names=['full', 'part'])    
+    print(summary)
+
+    print(mm.io.render_summary(summary, formatters=mh.formatters, namemap=mm.io.motchallenge_metric_names))
 
     
 

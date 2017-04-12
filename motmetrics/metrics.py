@@ -15,7 +15,7 @@ class MetricsHost:
     """Keeps track of metrics and intra metric dependencies."""
 
     def __init__(self):
-        self.metrics = {}
+        self.metrics = OrderedDict()
 
     def register(self, fnc, deps='auto', name=None, helpstr=None, formatter=None):
         assert not fnc is None, 'No function given for metric {}'.format(name)
@@ -83,7 +83,17 @@ class MetricsHost:
             name = 0 
 
         data = OrderedDict([(k, cache[k]) for k in metrics])
-        return pd.DataFrame(data, index=[name]) if return_dataframe else data        
+        return pd.DataFrame(data, index=[name]) if return_dataframe else data     
+
+    def compute_many(self, dfs, metrics=None, names=None):
+        assert names is None or len(names) == len(dfs)
+
+        if names is None:
+            names = range(len(dfs))
+
+        partials = [self.compute(acc, metrics=metrics, name=name) for acc, name in zip(dfs, names)]
+        return pd.concat(partials)
+
 
     def _compute(self, df, name, cache, parent=None):
         assert name in self.metrics, 'Cannot find metric {} required by {}.'.format(name, parent)

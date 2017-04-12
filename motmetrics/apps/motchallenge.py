@@ -2,9 +2,6 @@
 
 Christoph Heindl, 2017
 https://github.com/cheind/py-motmetrics
-
-
-
 """
 
 import argparse
@@ -12,6 +9,7 @@ import glob
 import os
 import logging
 import motmetrics as mm
+import pandas as pd
 from pathlib import Path
 
 def parse_args():
@@ -82,6 +80,10 @@ if __name__ == '__main__':
     gt = dict([(Path(f).parts[-3], mm.io.loadtxt(f, fmt='mot15-2D')) for f in gtfiles])
     ts = dict([(os.path.splitext(Path(f).parts[-1])[0], mm.io.loadtxt(f, fmt='mot15-2D')) for f in tsfiles])
     
+    
+    mh = mm.metrics.default_metrics()
     accs, names = evaluate_dataframes(gt, ts)
-    summary = mm.metrics.summarize(accs, names) 
-    print(mm.io.render_summary(summary))
+    
+    logging.info('Running metrics')
+    summary = mh.compute_many(accs, names=names, metrics=mm.metrics.motchallenge_metrics)
+    print(mm.io.render_summary(summary, formatters=mh.formatters, namemap=mm.io.motchallenge_metric_names))

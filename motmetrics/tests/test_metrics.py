@@ -81,7 +81,7 @@ def test_motchallenge_files():
     summary = pd.concat(partials)
 
     print()
-    print(mm.io.render_metric_summary(summary, namemap=mm.io.motchallenge_metric_names, formatters=mh.formatters))
+    print(mm.io.render_summary(summary, namemap=mm.io.motchallenge_metric_names, formatters=mh.formatters))
 
     expected = pd.DataFrame([
         [0.582173, 0.941441, 8.0, 1, 6, 1, 13, 150, 7, 7, 0.526462, 0.277201],

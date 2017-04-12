@@ -61,7 +61,7 @@ def loadtxt(fname, fmt='mot15-2D', **kwargs):
     func = switcher.get(fmt)
     return func(fname, **kwargs)
 
-def render_metric_summary(summary, buf=None, formatters=None, namemap=None):
+def render_summary(summary, formatters=None, namemap=None, buf=None):
     """Render metrics summary to console friendly tabular output.
     
     Params
