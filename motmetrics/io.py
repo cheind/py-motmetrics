@@ -88,14 +88,14 @@ def _load_vatictxt(fname, **kwargs):
         }
 
         # Remove quotes from activities
-        activitylist = [a.replace('\"', '') for a in activitylist]        
+        activitylist = [a.replace('\"', '').capitalize() for a in activitylist]        
 
         for a in activitylist:
             dtype[a] = bool
     
-        names = ['FrameId', 'Id', 'X', 'Y', 'Width', 'Height', 'ClassId', 'Lost', 'Occluded', 'Generated']
+        names = ['Id', 'X', 'Y', 'Width', 'Height', 'FrameId', 'Lost', 'Occluded', 'Generated', 'ClassId']
         names.extend(activitylist)
-        return pd.read_csv(io.StringIO(strdata), names=names, index_col=[0,1], header=None, sep=' ')
+        return pd.read_csv(io.StringIO(strdata), names=names, index_col=['FrameId','Id'], header=None, sep=' ')
 
 
     """
