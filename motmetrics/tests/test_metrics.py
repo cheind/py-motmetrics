@@ -4,7 +4,7 @@ import pandas as pd
 import motmetrics as mm
 import pytest
 
-def test_metrics_host():
+def test_metricscontainer():
     m = mm.metrics.MetricsContainer()
     m.register(lambda df: 1., name='a')
     m.register(lambda df: 2., name='b')
@@ -20,7 +20,7 @@ def test_metrics_host():
     assert summary['mul'] == -3.
     assert summary['add'] == 3.
 
-def test_metrics_host_autodep():
+def test_metricscontainer_autodep():
     m = mm.metrics.MetricsContainer()
     m.register(lambda df: 1., name='a')
     m.register(lambda df: 2., name='b')
@@ -36,7 +36,7 @@ def test_metrics_host_autodep():
     assert summary['mul'] == -3.
     assert summary['add'] == 3.
 
-def test_metrics_host_autodep_autoname():
+def test_metricscontainer_autoname():
 
     def constant_a(df):
         return 1.
