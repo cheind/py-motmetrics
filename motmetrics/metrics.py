@@ -4,13 +4,16 @@ Christoph Heindl, 2017
 https://github.com/cheind/py-motmetrics
 """
 
-import pandas as pd
-import numpy as np
+from __future__ import division
 from collections import OrderedDict, Iterable
 from motmetrics.mot import MOTAccumulator
+import pandas as pd
+import numpy as np
 import inspect
 
 class MetricsHost:
+    """Keeps track of metrics and intra metric dependencies."""
+
     def __init__(self):
         self.metrics = {}
 
@@ -40,6 +43,10 @@ class MetricsHost:
     @property
     def names(self):
         return [v['name'] for v in self.metrics.values()]
+    
+    @property
+    def formatters(self):
+        return dict([(k, v['formatter']) for k, v in self.metrics.items() if not v['formatter'] is None])
 
     def list_metrics(self, include_deps=False):
         cols = ['Name', 'Description', 'Dependencies']
@@ -91,7 +98,7 @@ class MetricsHost:
 
 def num_frames(df):
     """Total number of frames."""
-    return float(df.index.get_level_values(0).unique().shape[0])
+    return df.index.get_level_values(0).unique().shape[0]
 
 def obj_frequencies(df):
     """Total number of occurrences of individual objects."""
@@ -99,23 +106,23 @@ def obj_frequencies(df):
 
 def num_unique_objects(df, obj_frequencies):
     """Total number of unique object ids encountered."""
-    return float(len(obj_frequencies))
+    return len(obj_frequencies)
 
 def num_matches(df):
     """Total number matches."""
-    return float(df.Type.isin(['MATCH']).sum())
+    return df.Type.isin(['MATCH']).sum()
 
 def num_switches(df):
     """Total number of track switches."""
-    return float(df.Type.isin(['SWITCH']).sum())
+    return df.Type.isin(['SWITCH']).sum()
 
 def num_false_positives(df):
     """Total number of false positives (false-alarms)."""
-    return float(df.Type.isin(['FP']).sum())
+    return df.Type.isin(['FP']).sum()
 
 def num_misses(df):
     """Total number of misses."""
-    return float(df.Type.isin(['MISS']).sum())
+    return df.Type.isin(['MISS']).sum()
 
 def num_detections(df, num_matches, num_switches):
     """Total number of detected objects including matches and switches."""
@@ -123,7 +130,7 @@ def num_detections(df, num_matches, num_switches):
 
 def num_objects(df):
     """Total number of objects."""
-    return float(df.OId.count())
+    return df.OId.count()
 
 def track_ratios(df, obj_frequencies):
     """Ratio of assigned to total appearance count per unique object id."""   
@@ -185,16 +192,16 @@ def default_metrics():
     m.register(num_misses, formatter='{:d}'.format)
     m.register(num_detections, formatter='{:d}'.format)
     m.register(num_objects, formatter='{:d}'.format)
-    m.register(num_unique_objects, deps='auto', formatter='{:d}'.format)
-    m.register(track_ratios, deps='auto')
-    m.register(mostly_tracked, deps='auto', formatter='{:d}'.format)
-    m.register(partially_tracked, deps='auto', formatter='{:d}'.format)
-    m.register(mostly_lost, deps='auto', formatter='{:d}'.format)
-    m.register(num_fragmentations, deps='auto')
-    m.register(motp, deps='auto', formatter='{:.3f}'.format)
-    m.register(mota, deps='auto', formatter='{:.2%}'.format)
-    m.register(precision, deps='auto', formatter='{:.2%}'.format)
-    m.register(recall, deps='auto', formatter='{:.2%}'.format)
+    m.register(num_unique_objects, formatter='{:d}'.format)
+    m.register(track_ratios)
+    m.register(mostly_tracked, formatter='{:d}'.format)
+    m.register(partially_tracked, formatter='{:d}'.format)
+    m.register(mostly_lost, formatter='{:d}'.format)
+    m.register(num_fragmentations)
+    m.register(motp, formatter='{:.3f}'.format)
+    m.register(mota, formatter='{:.2%}'.format)
+    m.register(precision, formatter='{:.2%}'.format)
+    m.register(recall, formatter='{:.2%}'.format)
 
     return m
 
