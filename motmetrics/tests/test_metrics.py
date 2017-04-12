@@ -39,6 +39,7 @@ def test_metricscontainer_autodep():
 def test_metricscontainer_autoname():
 
     def constant_a(df):
+        """Constant a help."""
         return 1.
     
     def constant_b(df):
@@ -59,6 +60,9 @@ def test_metricscontainer_autoname():
     m.register(add, deps='auto')
     m.register(sub, deps='auto')
     m.register(mul, deps='auto')
+
+    assert m.metrics['constant_a']['help'] == 'Constant a help.'
+
     summary = m.summarize(None, metrics=['mul','add'])
     assert 'mul' in summary
     assert 'add' in summary

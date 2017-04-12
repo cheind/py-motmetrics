@@ -8,32 +8,53 @@ import pandas as pd
 import numpy as np
 from collections import OrderedDict, Iterable
 from motmetrics.mot import MOTAccumulator
+import inspect
 
 class MetricsContainer:
     def __init__(self):
         self.metrics = {}
 
-    def register(self, fnc, deps=None, name=None):
+    def register(self, fnc, deps=None, name=None, helpstr=None):
         assert not fnc is None, 'No function given for metric {}'.format(name)
 
         if deps is None:
             deps = []
-        elif deps is 'auto':
-            import inspect
+        elif deps is 'auto':            
             deps = inspect.getargspec(fnc).args[1:] # assumes dataframe as first argument
 
         if name is None:
             name = fnc.__name__ # Relies on meaningful function names, i.e don't use for lambdas
 
+        if helpstr is None:
+            helpstr = inspect.getdoc(fnc) if inspect.getdoc(fnc) else 'No description.'
+            
         self.metrics[name] = {
             'name' : name,
             'fnc' : fnc,
-            'deps' : deps
+            'deps' : deps,
+            'help' : helpstr
         }
 
     @property
     def names(self):
         return [v['name'] for v in self.metrics.values()]
+
+    def list_metrics(self, include_deps=False):
+        cols = ['Name', 'Description', 'Dependencies']
+        if include_deps:
+            data = [(m['name'], m['help'], m['deps']) for m in self.metrics.values()]
+        else:
+            data = [(m['name'], m['help']) for m in self.metrics.values()]
+            cols = cols[:-1]
+
+        return pd.DataFrame(data, columns=cols)
+
+    def to_markdown(self, include_deps=False):
+        df = self.list_metrics(include_deps=include_deps)
+        fmt = ['---' for i in range(len(df.columns))]
+        df_fmt = pd.DataFrame([fmt], columns=df.columns)
+        df_formatted = pd.concat([df_fmt, df])
+        return df_formatted.to_csv(sep="|", index=False)
 
     def summarize(self, df, metrics=None):
         cache = {}
