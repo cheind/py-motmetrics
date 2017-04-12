@@ -201,17 +201,6 @@ part 75.00% 75.00%  2  1  1  0  1  1   0   0 50.00% 0.167
 """
 ```
 
-# Summarize multiple accumulators or accumulator parts
-summaries = mm.metrics.summarize([acc, acc.events.loc[0:1]], names=['full', 'part'])
-print(mm.io.render_summary(summaries))
-
-"""
-      Frames  Match  Switch  FalsePos  Miss  MOTP   MOTA Precision Recall  Frag  Objs  MT  PT  ML
-full       3      4       1         1     1 0.340 50.00%    83.33% 83.33%     1     2   1   1   0
-part       2      3       0         1     1 0.167 50.00%    75.00% 75.00%     0     2   1   1   0
-"""
-```
-
 #### Computing distances
 Up until this point we assumed the pairwise object/hypothesis distances to be known. Usually this is not the case. You are mostly given either rectangles or points (centroids) of related
 objects. To compute a distance matrix from them you can use `motmetrics.distance` module as shown below.
