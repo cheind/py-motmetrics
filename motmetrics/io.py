@@ -17,6 +17,12 @@ class Format(Enum):
     MOT15_2D = 'mot15-2D'
     """Leal-Taixé, Laura, et al. "MOTChallenge 2015: Towards a benchmark for multi-target tracking." arXiv preprint arXiv:1504.01942 (2015)."""
 
+    VATIC_TXT = 'vatic-txt'
+    """Vondrick, Carl, Donald Patterson, and Deva Ramanan. "Efficiently scaling up crowdsourced video annotation." International Journal of Computer Vision 101.1 (2013): 184-204.
+    https://github.com/cvondrick/vatic
+    """
+
+
 def _load_motchallenge(fname, **kwargs):
     """Load MOT challenge data."""
 
@@ -38,6 +44,11 @@ def _load_motchallenge(fname, **kwargs):
     del df['unused']
 
     return df
+
+def _load_vatictxt(fname, **kwargs):
+    pass
+
+
 
 def loadtxt(fname, fmt='mot15-2D', **kwargs):
     """Load data from any known format."""

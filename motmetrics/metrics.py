@@ -9,6 +9,147 @@ import numpy as np
 from collections import OrderedDict, Iterable
 from motmetrics.mot import MOTAccumulator
 
+class Metrics:
+    def __init__(self):
+        self.metrics = {}
+
+    def add(self, fnc, deps=None, name=None):
+        assert not fnc is None, 'No function given for metric {}'.format(name)
+
+        if deps is None:
+            deps = []
+        elif deps is 'auto':
+            import inspect
+            deps = inspect.getargspec(fnc).args[1:] # assumes dataframe as first argument
+
+        if name is None:
+            name = fnc.__name__ # Relies on meaningful function names, i.e don't use for lambdas
+
+        self.metrics[name] = {
+            'name' : name,
+            'fnc' : fnc,
+            'deps' : deps
+        }
+
+    @property
+    def names(self):
+        return [v['name'] for v in self.metrics.values()]
+
+    def summarize(self, df, metrics=None):
+        cache = {}
+
+        if metrics is None:
+            metrics = self.names
+
+        for mname in metrics:
+            cache[mname] = self._compute(df, mname, cache, parent='summarize')            
+
+        return OrderedDict([(k, cache[k]) for k in metrics])
+        
+    def _compute(self, df, name, cache, parent=None):
+        assert name in self.metrics, 'Cannot find metric {} required by {}.'.format(name, parent)
+        minfo = self.metrics[name]
+        vals = []
+        for depname in minfo['deps']:
+            if not depname in cache:
+                cache[depname] = self._compute(df, depname, cache, parent=name)
+            vals.append(cache[depname])
+        return minfo['fnc'](df, *vals)
+
+def num_frames(df):
+    return float(df.index.get_level_values(0).unique().shape[0])
+
+def obj_frequencies(df):
+    return df.OId.value_counts()
+
+def num_unique_objects(df, obj_frequencies):
+    return float(len(obj_frequencies))
+
+def num_matches(df):
+    return float(df.Type.isin(['MATCH']).sum())
+
+def num_switches(df):
+    return float(df.Type.isin(['SWITCH']).sum())
+
+def num_falsepositives(df):
+    return float(df.Type.isin(['FP']).sum())
+
+def num_misses(df):
+    float(df.Type.isin(['MISS']).sum())
+
+def num_detections(df, num_matches, num_switches):
+    return num_matches + num_switches
+
+def num_objects(df):
+    return float(df.OId.count())
+
+def track_ratios(df, obj_frequencies):    
+    tracked = data[df.Type !='MISS']['OId'].value_counts()   
+    return tracked.div(obj_frequencies).fillna(1.)
+
+def mostly_tracked(df, track_ratios):
+    return track_ratio[track_ratios >= 0.8].count()
+
+def partially_tracked(df, track_ratios):
+    return track_ratios[(track_ratios >= 0.2) & (track_ratios < 0.8)].count()
+
+def mostly_lost(df, track_ratios):
+    return track_ratio[track_ratio < 0.2].count()
+
+def num_fragmentation(df, obj_frequencies):
+    fra = 0
+    for o in obj_frequencies.index:
+        # Find first and last time object was not missed (track span). Then count
+        # the number switches from NOT MISS to MISS state.
+        dfo = df[df.OId == o]
+        notmiss = dfo[dfo.Type != 'MISS']
+        if len(notmiss) == 0:
+            continue
+        first = notmiss.index[0]
+        last = notmiss.index[-1]
+        diffs = dfo.loc[first:last].Type.apply(lambda x: 1 if x == 'MISS' else 0).diff()
+        fra += diffs[diffs == 1].count()
+    return fra
+
+def motp(df, num_detections):
+    return df['D'].sum() / num_detections
+
+def mota(df, num_misses, num_switches, num_falsepositives, num_objects):
+    return 1. - (num_misses + num_switches + num_falsepositives) / num_objects
+
+def precision(df, num_detections, num_falsepositives):
+    return num_detections / (num_falsepositives + num_detections)
+
+def recall(df, num_detections, num_objects):
+    return num_detections / num_objects
+
+
+def create_metrics():
+    m = Metrics()
+
+    m.add(num_frames)
+    m.add(obj_frequencies)    
+    m.add(num_matches)
+    m.add(num_switches)
+    m.add(num_falsepositives)
+    m.add(num_misses)
+    m.add(num_detections)
+    m.add(num_objects)
+    m.add(num_unique_objects, deps='auto')
+    m.add(track_ratios, deps='auto')
+    m.add(mostly_tracked, deps='auto')
+    m.add(partially_tracked, deps='auto')
+    m.add(mostly_lost, deps='auto')
+    m.add(num_fragmentation, deps='auto')
+    m.add(motp, deps='auto')
+    m.add(mota, deps='auto')
+    m.add(precision, deps='auto')
+    m.add(recall, deps='auto')
+
+    return m
+
+
+
 def compute_metrics(data):
     """Returns computed metrics for event data frame.
 
