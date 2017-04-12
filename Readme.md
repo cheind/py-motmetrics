@@ -20,29 +20,40 @@ Supports Euclidean, Intersection over Union and other distances measures.
 - *Complete event history* <br/> 
 Tracks all relevant per-frame events suchs as correspondences, misses, false alarms and switches.
 - *Easy to extend* <br/> 
-Events and summaries are utilizing [pandas][pandas] for data structures and analysis.
+Events and summaries are utilizing [pandas][pandas] for data structures and analysis. New metrics can reuse already computed values from depending metrics.
 
 <a name="Metrics"></a>
 ### Metrics
 
 **py-motmetrics** implements the following metrics. The metrics have been aligned with what is reported by [MOTChallenge][MOTChallenge] benchmarks.
 
-Metric  | Unit   | Description |
-------- | ------ | ----------- |
-Frames  | Count  | Total number of frames|
-Match  | Count  | Total number matches|
-Switch  | Count  | Total number track switches (see [[1]](#References))|
-FalsePos  | Count  | Total number false positive hypothesis (see [[1]](#References))|
-Miss  | Count  | Total number missed objects (see [[1]](#References))|
-MOTP  | Distance  | Multiple Object Tracking Precision. Average distance error of correctly detected objects (see [[1]](#References)). Note, MOTChallenge compatibility is given by `MOTP=1-MOTP`, distance IoU with threshold 0.5|
-MOTA  | Percentage  | Multiple object tracking accuracy (see [[1]](#References)). Accounts for object configuration errors of tracker.|
-|Precision | Percentage | Percent of correct detections to total tracker detections (see [[2]](#References)).|
-|Recall | Percentage | Percent of correct detections to total number of objects (see [[2]](#References)).|
-|Frag | Count | Total number of track fragmentations (see [[2,3]](#References)). |
-|Objs | Count | Total number unique objects. |
-|MT | Count | Mostly tracked objects (see [[2,3]](#References)). Count of trajectories covered by hypothesis for at least 80% of track-lifespan.|
-|PT | Count | Partially tracked objects (see [[2,3]](#References)). Count of trajectories covered by hypothesis between 20% and 80% of track-lifespan. |
-|ML | Count | Mostly lost objects (see [[2,3]](#References)). Count of trajectories covered by hypothesis for less than 20% of track-lifespan.|
+```python
+import motmetrics as mm
+# List all default metrics
+mh = mm.metrics.create()
+print(mh.list_metrics_markdown())
+```
+
+Name|Description
+:---|:---
+num_frames|Total number of frames.
+obj_frequencies|Total number of occurrences of individual objects.
+num_matches|Total number matches.
+num_switches|Total number of track switches.
+num_false_positives|Total number of false positives (false-alarms).
+num_misses|Total number of misses.
+num_detections|Total number of detected objects including matches and switches.
+num_objects|Total number of objects.
+num_unique_objects|Total number of unique object ids encountered.
+track_ratios|Ratio of assigned to total appearance count per unique object id.
+mostly_tracked|Number of objects tracked for at least 80 percent of lifespan.
+partially_tracked|Number of objects tracked between 20 and 80 percent of lifespan.
+mostly_lost|Number of objects tracked less than 20 percent of lifespan.
+num_fragmentations|Total number of switches from tracked to not tracked.
+motp|Multiple object tracker precision.
+mota|Multiple object tracker accuracy.
+precision|Number of detected objects over sum of detected and false positives.
+recall|Number of detections over number of objects.
 
 ### Usage
 
@@ -125,13 +136,70 @@ print(df)
 Once the accumulator has been populated you can compute and display metrics. Continuing the example from above
 
 ```python
-summary = mm.metrics.summarize(acc)
-print(mm.io.render_summary(summary))
+mh = mm.metrics.create()
+summary = mh.compute(acc, metrics=['num_frames', 'mota', 'motp'], name='acc')
+print(summary)
 
 """
-   Frames  Match  Switch  FalsePos  Miss  MOTP   MOTA Precision Recall  Frag  Objs  MT  PT  ML
-0       3      4       1         1     1 0.340 50.00%    83.33% 83.33%     1     2   1   1   0
+     num_frames  mota  motp
+acc           3   0.5  0.34
 """
+```
+
+Computing metrics for multiple accumulators or accumulator views is also possible
+
+```python
+summary = mh.compute_many(
+    [acc, acc.events.loc[0:1]], 
+    metrics=['num_frames', 'mota', 'motp'], 
+    names=['full', 'part'])    
+print(summary)
+
+"""
+      num_frames  mota      motp
+full           3   0.5  0.340000
+part           2   0.5  0.166667
+"""
+```
+
+Finally, you may want to reformat column names and how column values are displayed. 
+
+```python
+strsummary = mm.io.render_summary(
+    summary, 
+    formatters={'mota' : '{:.2%}'.format}, 
+    namemap={'mota': 'MOTA', 'motp' : 'MOTP'}
+)
+print(strsummary)
+
+"""
+      num_frames   MOTA      MOTP
+full           3 50.00%  0.340000
+part           2 50.00%  0.166667 
+"""
+```
+
+For MOTChallenge **py-motmetrics** provides predefined metric selectors, formatters and metric names, so that the result looks alike what is provided via their Matlab `devkit`.
+
+```python
+summary = mh.compute_many(
+    [acc, acc.events.loc[0:1]], 
+    metrics=mm.metrics.motchallenge_metrics, 
+    names=['full', 'part'])
+
+strsummary = mm.io.render_summary(
+    summary, 
+    formatters=mh.formatters, 
+    namemap=mm.io.motchallenge_metric_names
+)
+print(strsummary)
+
+"""
+       Rcll   Prcn GT MT PT ML FP FN IDs  FM   MOTA  MOTP
+full 83.33% 83.33%  2  1  1  0  1  1   1   1 50.00% 0.340
+part 75.00% 75.00%  2  1  1  0  1  1   0   0 50.00% 0.167
+"""
+```
 
 # Summarize multiple accumulators or accumulator parts
 summaries = mm.metrics.summarize([acc, acc.events.loc[0:1]], names=['full', 'part'])
