@@ -18,6 +18,35 @@ class MetricsHost:
         self.metrics = OrderedDict()
 
     def register(self, fnc, deps='auto', name=None, helpstr=None, formatter=None):
+        """Register a new metric.
+
+        Params
+        ------
+        fnc : Function
+            Function that computes the metric to be registered. The number of arguments
+            is 1 + N, where N is the number of dependencies of the metric to be registered.
+            The order of the argument passed is `df, result_dep1, result_dep2, ...`.
+
+        Kwargs
+        ------
+        deps : string, list of strings or None, optional
+            The dependencies of this metric. Each dependency is evaluated and the result
+            is passed as argument to `fnc` as described above. If None is specified, the
+            function does not have any dependencies. If a list of strings is given, dependencies
+            for these metric strings are registered. If 'auto' is passed, the dependencies
+            are deduced from argument inspection of the method. For this to work the argument 
+            names have to be equal to the intended dependencies.
+        name : string or None, optional
+            Name identifier of this metric. If None is passed the name is deduced from
+            function inspection.
+        helpstr : string or None, optional 
+            A description of what the metric computes. If no help message is given it
+            is deduced from the docstring of the function.
+        formatter: Format object, optional
+            An optional default formatter when rendering metric results as string. I.e to
+            render the result `0.35` as `35%` one would pass `{:.2%}.format`
+        """        
+
         assert not fnc is None, 'No function given for metric {}'.format(name)
 
         if deps is None:
@@ -42,13 +71,16 @@ class MetricsHost:
 
     @property
     def names(self):
+        """Returns the name identifiers of all registered metrics."""
         return [v['name'] for v in self.metrics.values()]
     
     @property
     def formatters(self):
+        """Returns the formatters for all metrics that have associated formatters."""
         return dict([(k, v['formatter']) for k, v in self.metrics.items() if not v['formatter'] is None])
 
     def list_metrics(self, include_deps=False):
+        """Returns a dataframe containing names, descriptions and optionally dependencies for each metric."""
         cols = ['Name', 'Description', 'Dependencies']
         if include_deps:
             data = [(m['name'], m['help'], m['deps']) for m in self.metrics.values()]
@@ -59,13 +91,33 @@ class MetricsHost:
         return pd.DataFrame(data, columns=cols)
 
     def list_metrics_markdown(self, include_deps=False):
+        """Returns a markdown ready version of `list_metrics`."""
         df = self.list_metrics(include_deps=include_deps)
         fmt = [':---' for i in range(len(df.columns))]
         df_fmt = pd.DataFrame([fmt], columns=df.columns)
         df_formatted = pd.concat([df_fmt, df])
         return df_formatted.to_csv(sep="|", index=False)
 
-    def compute(self, df, metrics=None, return_dataframe=True, name=None):        
+    def compute(self, df, metrics=None, return_dataframe=True, name=None):
+        """Compute metrics on the dataframe / accumulator.
+        
+        Params
+        ------
+        df : MOTAccumulator or pandas.DataFrame
+            The dataframe to compute the metrics on
+        
+        Kwargs
+        ------
+        metrics : string, list of string or None, optional
+            The identifiers of the metrics to be computed. This method will only
+            compute the minimal set of necessary metrics to fullfill the request.
+            If None is passed all registered metrics are computed.
+        return_dataframe : bool, optional
+            Return the result as pandas.DataFrame (default) or dict.
+        name : string, optional
+            When returning a pandas.DataFrame this is the index of the row containing
+            the computed metric values.
+        """ 
         
         if isinstance(df, MOTAccumulator):
             df = df.events
@@ -86,6 +138,28 @@ class MetricsHost:
         return pd.DataFrame(data, index=[name]) if return_dataframe else data     
 
     def compute_many(self, dfs, metrics=None, names=None):
+        """Compute metrics on multiple dataframe / accumulators.
+        
+        Params
+        ------
+        dfs : list of MOTAccumulator or list of pandas.DataFrame
+            The data to compute metrics on.
+        
+        Kwargs
+        ------
+        metrics : string, list of string or None, optional
+            The identifiers of the metrics to be computed. This method will only
+            compute the minimal set of necessary metrics to fullfill the request.
+            If None is passed all registered metrics are computed.
+        names : list of string, optional
+            The names of individual rows in the resulting dataframe.
+
+        Returns
+        -------
+        df : pandas.DataFrame
+            A datafrom containing the metrics in columns and names in rows.
+        """
+
         assert names is None or len(names) == len(dfs)
 
         if names is None:
@@ -96,6 +170,7 @@ class MetricsHost:
 
 
     def _compute(self, df, name, cache, parent=None):
+        """Compute metric and resolve dependencies."""
         assert name in self.metrics, 'Cannot find metric {} required by {}.'.format(name, parent)
         minfo = self.metrics[name]
         vals = []
@@ -192,6 +267,7 @@ def recall(df, num_detections, num_objects):
     return num_detections / num_objects
 
 def create():
+    """Creates a MetricsHost and populates it with default metrics."""
     m = MetricsHost()
 
     m.register(num_frames, formatter='{:d}'.format)
@@ -229,3 +305,4 @@ motchallenge_metrics = [
     'mota',
     'motp'
 ]
+"""A list of all metrics from MOTChallenge."""

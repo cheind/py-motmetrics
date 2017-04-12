@@ -46,9 +46,7 @@ def _load_motchallenge(fname, **kwargs):
     return df
 
 def _load_vatictxt(fname, **kwargs):
-    pass
-
-
+    raise NotImplementedError()
 
 def loadtxt(fname, fmt='mot15-2D', **kwargs):
     """Load data from any known format."""
@@ -113,3 +111,4 @@ motchallenge_metric_names = {
     'mota' : 'MOTA',
     'motp' : 'MOTP'
 }
+"""A list mappings for metric names to comply with MOTChallenge."""
