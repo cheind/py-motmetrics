@@ -14,7 +14,7 @@ class MetricsContainer:
     def __init__(self):
         self.metrics = {}
 
-    def register(self, fnc, deps=None, name=None, helpstr=None):
+    def register(self, fnc, deps=None, name=None, helpstr=None, formatter=None):
         assert not fnc is None, 'No function given for metric {}'.format(name)
 
         if deps is None:
@@ -27,12 +27,14 @@ class MetricsContainer:
 
         if helpstr is None:
             helpstr = inspect.getdoc(fnc) if inspect.getdoc(fnc) else 'No description.'
+            helpstr = ' '.join(helpstr.split())
             
         self.metrics[name] = {
             'name' : name,
             'fnc' : fnc,
             'deps' : deps,
-            'help' : helpstr
+            'help' : helpstr,
+            'formatter' : formatter
         }
 
     @property
@@ -51,12 +53,12 @@ class MetricsContainer:
 
     def to_markdown(self, include_deps=False):
         df = self.list_metrics(include_deps=include_deps)
-        fmt = ['---' for i in range(len(df.columns))]
+        fmt = [':---' for i in range(len(df.columns))]
         df_fmt = pd.DataFrame([fmt], columns=df.columns)
         df_formatted = pd.concat([df_fmt, df])
         return df_formatted.to_csv(sep="|", index=False)
 
-    def summarize(self, df, metrics=None):
+    def compute(self, df, metrics=None, name=None):
         cache = {}
 
         if metrics is None:
@@ -65,8 +67,12 @@ class MetricsContainer:
         for mname in metrics:
             cache[mname] = self._compute(df, mname, cache, parent='summarize')            
 
-        return OrderedDict([(k, cache[k]) for k in metrics])
-        
+        if name is None:
+            name = 0 
+
+        data = OrderedDict([(k, cache[k]) for k in metrics])
+        return pd.DataFrame(data, index=[name])
+
     def _compute(self, df, name, cache, parent=None):
         assert name in self.metrics, 'Cannot find metric {} required by {}.'.format(name, parent)
         minfo = self.metrics[name]
@@ -90,7 +96,10 @@ def num_unique_objects(df, obj_frequencies):
     return float(len(obj_frequencies))
 
 def num_matches(df):
-    """Total number matches."""
+    """Total number matches.
+    
+    Multiline test.
+    """
     return float(df.Type.isin(['MATCH']).sum())
 
 def num_switches(df):
@@ -165,24 +174,24 @@ def recall(df, num_detections, num_objects):
 def default_metrics():
     m = MetricsContainer()
 
-    m.register(num_frames)
-    m.register(obj_frequencies)    
-    m.register(num_matches)
-    m.register(num_switches)
-    m.register(num_falsepositives)
-    m.register(num_misses)
-    m.register(num_detections)
-    m.register(num_objects)
-    m.register(num_unique_objects, deps='auto')
+    m.register(num_frames, formatter='{:d}'.format)
+    m.register(obj_frequencies, formatter='{:d}'.format)    
+    m.register(num_matches, formatter='{:d}'.format)
+    m.register(num_switches, formatter='{:d}'.format)
+    m.register(num_falsepositives, formatter='{:d}'.format)
+    m.register(num_misses, formatter='{:d}'.format)
+    m.register(num_detections, formatter='{:d}'.format)
+    m.register(num_objects, formatter='{:d}'.format)
+    m.register(num_unique_objects, deps='auto', formatter='{:d}'.format)
     m.register(track_ratios, deps='auto')
-    m.register(mostly_tracked, deps='auto')
-    m.register(partially_tracked, deps='auto')
-    m.register(mostly_lost, deps='auto')
+    m.register(mostly_tracked, deps='auto', formatter='{:d}'.format)
+    m.register(partially_tracked, deps='auto', formatter='{:d}'.format)
+    m.register(mostly_lost, deps='auto', formatter='{:d}'.format)
     m.register(num_fragmentation, deps='auto')
-    m.register(motp, deps='auto')
-    m.register(mota, deps='auto')
-    m.register(precision, deps='auto')
-    m.register(recall, deps='auto')
+    m.register(motp, deps='auto', formatter='{:.3f}'.format)
+    m.register(mota, deps='auto', formatter='{:.2%}'.format)
+    m.register(precision, deps='auto', formatter='{:.2%}'.format)
+    m.register(recall, deps='auto', formatter='{:.2%}'.format)
 
     return m
 

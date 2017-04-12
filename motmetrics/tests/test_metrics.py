@@ -4,21 +4,17 @@ import pandas as pd
 import motmetrics as mm
 import pytest
 
-def test_metricscontainer():
+def test_metricscontainer_1():
     m = mm.metrics.MetricsContainer()
     m.register(lambda df: 1., name='a')
     m.register(lambda df: 2., name='b')
     m.register(lambda df, a, b: a+b, deps=['a', 'b'], name='add')
     m.register(lambda df, a, b: a-b, deps=['a', 'b'], name='sub')
     m.register(lambda df, a, b: a*b, deps=['add', 'sub'], name='mul')
-    summary = m.summarize(None, metrics=['mul','add'])
-    assert 'mul' in summary
-    assert 'add' in summary
-    assert not 'sub' in summary
-    assert not 'a' in summary
-    assert not 'b' in summary
-    assert summary['mul'] == -3.
-    assert summary['add'] == 3.
+    summary = m.compute(None, metrics=['mul','add'], name='x')
+    assert summary.columns.values.tolist() == ['mul','add']
+    assert summary.iloc[0]['mul'] == -3.
+    assert summary.iloc[0]['add'] == 3.
 
 def test_metricscontainer_autodep():
     m = mm.metrics.MetricsContainer()
@@ -27,14 +23,10 @@ def test_metricscontainer_autodep():
     m.register(lambda df, a, b: a+b, name='add', deps='auto')
     m.register(lambda df, a, b: a-b, name='sub', deps='auto')
     m.register(lambda df, add, sub: add*sub, name='mul', deps='auto')
-    summary = m.summarize(None, metrics=['mul','add'])
-    assert 'mul' in summary
-    assert 'add' in summary
-    assert not 'sub' in summary
-    assert not 'a' in summary
-    assert not 'b' in summary
-    assert summary['mul'] == -3.
-    assert summary['add'] == 3.
+    summary = m.compute(None, metrics=['mul','add'])
+    assert summary.columns.values.tolist() == ['mul','add']
+    assert summary.iloc[0]['mul'] == -3.
+    assert summary.iloc[0]['add'] == 3.
 
 def test_metricscontainer_autoname():
 
@@ -63,11 +55,7 @@ def test_metricscontainer_autoname():
 
     assert m.metrics['constant_a']['help'] == 'Constant a help.'
 
-    summary = m.summarize(None, metrics=['mul','add'])
-    assert 'mul' in summary
-    assert 'add' in summary
-    assert not 'sub' in summary
-    assert not 'a' in summary
-    assert not 'b' in summary
-    assert summary['mul'] == -3.
-    assert summary['add'] == 3.
+    summary = m.compute(None, metrics=['mul','add'])
+    assert summary.columns.values.tolist() == ['mul','add']
+    assert summary.iloc[0]['mul'] == -3.
+    assert summary.iloc[0]['add'] == 3.
