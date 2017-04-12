@@ -9,11 +9,11 @@ import numpy as np
 from collections import OrderedDict, Iterable
 from motmetrics.mot import MOTAccumulator
 
-class Metrics:
+class MetricsContainer:
     def __init__(self):
         self.metrics = {}
 
-    def add(self, fnc, deps=None, name=None):
+    def register(self, fnc, deps=None, name=None):
         assert not fnc is None, 'No function given for metric {}'.format(name)
 
         if deps is None:
@@ -124,27 +124,27 @@ def recall(df, num_detections, num_objects):
     return num_detections / num_objects
 
 
-def create_metrics():
-    m = Metrics()
+def default_metrics():
+    m = MetricsContainer()
 
-    m.add(num_frames)
-    m.add(obj_frequencies)    
-    m.add(num_matches)
-    m.add(num_switches)
-    m.add(num_falsepositives)
-    m.add(num_misses)
-    m.add(num_detections)
-    m.add(num_objects)
-    m.add(num_unique_objects, deps='auto')
-    m.add(track_ratios, deps='auto')
-    m.add(mostly_tracked, deps='auto')
-    m.add(partially_tracked, deps='auto')
-    m.add(mostly_lost, deps='auto')
-    m.add(num_fragmentation, deps='auto')
-    m.add(motp, deps='auto')
-    m.add(mota, deps='auto')
-    m.add(precision, deps='auto')
-    m.add(recall, deps='auto')
+    m.register(num_frames)
+    m.register(obj_frequencies)    
+    m.register(num_matches)
+    m.register(num_switches)
+    m.register(num_falsepositives)
+    m.register(num_misses)
+    m.register(num_detections)
+    m.register(num_objects)
+    m.register(num_unique_objects, deps='auto')
+    m.register(track_ratios, deps='auto')
+    m.register(mostly_tracked, deps='auto')
+    m.register(partially_tracked, deps='auto')
+    m.register(mostly_lost, deps='auto')
+    m.register(num_fragmentation, deps='auto')
+    m.register(motp, deps='auto')
+    m.register(mota, deps='auto')
+    m.register(precision, deps='auto')
+    m.register(recall, deps='auto')
 
     return m
 

@@ -5,12 +5,12 @@ import motmetrics as mm
 import pytest
 
 def test_metrics_host():
-    m = mm.metrics.Metrics()
-    m.add(lambda df: 1., name='a')
-    m.add(lambda df: 2., name='b')
-    m.add(lambda df, a, b: a+b, deps=['a', 'b'], name='add')
-    m.add(lambda df, a, b: a-b, deps=['a', 'b'], name='sub')
-    m.add(lambda df, a, b: a*b, deps=['add', 'sub'], name='mul')
+    m = mm.metrics.MetricsContainer()
+    m.register(lambda df: 1., name='a')
+    m.register(lambda df: 2., name='b')
+    m.register(lambda df, a, b: a+b, deps=['a', 'b'], name='add')
+    m.register(lambda df, a, b: a-b, deps=['a', 'b'], name='sub')
+    m.register(lambda df, a, b: a*b, deps=['add', 'sub'], name='mul')
     summary = m.summarize(None, metrics=['mul','add'])
     assert 'mul' in summary
     assert 'add' in summary
@@ -21,12 +21,12 @@ def test_metrics_host():
     assert summary['add'] == 3.
 
 def test_metrics_host_autodep():
-    m = mm.metrics.Metrics()
-    m.add(lambda df: 1., name='a')
-    m.add(lambda df: 2., name='b')
-    m.add(lambda df, a, b: a+b, name='add', deps='auto')
-    m.add(lambda df, a, b: a-b, name='sub', deps='auto')
-    m.add(lambda df, add, sub: add*sub, name='mul', deps='auto')
+    m = mm.metrics.MetricsContainer()
+    m.register(lambda df: 1., name='a')
+    m.register(lambda df: 2., name='b')
+    m.register(lambda df, a, b: a+b, name='add', deps='auto')
+    m.register(lambda df, a, b: a-b, name='sub', deps='auto')
+    m.register(lambda df, add, sub: add*sub, name='mul', deps='auto')
     summary = m.summarize(None, metrics=['mul','add'])
     assert 'mul' in summary
     assert 'add' in summary
@@ -53,12 +53,12 @@ def test_metrics_host_autodep_autoname():
     def mul(df, add, sub):
         return add * sub
 
-    m = mm.metrics.Metrics()
-    m.add(constant_a, deps='auto')
-    m.add(constant_b, deps='auto')
-    m.add(add, deps='auto')
-    m.add(sub, deps='auto')
-    m.add(mul, deps='auto')
+    m = mm.metrics.MetricsContainer()
+    m.register(constant_a, deps='auto')
+    m.register(constant_b, deps='auto')
+    m.register(add, deps='auto')
+    m.register(sub, deps='auto')
+    m.register(mul, deps='auto')
     summary = m.summarize(None, metrics=['mul','add'])
     assert 'mul' in summary
     assert 'add' in summary
