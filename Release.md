@@ -14,3 +14,8 @@
     - twine upload dist\*
     - git add, commit
     - git flow release finish <VERSION>
+    - git push
+    - git push --tags
+    - git checkout master
+    - git push
+    - git checkout develop
