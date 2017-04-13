@@ -7,6 +7,7 @@ https://github.com/cheind/py-motmetrics
 from enum import Enum
 import pandas as pd
 import numpy as np
+import io
 
 class Format(Enum):
     """Enumerates supported file formats."""
@@ -23,8 +24,21 @@ class Format(Enum):
     """
 
 
-def _load_motchallenge(fname, **kwargs):
-    """Load MOT challenge data."""
+def load_motchallenge(fname, **kwargs):
+    """Load MOT challenge data.
+    
+    Params
+    ------
+    fname : str
+        Filename to load data from
+
+    Returns
+    ------
+    df : pandas.DataFrame 
+        The returned dataframe has the following columns
+            'X', 'Y', 'Width', 'Height', 'Score', 'ClassId', 'Visibility'
+        The dataframe is indexed by ('FrameId', 'Id')    
+    """
 
     sep = kwargs.pop('sep', '\s+|\t+|,')
     df = pd.read_csv(
@@ -45,16 +59,101 @@ def _load_motchallenge(fname, **kwargs):
 
     return df
 
-def _load_vatictxt(fname, **kwargs):
-    raise NotImplementedError()
+def load_vatictxt(fname, **kwargs):
+    """Load Vatic text format.
 
-def loadtxt(fname, fmt='mot15-2D', **kwargs):
+    Loads the vatic CSV text having the following columns per row
+    
+        0   Track ID. All rows with the same ID belong to the same path.
+        1   xmin. The top left x-coordinate of the bounding box.
+        2   ymin. The top left y-coordinate of the bounding box.
+        3   xmax. The bottom right x-coordinate of the bounding box.
+        4   ymax. The bottom right y-coordinate of the bounding box.
+        5   frame. The frame that this annotation represents.
+        6   lost. If 1, the annotation is outside of the view screen.
+        7   occluded. If 1, the annotation is occluded.
+        8   generated. If 1, the annotation was automatically interpolated.
+        9  label. The label for this annotation, enclosed in quotation marks.
+        10+ attributes. Each column after this is an attribute set in the current frame
+
+    Params
+    ------
+    fname : str
+        Filename to load data from
+
+    Returns
+    ------
+    df : pandas.DataFrame
+        The returned dataframe has the following columns
+            'X', 'Y', 'Width', 'Height', 'Lost', 'Occluded', 'Generated', 'ClassId', '<Attr1>', '<Attr2>', ...
+        where <Attr1> is placeholder for the actual attribute name capitalized (first letter). The order of attribute
+        columns is sorted in attribute name. The dataframe is indexed by ('FrameId', 'Id')    
+    """
+
+    sep = kwargs.pop('sep', ' ')
+    
+    with open(fname) as f:        
+        # First time going over file, we collect the set of all variable activities
+        activities = set()
+        for line in f:
+            [activities.add(c) for c in line.rstrip().split(sep)[10:]]        
+        activitylist = sorted(list(activities))
+
+        # Second time we construct artificial binary columns for each activity
+        data = []
+        f.seek(0)
+        for line in f:
+            fields = line.rstrip().split()
+            attrs = ['0'] * len(activitylist)            
+            for a in fields[10:]:
+                 attrs[activitylist.index(a)] = '1'
+            fields = fields[:10]
+            fields.extend(attrs)
+            data.append(' '.join(fields))
+
+        strdata = '\n'.join(data)
+
+        dtype = {
+            'Id': np.int64,
+            'X': np.float32,
+            'Y': np.float32,
+            'Width': np.float32,
+            'Height': np.float32,
+            'FrameId': np.int64,
+            'Lost': bool,
+            'Occluded': bool,
+            'Generated': bool,
+            'ClassId': str,
+        }
+
+        # Remove quotes from activities
+        activitylist = [a.replace('\"', '').capitalize() for a in activitylist]        
+
+        # Add dtypes for activities
+        for a in activitylist:
+            dtype[a] = bool
+
+        # Read from CSV
+        names = ['Id', 'X', 'Y', 'Width', 'Height', 'FrameId', 'Lost', 'Occluded', 'Generated', 'ClassId']
+        names.extend(activitylist)
+        df = pd.read_csv(io.StringIO(strdata), names=names, index_col=['FrameId','Id'], header=None, sep=' ')
+
+        # Correct Width and Height which are actually XMax, Ymax in files.
+        w = df['Width'] - df['X']
+        h = df['Height'] - df['Y']
+        df['Width'] = w
+        df['Height'] = h
+
+        return df
+
+def loadtxt(fname, fmt=Format.MOT15_2D, **kwargs):
     """Load data from any known format."""
     fmt = Format(fmt)
 
     switcher = {
-        Format.MOT16: _load_motchallenge,
-        Format.MOT15_2D: _load_motchallenge
+        Format.MOT16: load_motchallenge,
+        Format.MOT15_2D: load_motchallenge,
+        Format.VATIC_TXT: load_vatictxt
     }
     func = switcher.get(fmt)
     return func(fname, **kwargs)
