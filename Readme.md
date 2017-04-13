@@ -89,7 +89,9 @@ python -m motmetrics.apps.eval_motchallenge --help
 
 ### Installation
 
-#### Local
+
+
+#### Development mode
 To install **py-motmetrics** clone this repository and use `pip` to install from local sources.
 
 ```
