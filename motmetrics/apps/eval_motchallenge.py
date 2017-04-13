@@ -14,7 +14,7 @@ from pathlib import Path
 
 def parse_args():
     parser = argparse.ArgumentParser(description="""
-Compute  metrics for trackers using MOTChallenge ground-truth data.
+Compute metrics for trackers using MOTChallenge ground-truth data.
 
 Files
 -----
@@ -48,7 +48,7 @@ string.""", formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('--fmt', type=str, help='Data format', default='mot15-2D')
     return parser.parse_args()
 
-def evaluate_dataframes(gt, ts):
+def compare_dataframes(gt, ts):
     
     accs = []
     names = []
@@ -82,7 +82,7 @@ if __name__ == '__main__':
     
     
     mh = mm.metrics.create()
-    accs, names = evaluate_dataframes(gt, ts)
+    accs, names = compare_dataframes(gt, ts)
     
     logging.info('Running metrics')
     summary = mh.compute_many(accs, names=names, metrics=mm.metrics.motchallenge_metrics)

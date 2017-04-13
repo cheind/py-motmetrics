@@ -82,7 +82,10 @@ Besides naming conventions, the only obvious differences are
 - Metric `FAR` is missing. This metric is given implicitly and can be recovered by `FalsePos / Frames * 100`.
 - Metric `MOTP` seems to be off. To convert compute `(1 - MOTP) * 100`. [MOTChallenge][MOTChallenge] benchmarks compute `MOTP` as percentage, while **py-motmetrics** sticks to the original definition of average distance over number of assigned objects [[1]](#References).
 
-All results are asserted by unit tests.
+You can compare tracker results to ground truth in MOTChallenge format by
+```
+python -m motmetrics.apps.eval_motchallenge --help
+```
 
 ### Installation
 
