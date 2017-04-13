@@ -89,16 +89,21 @@ python -m motmetrics.apps.eval_motchallenge --help
 
 ### Installation
 
+#### PyPi and development installs
 
+To install **py-motmetrics** use `pip`
 
-#### Development mode
-To install **py-motmetrics** clone this repository and use `pip` to install from local sources.
+```
+pip install motmetrics
+```
+
+Python 3.5/3.6 and numpy, pandas and scipy is required. If no binary packages are available for your platform and building source packages fails, you might want to try a distribution like Conda (see below) to install dependencies.
+
+Alternatively for developing, clone or fork this repository and install in editing mode.
 
 ```
 pip install -e <path/to/setup.py>
 ```
-
-Python 3.5/3.6 and numpy, pandas and scipy is required. If no binary packages are available for your platform and building source packages fail, you might want to try a distribution like Conda (see below) to install dependencies.
 
 #### Conda
 In case you are using Conda, a simple way to run **py-motmetrics** is to create a virtual environment with all the necessary dependencies
@@ -123,6 +128,8 @@ conda install --file requirements.txt
 pip install .
 pytest
 ```
+
+###
 
 ### Usage
 
