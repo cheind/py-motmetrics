@@ -1,4 +1,4 @@
-![](https://travis-ci.org/cheind/py-motmetrics.svg?branch=master)
+[![](https://travis-ci.org/cheind/py-motmetrics.svg?branch=master)](https://travis-ci.org/cheind/py-motmetrics)
 
 ## py-motmetrics
 
