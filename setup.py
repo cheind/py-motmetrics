@@ -5,7 +5,10 @@ https://github.com/cheind/py-motmetrics
 """
 
 import os
-from distutils.core import setup
+try:
+    from setuptools import setup
+except ImportError:
+    from distutils.core import setup
 
 with open('requirements.txt') as f:
     required = f.read().splitlines()
@@ -19,4 +22,5 @@ setup(
     license='MIT',
     install_requires=required,
     packages=['motmetrics', 'motmetrics.tests', 'motmetrics.apps'],
+    keywords='tracker MOT evaluation metrics compare'
 )

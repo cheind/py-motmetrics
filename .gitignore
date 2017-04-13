@@ -48,3 +48,5 @@ Temporary Items
 *.pyc
 .cache/v/cache/lastfailed
 *.egg-info/
+build/
+dist/
