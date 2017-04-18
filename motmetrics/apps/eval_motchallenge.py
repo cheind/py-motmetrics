@@ -48,14 +48,13 @@ string.""", formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('--fmt', type=str, help='Data format', default='mot15-2D')
     return parser.parse_args()
 
-def compare_dataframes(gt, ts):
-    
+def compare_dataframes(gts, ts):
     accs = []
     names = []
     for k, tsacc in ts.items():
-        if k in gt:            
+        if k in gts:            
             logging.info('Comparing {}...'.format(k))
-            accs.append(mm.utils.compare_to_groundtruth(gt[k], tsacc, 'iou', distth=0.5))
+            accs.append(mm.utils.compare_to_groundtruth(gts[k], tsacc, 'iou', distth=0.5))
             names.append(k)
         else:
             logging.warning('No ground truth for {}, skipping.'.format(k))
@@ -77,11 +76,10 @@ if __name__ == '__main__':
     logging.info('Found {} groundtruths and {} test files.'.format(len(gtfiles), len(tsfiles)))
     logging.info('Loading files.')
     
-    gt = dict([(Path(f).parts[-3], mm.io.loadtxt(f, fmt='mot15-2D')) for f in gtfiles])
-    ts = dict([(os.path.splitext(Path(f).parts[-1])[0], mm.io.loadtxt(f, fmt='mot15-2D')) for f in tsfiles])
-    
-    
-    mh = mm.metrics.create()
+    gt = dict([(Path(f).parts[-3], mm.io.loadtxt(f, fmt=args.fmt, min_confidence=1)) for f in gtfiles])
+    ts = dict([(os.path.splitext(Path(f).parts[-1])[0], mm.io.loadtxt(f, fmt=args.fmt)) for f in tsfiles])    
+
+    mh = mm.metrics.create()    
     accs, names = compare_dataframes(gt, ts)
     
     logging.info('Running metrics')
