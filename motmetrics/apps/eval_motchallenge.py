@@ -10,6 +10,7 @@ import os
 import logging
 import motmetrics as mm
 import pandas as pd
+from collections import OrderedDict
 from pathlib import Path
 
 def parse_args():
@@ -76,8 +77,8 @@ if __name__ == '__main__':
     logging.info('Found {} groundtruths and {} test files.'.format(len(gtfiles), len(tsfiles)))
     logging.info('Loading files.')
     
-    gt = dict([(Path(f).parts[-3], mm.io.loadtxt(f, fmt=args.fmt, min_confidence=1)) for f in gtfiles])
-    ts = dict([(os.path.splitext(Path(f).parts[-1])[0], mm.io.loadtxt(f, fmt=args.fmt)) for f in tsfiles])    
+    gt = OrderedDict([(Path(f).parts[-3], mm.io.loadtxt(f, fmt=args.fmt, min_confidence=1)) for f in gtfiles])
+    ts = OrderedDict([(os.path.splitext(Path(f).parts[-1])[0], mm.io.loadtxt(f, fmt=args.fmt)) for f in tsfiles])    
 
     mh = mm.metrics.create()    
     accs, names = compare_dataframes(gt, ts)
