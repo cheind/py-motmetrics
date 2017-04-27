@@ -219,8 +219,8 @@ def num_objects(df):
 
 def track_ratios(df, obj_frequencies):
     """Ratio of assigned to total appearance count per unique object id."""   
-    tracked = df[df.Type !='MISS']['OId'].value_counts()   
-    return tracked.div(obj_frequencies).fillna(1.)
+    tracked = df[df.Type != 'MISS']['OId'].value_counts()
+    return tracked.div(obj_frequencies).fillna(0.)
 
 def mostly_tracked(df, track_ratios):
     """Number of objects tracked for at least 80 percent of lifespan."""

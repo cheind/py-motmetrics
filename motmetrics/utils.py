@@ -36,23 +36,37 @@ def compare_to_groundtruth(gt, dt, dist='iou', distfields=['X', 'Y', 'Width', 'H
         Maximum tolerable distance. Pairs exceeding this threshold are marked 'do-not-pair'.
     """
 
+    def compute_iou(a, b):
+        return iou_matrix(a, b, max_iou=distth)
+
+    def compute_euc(a, b):
+        return norm2squared_matrix(a, b, max_d2=distth)
+
+    compute_dist = compute_iou if dist.upper() == 'IOU' else compute_euc
+
     acc = MOTAccumulator()
 
-    for frameid, fgt in gt.groupby(level=0):
-        fgt = fgt.loc[frameid] 
-        oids = fgt.index.values
-        
-        hids = []
-        dists = []
+    # We need to account for all frames reported either by ground truth or
+    # detector. In case a frame is missing in GT this will lead to FPs, in 
+    # case a frame is missing in detector results this will lead to FNs.
+    allframeids = gt.index.union(dt.index).levels[0]
+    
+    for fid in allframeids:
+        oids = np.empty(0)
+        hids = np.empty(0)
+        dists = np.empty((0,0))
 
-        if frameid in dt.index:
-            fdt = dt.loc[frameid]
+        if fid in gt.index:
+            fgt = gt.loc[fid] 
+            oids = fgt.index.values
+
+        if fid in dt.index:
+            fdt = dt.loc[fid]
             hids = fdt.index.values
-            if dist == 'iou':                
-                dists = iou_matrix(fgt[distfields].values, fdt[distfields].values, max_iou=distth)
-            else:
-                dists = norm2squared_matrix(fgt[distfields].values, fdt[distfields].values, max_d2=distth)
 
-        acc.update(oids, hids, dists, frameid=frameid)
-
+        if oids.shape[0] > 0 and hids.shape[0] > 0:
+            dists = compute_dist(fgt[distfields].values, fdt[distfields].values)
+        
+        acc.update(oids, hids, dists, frameid=fid)
+    
     return acc
