@@ -86,3 +86,34 @@ def test_correct_average():
     mh = mm.metrics.create()
     metr = mh.compute(acc, metrics='mota', return_dataframe=False)
     assert metr['mota'] == approx(0.2)
+
+def test_merge_dataframes():
+
+    acc = mm.MOTAccumulator()
+
+    acc.update([], ['a', 'b'], [], frameid=0)
+    acc.update([1, 2], [], [], frameid=1)
+    acc.update([1, 2], ['a', 'b'], [[1, 0.5], [0.3, 1]], frameid=2)
+    acc.update([1, 2], ['a', 'b'], [[0.2, np.nan], [np.nan, 0.1]], frameid=3)
+    
+    r, mappings = mm.MOTAccumulator.merge_event_dataframes([acc.events, acc.events], return_mappings=True)
+
+    expect = mm.MOTAccumulator.new_event_dataframe()
+    expect.loc[(0, 0), :] = ['FP', np.nan, mappings[0]['hid_map']['a'], np.nan]
+    expect.loc[(0, 1), :] = ['FP', np.nan, mappings[0]['hid_map']['b'], np.nan]
+    expect.loc[(1, 0), :] = ['MISS', mappings[0]['oid_map'][1], np.nan, np.nan]
+    expect.loc[(1, 1), :] = ['MISS', mappings[0]['oid_map'][2], np.nan, np.nan]
+    expect.loc[(2, 0), :] = ['MATCH', mappings[0]['oid_map'][1], mappings[0]['hid_map']['b'], 0.5]
+    expect.loc[(2, 1), :] = ['MATCH', mappings[0]['oid_map'][2], mappings[0]['hid_map']['a'], 0.3]
+    expect.loc[(3, 0), :] = ['SWITCH', mappings[0]['oid_map'][1], mappings[0]['hid_map']['a'], 0.2]
+    expect.loc[(3, 1), :] = ['SWITCH', mappings[0]['oid_map'][2], mappings[0]['hid_map']['b'], 0.1]
+    expect.loc[(4, 0), :] = ['FP', np.nan, mappings[1]['hid_map']['a'], np.nan]
+    expect.loc[(4, 1), :] = ['FP', np.nan, mappings[1]['hid_map']['b'], np.nan]
+    expect.loc[(5, 0), :] = ['MISS', mappings[1]['oid_map'][1], np.nan, np.nan]
+    expect.loc[(5, 1), :] = ['MISS', mappings[1]['oid_map'][2], np.nan, np.nan]
+    expect.loc[(6, 0), :] = ['MATCH', mappings[1]['oid_map'][1], mappings[1]['hid_map']['b'], 0.5]
+    expect.loc[(6, 1), :] = ['MATCH', mappings[1]['oid_map'][2], mappings[1]['hid_map']['a'], 0.3]
+    expect.loc[(7, 0), :] = ['SWITCH', mappings[1]['oid_map'][1], mappings[1]['hid_map']['a'], 0.2]
+    expect.loc[(7, 1), :] = ['SWITCH', mappings[1]['oid_map'][2], mappings[1]['hid_map']['b'], 0.1]
+
+    assert pd.DataFrame.equals(r, expect)
