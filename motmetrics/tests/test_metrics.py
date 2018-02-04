@@ -78,7 +78,7 @@ def test_mota_motp():
     acc.update([], [], [], frameid=5)
     
     mh = mm.metrics.create()
-    metr = mh.compute(acc, metrics=['motp', 'mota'], return_dataframe=False, return_cached=True)
+    metr = mh.compute(acc, metrics=['motp', 'mota', 'num_predictions'], return_dataframe=False, return_cached=True)
 
     assert metr['num_matches'] == 4
     assert metr['num_false_positives'] == 2
@@ -86,6 +86,7 @@ def test_mota_motp():
     assert metr['num_switches'] == 2
     assert metr['num_detections'] == 6
     assert metr['num_objects'] == 8
+    assert metr['num_predictions'] == 8
     assert metr['mota'] == approx(1. - (2 + 2 + 2) / 8)
     assert metr['motp'] == approx(11.1 / 6)
     

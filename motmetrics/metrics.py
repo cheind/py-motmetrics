@@ -248,7 +248,7 @@ def num_predictions(df, pred_frequencies):
 
 def num_predictions(df):
     """Total number of unique prediction appearances over all frames."""
-    return df.noraw.Hid.count()
+    return df.noraw.HId.count()
 
 def track_ratios(df, obj_frequencies):
     """Ratio of assigned to total appearance count per unique object id."""   
