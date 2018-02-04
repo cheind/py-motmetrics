@@ -207,8 +207,12 @@ def num_frames(df):
     return df.full.index.get_level_values(0).unique().shape[0]
 
 def obj_frequencies(df):
-    """Total number of occurrences of individual objects."""
+    """Total number of occurrences of individual objects over all frames."""
     return df.noraw.OId.value_counts()
+
+def pred_frequencies(df):
+    """Total number of occurrences of individual predictions over all frames."""
+    return df.noraw.HId.value_counts()
 
 def num_unique_objects(df, obj_frequencies):
     """Total number of unique object ids encountered."""
@@ -234,9 +238,17 @@ def num_detections(df, num_matches, num_switches):
     """Total number of detected objects including matches and switches."""
     return num_matches + num_switches
 
-def num_objects(df):
-    """Total number of objects."""
-    return df.noraw.OId.count()
+def num_objects(df, obj_frequencies):
+    """Total number of unique object appearances over all frames."""
+    return obj_frequencies.sum()
+
+def num_predictions(df, pred_frequencies):
+    """Total number of unique prediction appearances over all frames."""
+    return pred_frequencies.sum()
+
+def num_predictions(df):
+    """Total number of unique prediction appearances over all frames."""
+    return df.noraw.Hid.count()
 
 def track_ratios(df, obj_frequencies):
     """Ratio of assigned to total appearance count per unique object id."""   
@@ -293,12 +305,14 @@ def create():
 
     m.register(num_frames, formatter='{:d}'.format)
     m.register(obj_frequencies, formatter='{:d}'.format)    
+    m.register(pred_frequencies, formatter='{:d}'.format)
     m.register(num_matches, formatter='{:d}'.format)
     m.register(num_switches, formatter='{:d}'.format)
     m.register(num_false_positives, formatter='{:d}'.format)
     m.register(num_misses, formatter='{:d}'.format)
     m.register(num_detections, formatter='{:d}'.format)
     m.register(num_objects, formatter='{:d}'.format)
+    m.register(num_predictions, formatter='{:d}'.format)
     m.register(num_unique_objects, formatter='{:d}'.format)
     m.register(track_ratios)
     m.register(mostly_tracked, formatter='{:d}'.format)
