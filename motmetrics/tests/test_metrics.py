@@ -12,7 +12,7 @@ def test_metricscontainer_1():
     m.register(lambda df, a, b: a+b, deps=['a', 'b'], name='add')
     m.register(lambda df, a, b: a-b, deps=['a', 'b'], name='sub')
     m.register(lambda df, a, b: a*b, deps=['add', 'sub'], name='mul')
-    summary = m.compute(None, metrics=['mul','add'], name='x')
+    summary = m.compute(mm.MOTAccumulator.new_event_dataframe(), metrics=['mul','add'], name='x')
     assert summary.columns.values.tolist() == ['mul','add']
     assert summary.iloc[0]['mul'] == -3.
     assert summary.iloc[0]['add'] == 3.
@@ -24,7 +24,7 @@ def test_metricscontainer_autodep():
     m.register(lambda df, a, b: a+b, name='add', deps='auto')
     m.register(lambda df, a, b: a-b, name='sub', deps='auto')
     m.register(lambda df, add, sub: add*sub, name='mul', deps='auto')
-    summary = m.compute(None, metrics=['mul','add'])
+    summary = m.compute(mm.MOTAccumulator.new_event_dataframe(), metrics=['mul','add'])
     assert summary.columns.values.tolist() == ['mul','add']
     assert summary.iloc[0]['mul'] == -3.
     assert summary.iloc[0]['add'] == 3.
@@ -56,10 +56,59 @@ def test_metricscontainer_autoname():
 
     assert m.metrics['constant_a']['help'] == 'Constant a help.'
 
-    summary = m.compute(None, metrics=['mul','add'])
+    summary = m.compute(mm.MOTAccumulator.new_event_dataframe(), metrics=['mul','add'])
     assert summary.columns.values.tolist() == ['mul','add']
     assert summary.iloc[0]['mul'] == -3.
     assert summary.iloc[0]['add'] == 3.
+
+def test_mota_motp():
+    acc = mm.MOTAccumulator()
+
+    # All FP
+    acc.update([], ['a', 'b'], [], frameid=0)
+    # All miss
+    acc.update([1, 2], [], [], frameid=1)
+    # Match
+    acc.update([1, 2], ['a', 'b'], [[1, 0.5], [0.3, 1]], frameid=2)
+    # Switch
+    acc.update([1, 2], ['a', 'b'], [[0.2, np.nan], [np.nan, 0.1]], frameid=3)
+    # Match. Better new match is available but should prefer history
+    acc.update([1, 2], ['a', 'b'], [[5, 1], [1, 5]], frameid=4)
+    # No data
+    acc.update([], [], [], frameid=5)
+    
+    mh = mm.metrics.create()
+    metr = mh.compute(acc, metrics=['motp', 'mota'], return_dataframe=False, return_cached=True)
+
+    assert metr['num_matches'] == 4
+    assert metr['num_false_positives'] == 2
+    assert metr['num_misses'] == 2
+    assert metr['num_switches'] == 2
+    assert metr['num_detections'] == 6
+    assert metr['num_objects'] == 8
+    assert metr['mota'] == approx(1. - (2 + 2 + 2) / 8)
+    assert metr['motp'] == approx(11.1 / 6)
+    
+
+def test_correct_average():
+    # Tests what is being depicted in figure 3 of 'Evaluating MOT Performance'
+    acc = mm.MOTAccumulator(auto_id=True)
+
+    # No track
+    acc.update([1, 2, 3, 4], [], [])
+    acc.update([1, 2, 3, 4], [], [])
+    acc.update([1, 2, 3, 4], [], [])
+    acc.update([1, 2, 3, 4], [], [])
+
+    # Track single
+    acc.update([4], [4], [0])
+    acc.update([4], [4], [0])
+    acc.update([4], [4], [0])
+    acc.update([4], [4], [0])
+
+    mh = mm.metrics.create()
+    metr = mh.compute(acc, metrics='mota', return_dataframe=False)
+    assert metr['mota'] == approx(0.2)
 
 def test_motchallenge_files():
     dnames = [
