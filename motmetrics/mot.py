@@ -32,15 +32,16 @@ class MOTAccumulator(object):
         - `'SWITCH'` a match between a object and hypothesis was found but differs from previous assignment
         - `'MISS'` no match for an object was found
         - `'FP'` no match for an hypothesis was found (spurious detections)
+        - `'RAW'` events corresponding to raw input
     
     Events are tracked in a pandas Dataframe. The dataframe is hierarchically indexed by (`FrameId`, `EventId`),
     where `FrameId` is either provided during the call to `update` or auto-incremented when `auto_id` is set
     true during construction of MOTAccumulator. `EventId` is auto-incremented. The dataframe has the following
     columns 
-        - `Type` one of `('MATCH', 'SWITCH', 'MISS', 'FP')`
-        - `OId` object id or np.nan when `'FP'`
-        - `HId` hypothesis id or np.nan when `'MISS'`
-        - `D` distance or np.nan when `'FP'` or `'MISS'`
+        - `Type` one of `('MATCH', 'SWITCH', 'MISS', 'FP', 'RAW')`
+        - `OId` object id or np.nan when `'FP'` or `'RAW'` and object is not present
+        - `HId` hypothesis id or np.nan when `'MISS'` or `'RAW'` and hypothesis is not present
+        - `D` distance or np.nan when `'FP'` or `'MISS'` or `'RAW'` and either object/hypothesis is absent
     
     From the events and associated fields the entire tracking history can be recovered. Once the accumulator 
     has been populated with per-frame data use `metrics.summarize` to compute statistics. See `metrics.compute_metrics`
