@@ -141,11 +141,22 @@ class MOTAccumulator(object):
         eid = count()
 
         # 0. Record raw events
-        for i in range(len(oids)):
-            for j in range(len(hids)):
-                d = dists[i,j]
-                if np.isfinite(d):
+
+        no = len(oids)
+        nh = len(hids)
+        
+        if no * nh > 0:
+            for i in range(no):
+                for j in range(nh):
+                    d = dists[i,j]
                     self.events.loc[(frameid, next(eid)), :] = ['RAW', oids[i], hids[j], d]
+        elif no == 0:
+            for i in range(nh):
+                self.events.loc[(frameid, next(eid)), :] = ['RAW', np.nan, hids[i], np.nan]        
+        elif nh == 0:
+            for i in range(no):
+                self.events.loc[(frameid, next(eid)), :] = ['RAW', oids[i], np.nan, np.nan]
+
 
         dists, INVDIST = self._sanitize_dists(dists)
 

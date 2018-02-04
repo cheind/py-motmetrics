@@ -22,10 +22,15 @@ def test_events():
     acc.update([], [], [], frameid=5)
 
     expect = mm.MOTAccumulator.new_event_dataframe()
-    expect.loc[(0, 0), :] = ['FP', np.nan, 'a', np.nan]
-    expect.loc[(0, 1), :] = ['FP', np.nan, 'b', np.nan]
-    expect.loc[(1, 0), :] = ['MISS', 1, np.nan, np.nan]
-    expect.loc[(1, 1), :] = ['MISS', 2, np.nan, np.nan]
+    expect.loc[(0, 0), :] = ['RAW', np.nan, 'a', np.nan]
+    expect.loc[(0, 1), :] = ['RAW', np.nan, 'b', np.nan]
+    expect.loc[(0, 2), :] = ['FP', np.nan, 'a', np.nan]
+    expect.loc[(0, 3), :] = ['FP', np.nan, 'b', np.nan]
+
+    expect.loc[(1, 0), :] = ['RAW', 1, np.nan, np.nan]
+    expect.loc[(1, 1), :] = ['RAW', 2, np.nan, np.nan]    
+    expect.loc[(1, 2), :] = ['MISS', 1, np.nan, np.nan]
+    expect.loc[(1, 3), :] = ['MISS', 2, np.nan, np.nan]
 
     expect.loc[(2, 0), :] = ['RAW', 1, 'a', 1.0]
     expect.loc[(2, 1), :] = ['RAW', 1, 'b', 0.5]
@@ -35,9 +40,11 @@ def test_events():
     expect.loc[(2, 5), :] = ['MATCH', 2, 'a', 0.3]
 
     expect.loc[(3, 0), :] = ['RAW', 1, 'a', 0.2]
-    expect.loc[(3, 1), :] = ['RAW', 2, 'b', 0.1]
-    expect.loc[(3, 2), :] = ['SWITCH', 1, 'a', 0.2]
-    expect.loc[(3, 3), :] = ['SWITCH', 2, 'b', 0.1]
+    expect.loc[(3, 1), :] = ['RAW', 1, 'b', np.nan]
+    expect.loc[(3, 2), :] = ['RAW', 2, 'a', np.nan]
+    expect.loc[(3, 3), :] = ['RAW', 2, 'b', 0.1]
+    expect.loc[(3, 4), :] = ['SWITCH', 1, 'a', 0.2]
+    expect.loc[(3, 5), :] = ['SWITCH', 2, 'b', 0.1]
 
     expect.loc[(4, 0), :] = ['RAW', 1, 'a', 5.]
     expect.loc[(4, 1), :] = ['RAW', 1, 'b', 1.]
