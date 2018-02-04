@@ -139,6 +139,14 @@ class MOTAccumulator(object):
             assert not self.auto_id, 'Cannot provide frame id when auto-id is enabled'
         
         eid = count()
+
+        # 0. Record raw events
+        for i in range(len(oids)):
+            for j in range(len(hids)):
+                d = dists[i,j]
+                if np.isfinite(d):
+                    self.events.loc[(frameid, next(eid)), :] = ['RAW', oids[i], hids[j], d]
+
         dists, INVDIST = self._sanitize_dists(dists)
 
         if oids.size * hids.size > 0:        
@@ -200,7 +208,7 @@ class MOTAccumulator(object):
     def new_event_dataframe():
         """Create a new DataFrame for event tracking."""
         idx = pd.MultiIndex(levels=[[],[]], labels=[[],[]], names=['FrameId','Event'])
-        cats = pd.Categorical([], categories=['FP', 'MISS', 'SWITCH', 'MATCH'])
+        cats = pd.Categorical([], categories=['RAW', 'FP', 'MISS', 'SWITCH', 'MATCH'])
         df = pd.DataFrame(
             OrderedDict([
                 ('Type', pd.Series(cats)),          # Type of event. One of FP (false positive), MISS, SWITCH, MATCH
