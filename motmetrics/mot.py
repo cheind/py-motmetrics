@@ -10,7 +10,6 @@ import pandas as pd
 from collections import OrderedDict
 from itertools import count
 from scipy.optimize import linear_sum_assignment
-import uuid 
 
 class MOTAccumulator(object):
     """Manage tracking events.
