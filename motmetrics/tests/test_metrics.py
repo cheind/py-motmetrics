@@ -125,7 +125,9 @@ def test_motchallenge_files():
 
     accs = [compute_motchallenge(os.path.join(reldir, d)) for d in dnames]
 
-    # Summarize results from individual files
+    # For testing
+    # [a.events.to_pickle(n) for (a,n) in zip(accs, dnames)]
+
     mh = mm.metrics.create()
     summary = mh.compute_many(accs, metrics=mm.metrics.motchallenge_metrics, names=dnames, generate_overall=True)
 
