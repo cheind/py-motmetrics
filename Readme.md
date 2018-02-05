@@ -137,6 +137,7 @@ pytest
 
 ```python
 import motmetrics as mm
+import numpy as np
 
 # Create an accumulator that will be updated during each frame
 acc = mm.MOTAccumulator(auto_id=True)
@@ -274,6 +275,31 @@ print(strsummary)
        Rcll   Prcn GT MT PT ML FP FN IDs  FM   MOTA  MOTP
 full 83.33% 83.33%  2  1  1  0  1  1   1   1 50.00% 0.340
 part 75.00% 75.00%  2  1  1  0  1  1   0   0 50.00% 0.167
+"""
+```
+
+In order to generate an overall summary that computes the metrics jointly over all accumulators add `generate_overall=True` as follows
+
+```python
+summary = mh.compute_many(
+    [acc, acc.events.loc[0:1]], 
+    metrics=mm.metrics.motchallenge_metrics, 
+    names=['full', 'part'],
+    generate_overall=True
+    )
+
+strsummary = mm.io.render_summary(
+    summary, 
+    formatters=mh.formatters, 
+    namemap=mm.io.motchallenge_metric_names
+)
+print(strsummary)
+
+"""
+          Rcll   Prcn GT MT PT ML FP FN IDs  FM   MOTA  MOTP
+full    83.33% 83.33%  2  1  1  0  1  1   1   1 50.00% 0.340
+part    75.00% 75.00%  2  1  1  0  1  1   0   0 50.00% 0.167
+OVERALL 80.00% 80.00%  4  2  2  0  2  2   1   1 50.00% 0.275
 """
 ```
 
