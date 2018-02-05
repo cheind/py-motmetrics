@@ -107,7 +107,7 @@ def test_correct_average():
     assert metr['mota'] == approx(0.2)
 
 def test_merge_dataframes():
-
+    """
     acc = mm.MOTAccumulator()
 
     acc.update([], ['a', 'b'], [], frameid=0)
@@ -136,3 +136,4 @@ def test_merge_dataframes():
     expect.loc[(7, 1), :] = ['SWITCH', mappings[1]['oid_map'][2], mappings[1]['hid_map']['b'], 0.1]
 
     assert pd.DataFrame.equals(r, expect)
+    """
