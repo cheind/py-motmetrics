@@ -85,9 +85,13 @@ class MOTAccumulator(object):
     def reset(self):
         """Reset the accumulator to empty state."""
 
-        self.events = MOTAccumulator.new_event_dataframe()
+        self._events = []
+        self._indices = []
+        #self.events = MOTAccumulator.new_event_dataframe()
         self.m = {} # Pairings up to current timestamp  
         self.last_occurrence = {} # Tracks most recent occurance of object
+        self.dirty_events = True
+        self.cached_events_df = None
 
     def update(self, oids, hids, dists, frameid=None):
         """Updates the accumulator with frame specific objects/detections.
@@ -128,14 +132,18 @@ class MOTAccumulator(object):
         1. Bernardin, Keni, and Rainer Stiefelhagen. "Evaluating multiple object tracking performance: the CLEAR MOT metrics." 
         EURASIP Journal on Image and Video Processing 2008.1 (2008): 1-10.
         """
-            
+        
+        self.dirty_events = True
         oids = ma.array(oids, mask=np.zeros(len(oids)))
         hids = ma.array(hids, mask=np.zeros(len(hids)))  
         dists = np.atleast_2d(dists).astype(float).reshape(oids.shape[0], hids.shape[0])
 
         if frameid is None:            
             assert self.auto_id, 'auto-id is not enabled'
-            frameid = self.events.index.get_level_values(0).unique().shape[0]   
+            if len(self._indices) > 0:
+                frameid = self._indices[-1][0] + 1
+            else:
+                frameid = 0
         else:
             assert not self.auto_id, 'Cannot provide frame id when auto-id is enabled'
         
@@ -149,14 +157,16 @@ class MOTAccumulator(object):
         if no * nh > 0:
             for i in range(no):
                 for j in range(nh):
-                    d = dists[i,j]
-                    self.events.loc[(frameid, next(eid)), :] = ['RAW', oids[i], hids[j], d]
+                    self._indices.append((frameid, next(eid)))
+                    self._events.append(['RAW', oids[i], hids[j], dists[i,j]])
         elif no == 0:
             for i in range(nh):
-                self.events.loc[(frameid, next(eid)), :] = ['RAW', np.nan, hids[i], np.nan]        
+                self._indices.append((frameid, next(eid)))
+                self._events.append(['RAW', np.nan, hids[i], np.nan])       
         elif nh == 0:
             for i in range(no):
-                self.events.loc[(frameid, next(eid)), :] = ['RAW', oids[i], np.nan, np.nan]
+                self._indices.append((frameid, next(eid)))
+                self._events.append(['RAW', oids[i], np.nan, np.nan])
 
 
         dists, INVDIST = MOTAccumulator.sanitize_dists(dists)
@@ -177,8 +187,10 @@ class MOTAccumulator(object):
                     oids[i] = ma.masked
                     hids[j] = ma.masked
                     self.m[oids.data[i]] = hids.data[j]
-                    self.events.loc[(frameid, next(eid)), :] = ['MATCH', oids.data[i], hids.data[j], dists[i, j]]
-            
+                    
+                    self._indices.append((frameid, next(eid)))
+                    self._events.append(['MATCH', oids.data[i], hids.data[j], dists[i, j]])
+
             # 2. Try to remaining objects/hypotheses
             dists[oids.mask, :] = INVDIST
             dists[:, hids.mask] = INVDIST
@@ -194,27 +206,35 @@ class MOTAccumulator(object):
                             self.m[o] != h and \
                             abs(frameid - self.last_occurrence[o]) <= self.max_switch_time
                 cat = 'SWITCH' if is_switch else 'MATCH'
-                self.events.loc[(frameid, next(eid)), :] = [cat, oids.data[i], hids.data[j], dists[i, j]]
+                self._indices.append((frameid, next(eid)))
+                self._events.append([cat, oids.data[i], hids.data[j], dists[i, j]])
                 oids[i] = ma.masked
                 hids[j] = ma.masked
                 self.m[o] = h
 
         # 3. All remaining objects are missed
         for o in oids[~oids.mask]:
-            self.events.loc[(frameid, next(eid)), :] = ['MISS', o, np.nan, np.nan]
+            self._indices.append((frameid, next(eid)))
+            self._events.append(['MISS', o, np.nan, np.nan])
         
         # 4. All remaining hypotheses are false alarms
         for h in hids[~hids.mask]:
-            self.events.loc[(frameid, next(eid)), :] = ['FP', np.nan, h, np.nan]
+            self._indices.append((frameid, next(eid)))
+            self._events.append(['FP', np.nan, h, np.nan])
 
         # 5. Update occurance state
-        for o in oids.data:
+        for o in oids.data:            
             self.last_occurrence[o] = frameid
 
-        if frameid in self.events.index:
-            return self.events.loc[frameid]
-        else:
-            return None
+        return frameid
+
+    @property
+    def events(self):
+        if self.dirty_events:
+            idx = pd.MultiIndex.from_tuples(self._indices, names=['FrameId','Event'])
+            self.cached_events_df = pd.DataFrame(self._events, index=idx, columns=['Type', 'OId', 'HId', 'D'])
+            self.dirty_events = False
+        return self.cached_events_df
 
     @staticmethod
     def new_event_dataframe():
