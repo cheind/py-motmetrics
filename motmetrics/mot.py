@@ -231,8 +231,7 @@ class MOTAccumulator(object):
     @property
     def events(self):
         if self.dirty_events:
-            idx = pd.MultiIndex.from_tuples(self._indices, names=['FrameId','Event'])
-            self.cached_events_df = pd.DataFrame(self._events, index=idx, columns=['Type', 'OId', 'HId', 'D'])
+            self.cached_events_df = MOTAccumulator.new_event_dataframe_with_data(self._indices, self._events)
             self.dirty_events = False
         return self.cached_events_df
 
@@ -251,6 +250,38 @@ class MOTAccumulator(object):
             index=idx
         )
         return df
+
+    @staticmethod
+    def new_event_dataframe_with_data(indices, events):
+        """Create a new DataFrame filled with data.
+        
+        Params
+        ------
+        indices: list
+            list of tuples (frameid, eventid)
+        events: list
+            list of events where each event is a list containing
+            'Type', 'OId', HId', 'D'                    
+        """
+
+        
+        
+        tevents = list(zip(*events))
+
+        raw_type = pd.Categorical(tevents[0], categories=['RAW', 'FP', 'MISS', 'SWITCH', 'MATCH'], ordered=False)
+        series = [
+            pd.Series(raw_type, name='Type'),
+            pd.Series(tevents[1], dtype=str, name='OId'),
+            pd.Series(tevents[2], dtype=str, name='HId'),
+            pd.Series(tevents[3], dtype=float, name='D')
+        ]
+        
+        idx = pd.MultiIndex.from_tuples(indices, names=['FrameId','Event'])
+        df = pd.concat(series, axis=1)
+        df.index = idx
+        return df
+    
+
 
     @staticmethod
     def merge_event_dataframes(dfs, update_frame_indices=True, update_oids=True, update_hids=True, return_mappings=False):
