@@ -126,7 +126,7 @@ def test_motchallenge_files():
     accs = [compute_motchallenge(os.path.join(reldir, d)) for d in dnames]
 
     # For testing
-    #[a.events.to_pickle(n) for (a,n) in zip(accs, dnames)]
+    # [a.events.to_pickle(n) for (a,n) in zip(accs, dnames)]
 
     mh = mm.metrics.create()
     partials = [mh.compute(df, metrics=mm.metrics.motchallenge_metrics, name=dname) for df, dname in zip(accs, dnames)]
