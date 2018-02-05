@@ -310,6 +310,8 @@ class MOTAccumulator(object):
         """
 
         mapping_infos = []
+        new_oid = count()
+        new_hid = count()
 
         r = MOTAccumulator.new_event_dataframe()
         for df in dfs:
@@ -329,13 +331,13 @@ class MOTAccumulator(object):
                 infos['frame_offset'] = next_frame_id
 
             # Update object / hypothesis ids
-            if update_oids:
-                oid_map = dict([oid, uuid.uuid4().hex] for oid in copy['OId'].unique())
+            if update_oids:                
+                oid_map = dict([oid, str(next(new_oid))] for oid in copy['OId'].dropna().unique())
                 copy['OId'] = copy['OId'].map(lambda x: oid_map[x], na_action='ignore')
                 infos['oid_map'] = oid_map
             
             if update_hids:
-                hid_map = dict([hid, uuid.uuid4().hex] for hid in copy['HId'].unique())
+                hid_map = dict([hid, str(next(new_hid))] for hid in copy['HId'].dropna().unique())
                 copy['HId'] = copy['HId'].map(lambda x: hid_map[x], na_action='ignore')
                 infos['hid_map'] = hid_map
             
