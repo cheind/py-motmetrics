@@ -14,7 +14,7 @@ While benchmarking single object trackers is rather straightforward, measuring t
 
 ### Features at a glance
 - *Variety of metrics* <br/>
-Provides MOTA, MOTP, track quality measures and more. The results are [comparable](#MOTChallengeCompatibility) with the popular [MOTChallenge][MOTChallenge] benchmarks.
+Provides MOTA, MOTP, track quality measures, global ID measures and more. The results are [comparable](#MOTChallengeCompatibility) with the popular [MOTChallenge][MOTChallenge] benchmarks.
 - *Distance agnostic* <br/>
 Supports Euclidean, Intersection over Union and other distances measures.
 - *Complete event history* <br/> 
@@ -37,13 +37,15 @@ print(mh.list_metrics_markdown())
 Name|Description
 :---|:---
 num_frames|Total number of frames.
-obj_frequencies|Total number of occurrences of individual objects.
+obj_frequencies|Total number of occurrences of individual objects over all frames.
+pred_frequencies|Total number of occurrences of individual predictions over all frames.
 num_matches|Total number matches.
 num_switches|Total number of track switches.
 num_false_positives|Total number of false positives (false-alarms).
 num_misses|Total number of misses.
 num_detections|Total number of detected objects including matches and switches.
-num_objects|Total number of objects.
+num_objects|Total number of unique object appearances over all frames.
+num_predictions|Total number of unique prediction appearances over all frames.
 num_unique_objects|Total number of unique object ids encountered.
 track_ratios|Ratio of assigned to total appearance count per unique object id.
 mostly_tracked|Number of objects tracked for at least 80 percent of lifespan.
@@ -54,6 +56,13 @@ motp|Multiple object tracker precision.
 mota|Multiple object tracker accuracy.
 precision|Number of detected objects over sum of detected and false positives.
 recall|Number of detections over number of objects.
+id_global_assignment|ID measures: Global min-cost assignment for ID measures.
+idfp|ID measures: Number of false positive matches after global min-cost matching.
+idfn|ID measures: Number of false negatives matches after global min-cost matching.
+idtp|ID measures: Number of true positives matches after global min-cost matching.
+idp|ID measures: global min-cost precision.
+idr|ID measures: global min-cost recall.
+idf1|ID measures: global min-cost F1 score.
 
 <a name="MOTChallengeCompatibility"></a>
 ### MOTChallenge compatibility
@@ -61,21 +70,23 @@ recall|Number of detections over number of objects.
 **py-motmetrics** produces results compatible with popular [MOTChallenge][MOTChallenge] benchmarks. Below are two results taken from MOTChallenge [Matlab devkit][devkit] corresponding to the results of the CEM tracker on the training set of the 2015 MOT 2DMark.
 
 ```
-        ... TUD-Campus
- Rcll  Prcn   FAR| GT  MT  PT  ML|   FP    FN  IDs   FM|  MOTA  MOTP MOTAL
- 58.2  94.1  0.18|  8   1   6   1|   13   150    7    7|  52.6  72.3  54.3
 
-         ... TUD-Stadtmitte
- Rcll  Prcn   FAR| GT  MT  PT  ML|   FP    FN  IDs   FM|  MOTA  MOTP MOTAL
- 60.9  94.0  0.25| 10   5   4   1|   45   452    7    6|  56.4  65.4  56.9
+TUD-Campus
+ IDF1  IDP  IDR| Rcll  Prcn   FAR| GT  MT  PT  ML|   FP    FN  IDs   FM| MOTA  MOTP MOTAL 
+ 55.8 73.0 45.1| 58.2  94.1  0.18|  8   1   6   1|   13   150    7    7| 52.6  72.3  54.3
+
+TUD-Stadtmitte
+ IDF1  IDP  IDR| Rcll  Prcn   FAR| GT  MT  PT  ML|   FP    FN  IDs   FM| MOTA  MOTP MOTAL 
+ 64.5 82.0 53.1| 60.9  94.0  0.25| 10   5   4   1|   45   452    7    6| 56.4  65.4  56.9
+
 ```
 
 In comparison to **py-motmetrics**
 
 ```
-                 Rcll   Prcn GT MT PT ML FP  FN IDs  FM   MOTA  MOTP
-TUD-Campus     58.22% 94.14%  8  1  6  1 13 150   7   7 52.65% 0.277
-TUD-Stadtmitte 60.90% 93.99% 10  5  4  1 45 452   7   6 56.40% 0.346
+                IDF1   IDP   IDR  Rcll  Prcn GT MT PT ML FP  FN IDs  FM  MOTA  MOTP
+TUD-Campus     55.8% 73.0% 45.1% 58.2% 94.1%  8  1  6  1 13 150   7   7 52.6% 0.277
+TUD-Stadtmitte 64.5% 82.0% 53.1% 60.9% 94.0% 10  5  4  1 45 452   7   6 56.4% 0.346
 ```
 
 Besides naming conventions, the only obvious differences are
@@ -362,7 +373,7 @@ EURASIP Journal on Image and Video Processing 2008.1 (2008): 1-10.
 2. Milan, Anton, et al. "Mot16: A benchmark for multi-object tracking." arXiv preprint arXiv:1603.00831 (2016).
 3. Li, Yuan, Chang Huang, and Ram Nevatia. "Learning to associate: Hybridboosted multi-target tracker for crowded scene." 
 Computer Vision and Pattern Recognition, 2009. CVPR 2009. IEEE Conference on. IEEE, 2009.
-
+4. Performance Measures and a Data Set for Multi-Target, Multi-Camera Tracking. E. Ristani, F. Solera, R. S. Zou, R. Cucchiara and C. Tomasi. ECCV 2016 Workshop on Benchmarking Multi-Target Tracking.
 
 ### License
 

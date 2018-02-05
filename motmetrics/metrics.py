@@ -302,7 +302,7 @@ def recall(df, num_detections, num_objects):
     return num_detections / num_objects
 
 def id_global_assignment(df):
-    """ID measures: Computes global min-cost assigned for ID measures."""
+    """ID measures: Global min-cost assignment for ID measures."""
     oids = df.full['OId'].dropna().unique()
     hids = df.full['HId'].dropna().unique()
 
@@ -344,29 +344,29 @@ def id_global_assignment(df):
     }
 
 def idfp(df, id_global_assignment):
-    """ID measures: Computes the number of false positive matches after global min-cost matching."""
+    """ID measures: Number of false positive matches after global min-cost matching."""
     rids, cids = id_global_assignment['rids'], id_global_assignment['cids']
     return id_global_assignment['fpmatrix'][rids, cids].sum()
 
 def idfn(df, id_global_assignment):
-    """ID measures: Computes the number of false negatives matches after global min-cost matching."""
+    """ID measures: Number of false negatives matches after global min-cost matching."""
     rids, cids = id_global_assignment['rids'], id_global_assignment['cids']
     return id_global_assignment['fnmatrix'][rids, cids].sum()
 
 def idtp(df, id_global_assignment, num_objects, idfn):
-    """ID measures: Computes the number of true positives matches after global min-cost matching."""
+    """ID measures: Number of true positives matches after global min-cost matching."""
     return num_objects - idfn
 
 def idp(df, idtp, idfp):
-    """ID measures: Computes the precision after global min-cost matching."""
+    """ID measures: global min-cost precision."""
     return idtp / (idtp + idfp)
 
 def idr(df, idtp, idfn):
-    """ID measures: Computes the recall after global min-cost matching."""
+    """ID measures: global min-cost recall."""
     return idtp / (idtp + idfn)
 
 def idf1(df, idtp, num_objects, num_predictions):
-    """ID measures: Computes the F1 score after global min-cost matching."""
+    """ID measures: global min-cost F1 score."""
     return 2 * idtp / (num_objects + num_predictions)
 
 
