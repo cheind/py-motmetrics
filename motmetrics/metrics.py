@@ -303,6 +303,7 @@ def recall(df, num_detections, num_objects):
 
 def id_global_assignment(df):
     """ID measures: Global min-cost assignment for ID measures."""
+
     oids = df.full['OId'].dropna().unique()
     hids = df.full['HId'].dropna().unique()
 
@@ -314,14 +315,24 @@ def id_global_assignment(df):
     fpmatrix[no:, :nh] = np.nan
     fnmatrix[:no, nh:] = np.nan    
 
+    dfr = df.raw.reset_index()    
+    df_oh = dfr.set_index(['OId','HId']) 
+    df_oh.sort_index(level=[0,1], inplace=True)
+
+    hcs = [len(df.raw[(df.raw.HId==h)].groupby(level=0)) for h in hids]
+    ocs = [len(df.raw[(df.raw.OId==o)].groupby(level=0)) for o in oids]
+    
     for (r,c) in itertools.product(range(no), range(nh)):
         o = oids[r]
         h = hids[c]
         
-        hc = len(df.full[(df.full.HId==h) & (df.full.Type=='RAW')].groupby(level=0))
-        oc = len(df.full[(df.full.OId==o) & (df.full.Type=='RAW')].groupby(level=0))
-        ex = len(df.full[(df.full.OId==o) & (df.full.HId==h) & (df.full.Type=='RAW') & (np.isfinite(df.full.D))].groupby(level=0))
-        
+        hc = hcs[c]
+        oc = ocs[r]
+        if (o,h) in df_oh.index:
+            ex = df_oh.loc[(o,h), 'D'].count()
+        else:
+            ex = 0
+
         fp = hc - ex
         fn = oc - ex
 
