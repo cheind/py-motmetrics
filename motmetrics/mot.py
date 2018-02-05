@@ -159,7 +159,7 @@ class MOTAccumulator(object):
                 self.events.loc[(frameid, next(eid)), :] = ['RAW', oids[i], np.nan, np.nan]
 
 
-        dists, INVDIST = self._sanitize_dists(dists)
+        dists, INVDIST = MOTAccumulator.sanitize_dists(dists)
 
         if oids.size * hids.size > 0:        
             # 1. Try to re-establish tracks from previous correspondences
@@ -295,8 +295,9 @@ class MOTAccumulator(object):
             return r, mapping_infos
         else:            
             return r
-    
-    def _sanitize_dists(self, dists):
+
+    @staticmethod    
+    def sanitize_dists(dists):
         """Replace invalid distances."""
         
         dists = np.copy(dists)

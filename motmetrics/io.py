@@ -211,6 +211,9 @@ def render_summary(summary, formatters=None, namemap=None, buf=None):
     return output
 
 motchallenge_metric_names = {
+    'idf1' : 'IDF1',
+    'idp' : 'IDP',
+    'idr' : 'IDR',
     'recall' : 'Rcll', 
     'precision' : 'Prcn',
     'num_unique_objects' : 'GT', 

@@ -10,6 +10,8 @@ from motmetrics.mot import MOTAccumulator
 import pandas as pd
 import numpy as np
 import inspect
+import itertools
+from scipy.optimize import linear_sum_assignment
 
 class MetricsHost:
     """Keeps track of metrics and intra metric dependencies."""
@@ -299,6 +301,75 @@ def recall(df, num_detections, num_objects):
     """Number of detections over number of objects."""
     return num_detections / num_objects
 
+def id_global_assignment(df):
+    """ID measures: Computes global min-cost assigned for ID measures."""
+    oids = df.full['OId'].dropna().unique()
+    hids = df.full['HId'].dropna().unique()
+
+    no = oids.shape[0]
+    nh = hids.shape[0]
+
+    fpmatrix = np.full((no+nh, no+nh), 0.)
+    fnmatrix = np.full((no+nh, no+nh), 0.)
+    fpmatrix[no:, :nh] = np.nan
+    fnmatrix[:no, nh:] = np.nan    
+
+    for (r,c) in itertools.product(range(no), range(nh)):
+        o = oids[r]
+        h = hids[c]
+        
+        hc = len(df.full[(df.full.HId==h) & (df.full.Type=='RAW')].groupby(level=0))
+        oc = len(df.full[(df.full.OId==o) & (df.full.Type=='RAW')].groupby(level=0))
+        ex = len(df.full[(df.full.OId==o) & (df.full.HId==h) & (df.full.Type=='RAW') & (np.isfinite(df.full.D))].groupby(level=0))
+        
+        fp = hc - ex
+        fn = oc - ex
+
+        fpmatrix[r,c] = fp
+        fnmatrix[r,c] = fn
+        fnmatrix[r,nh+r] = oc
+        fpmatrix[c+no,c] = hc
+
+    costs = fpmatrix + fnmatrix    
+    costs_san, invdist = MOTAccumulator.sanitize_dists(costs)
+    rids, cids = linear_sum_assignment(costs_san)
+
+    return {
+        'fpmatrix' : fpmatrix,
+        'fnmatrix' : fnmatrix,
+        'rids' : rids,
+        'cids' : cids,
+        'costs' : costs,
+        'min_cost' : costs[rids, cids].sum()
+    }
+
+def idfp(df, id_global_assignment):
+    """ID measures: Computes the number of false positive matches after global min-cost matching."""
+    rids, cids = id_global_assignment['rids'], id_global_assignment['cids']
+    return id_global_assignment['fpmatrix'][rids, cids].sum()
+
+def idfn(df, id_global_assignment):
+    """ID measures: Computes the number of false negatives matches after global min-cost matching."""
+    rids, cids = id_global_assignment['rids'], id_global_assignment['cids']
+    return id_global_assignment['fnmatrix'][rids, cids].sum()
+
+def idtp(df, id_global_assignment, num_objects, idfn):
+    """ID measures: Computes the number of true positives matches after global min-cost matching."""
+    return num_objects - idfn
+
+def idp(df, idtp, idfp):
+    """ID measures: Computes the precision after global min-cost matching."""
+    return idtp / (idtp + idfp)
+
+def idr(df, idtp, idfn):
+    """ID measures: Computes the recall after global min-cost matching."""
+    return idtp / (idtp + idfn)
+
+def idf1(df, idtp, num_objects, num_predictions):
+    """ID measures: Computes the F1 score after global min-cost matching."""
+    return 2 * idtp / (num_objects + num_predictions)
+
+
 def create():
     """Creates a MetricsHost and populates it with default metrics."""
     m = MetricsHost()
@@ -320,13 +391,25 @@ def create():
     m.register(mostly_lost, formatter='{:d}'.format)
     m.register(num_fragmentations)
     m.register(motp, formatter='{:.3f}'.format)
-    m.register(mota, formatter='{:.2%}'.format)
-    m.register(precision, formatter='{:.2%}'.format)
-    m.register(recall, formatter='{:.2%}'.format)
+    m.register(mota, formatter='{:.1%}'.format)
+    m.register(precision, formatter='{:.1%}'.format)
+    m.register(recall, formatter='{:.1%}'.format)
+    
+    m.register(id_global_assignment)
+    m.register(idfp)
+    m.register(idfn)
+    m.register(idtp)
+    m.register(idp, formatter='{:.1%}'.format)
+    m.register(idr, formatter='{:.1%}'.format)
+    m.register(idf1, formatter='{:.1%}'.format)
+
 
     return m
 
 motchallenge_metrics = [
+    'idf1',
+    'idp',
+    'idr',
     'recall', 
     'precision', 
     'num_unique_objects', 
