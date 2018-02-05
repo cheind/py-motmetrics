@@ -137,7 +137,7 @@ class MetricsHost:
         data = OrderedDict([(k, cache[k]) for k in metrics])
         return pd.DataFrame(data, index=[name]) if return_dataframe else data     
 
-    def compute_many(self, dfs, metrics=None, names=None):
+    def compute_many(self, dfs, metrics=None, names=None, generate_overall=False):
         """Compute metrics on multiple dataframe / accumulators.
         
         Params
@@ -153,6 +153,11 @@ class MetricsHost:
             If None is passed all registered metrics are computed.
         names : list of string, optional
             The names of individual rows in the resulting dataframe.
+        generate_overall : boolean, optional
+            If true resulting dataframe will contain a summary row that is computed
+            using the same metrics over an accumulator that is the concatentation of
+            all input containers. In creating this temporary accumulator, care is taken
+            to offset frame indices avoid object id collisions.
 
         Returns
         -------
@@ -165,9 +170,12 @@ class MetricsHost:
         if names is None:
             names = range(len(dfs))
 
+        if generate_overall:
+            dfs += [MOTAccumulator.merge_event_dataframes(dfs)]
+            names += ['OVERALL']
+
         partials = [self.compute(acc, metrics=metrics, name=name) for acc, name in zip(dfs, names)]
         return pd.concat(partials)
-
 
     def _compute(self, df, name, cache, parent=None):
         """Compute metric and resolve dependencies."""

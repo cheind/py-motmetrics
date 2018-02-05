@@ -75,10 +75,9 @@ def test_motchallenge_files():
 
     accs = [compute_motchallenge(os.path.join(reldir, d)) for d in dnames]
 
+    # Summarize results from individual files
     mh = mm.metrics.create()
-    partials = [mh.compute(df, metrics=mm.metrics.motchallenge_metrics, name=dname) for df, dname in zip(accs, dnames)]
-
-    summary = pd.concat(partials)
+    summary = mh.compute_many(accs, metrics=mm.metrics.motchallenge_metrics, names=dnames, generate_overall=True)
 
     print()
     print(mm.io.render_summary(summary, namemap=mm.io.motchallenge_metric_names, formatters=mh.formatters))
@@ -86,6 +85,7 @@ def test_motchallenge_files():
     expected = pd.DataFrame([
         [0.582173, 0.941441, 8.0, 1, 6, 1, 13, 150, 7, 7, 0.526462, 0.277201],
         [0.608997, 0.939920, 10.0, 5, 4, 1, 45, 452, 7, 6, 0.564014, 0.345904],
+        [0.602640, 0.940268, 18.0, 6, 10, 2, 58, 602, 14, 13, 0.555116, 0.330177],
     ])
 
     np.testing.assert_allclose(summary, expected, atol=1e-3)
