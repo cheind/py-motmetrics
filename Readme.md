@@ -422,7 +422,7 @@ Matrix    Solver
           munkres             -
 ```
 
-For small problem sizes all method perform equally well. Small problem sizes usually occur when computing `CLEAR-MOT` metrics from individual frames. On large problem sizes only Google's [optimization tools](https://developers.google.com/optimization/) provide  acceptable performance characteristics. For this reason, **py-motmetrics** switches from `scipy` (the default) to `ortools` when problem sizes increase. 
+For small problem sizes all method perform equally well. Small problem sizes usually appear in computing `CLEAR-MOT` metrics of individual frames. On large problem sizes only Google's [optimization tools](https://developers.google.com/optimization/) provide  acceptable performance characteristics. For this reason **py-motmetrics** switches from `scipy` (the default) to `ortools` when problem sizes increase. 
 
 `ortools` and `munkres` can be installed via `pip install ortools` and `pip install munkres`.
 
