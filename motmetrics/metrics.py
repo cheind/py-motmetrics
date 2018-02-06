@@ -306,40 +306,38 @@ def id_global_assignment(df):
 
     oids = df.full['OId'].dropna().unique()
     hids = df.full['HId'].dropna().unique()
+    hids_idx = dict((h,i) for i,h in enumerate(hids))
+
+    hcs = [len(df.raw[(df.raw.HId==h)].groupby(level=0)) for h in hids]
+    ocs = [len(df.raw[(df.raw.OId==o)].groupby(level=0)) for o in oids]
 
     no = oids.shape[0]
-    nh = hids.shape[0]
+    nh = hids.shape[0]   
+
+    df = df.raw.reset_index()    
+    df = df.set_index(['OId','HId']) 
+    df = df.sort_index(level=[0,1])
 
     fpmatrix = np.full((no+nh, no+nh), 0.)
     fnmatrix = np.full((no+nh, no+nh), 0.)
     fpmatrix[no:, :nh] = np.nan
-    fnmatrix[:no, nh:] = np.nan    
+    fnmatrix[:no, nh:] = np.nan 
 
-    dfr = df.raw.reset_index()    
-    df_oh = dfr.set_index(['OId','HId']) 
-    df_oh.sort_index(level=[0,1], inplace=True)
-
-    hcs = [len(df.raw[(df.raw.HId==h)].groupby(level=0)) for h in hids]
-    ocs = [len(df.raw[(df.raw.OId==o)].groupby(level=0)) for o in oids]
-    
-    for (r,c) in itertools.product(range(no), range(nh)):
-        o = oids[r]
-        h = hids[c]
-        
-        hc = hcs[c]
-        oc = ocs[r]
-        if (o,h) in df_oh.index:
-            ex = df_oh.loc[(o,h), 'D'].count()
-        else:
-            ex = 0
-
-        fp = hc - ex
-        fn = oc - ex
-
-        fpmatrix[r,c] = fp
-        fnmatrix[r,c] = fn
+    for r, oc in enumerate(ocs):
+        fnmatrix[r, :nh] = oc
         fnmatrix[r,nh+r] = oc
+
+    for c, hc in enumerate(hcs):
+        fpmatrix[:no, c] = hc
         fpmatrix[c+no,c] = hc
+
+    for r, o in enumerate(oids):
+        df_o = df.loc[o, 'D'].dropna()
+        for h, ex in df_o.groupby(level=0).count().iteritems():            
+            c = hids_idx[h]
+
+            fpmatrix[r,c] -= ex
+            fnmatrix[r,c] -= ex
 
     costs = fpmatrix + fnmatrix    
     costs_san, invdist = MOTAccumulator.sanitize_dists(costs)
