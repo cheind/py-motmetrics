@@ -7,11 +7,11 @@ https://github.com/cheind/py-motmetrics
 from __future__ import division
 from collections import OrderedDict, Iterable
 from motmetrics.mot import MOTAccumulator
+from motmetrics.hungarian import linear_sum_assignment
 import pandas as pd
 import numpy as np
 import inspect
 import itertools
-from scipy.optimize import linear_sum_assignment
 
 class MetricsHost:
     """Keeps track of metrics and intra metric dependencies."""
@@ -340,8 +340,7 @@ def id_global_assignment(df):
             fnmatrix[r,c] -= ex
 
     costs = fpmatrix + fnmatrix    
-    costs_san, invdist = MOTAccumulator.sanitize_dists(costs)
-    rids, cids = linear_sum_assignment(costs_san)
+    rids, cids = linear_sum_assignment(costs)
 
     return {
         'fpmatrix' : fpmatrix,

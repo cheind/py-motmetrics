@@ -266,8 +266,6 @@ class MOTAccumulator(object):
             'Type', 'OId', HId', 'D'                    
         """
 
-        
-        
         tevents = list(zip(*events))
 
         raw_type = pd.Categorical(tevents[0], categories=['RAW', 'FP', 'MISS', 'SWITCH', 'MATCH'], ordered=False)
@@ -350,21 +348,3 @@ class MOTAccumulator(object):
             return r, mapping_infos
         else:            
             return r
-
-    @staticmethod    
-    def sanitize_dists(dists):
-        """Replace invalid distances."""
-        
-        dists = np.copy(dists)
-        
-        # Note there is an issue in scipy.optimize.linear_sum_assignment where
-        # it runs forever if an entire row/column is infinite or nan. We therefore
-        # make a copy of the distance matrix and compute a safe value that indicates
-        # 'cannot assign'. Also note + 1 is necessary in below inv-dist computation
-        # to make invdist bigger than max dist in case max dist is zero.
-        
-        valid_dists = dists[np.isfinite(dists)]
-        INVDIST = 2 * valid_dists.max() + 1 if valid_dists.shape[0] > 0 else 1.
-        dists[~np.isfinite(dists)] = INVDIST  
-
-        return dists, INVDIST
