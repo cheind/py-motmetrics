@@ -1,10 +1,10 @@
-[![](https://travis-ci.org/cheind/py-motmetrics.svg?branch=master)](https://travis-ci.org/cheind/py-motmetrics)
+[![PyPI version](https://badge.fury.io/py/motmetrics.svg)](https://badge.fury.io/py/motmetrics) [![](https://travis-ci.org/cheind/py-motmetrics.svg?branch=master)](https://travis-ci.org/cheind/py-motmetrics)
 
 ## py-motmetrics
 
 The **py-motmetrics** library provides a Python implementation of metrics for benchmarking multiple object trackers (MOT).
 
-While benchmarking single object trackers is rather straightforward, measuring the performance of multiple object trackers needs careful design as multiple correspondence constellations can arise (see image below). A variety of methods have been proposed in the past and while there is no general agreement on a single method, the methods of [[1,2,3]](#References) have received considerable attention in recent years. **py-motmetrics** implements these [metrics](#Metrics).
+While benchmarking single object trackers is rather straightforward, measuring the performance of multiple object trackers needs careful design as multiple correspondence constellations can arise (see image below). A variety of methods have been proposed in the past and while there is no general agreement on a single method, the methods of [[1,2,3,4]](#References) have received considerable attention in recent years. **py-motmetrics** implements these [metrics](#Metrics).
 
 <div style="text-align:center;">
 
@@ -12,9 +12,11 @@ While benchmarking single object trackers is rather straightforward, measuring t
 *Pictures courtesy of Bernardin, Keni, and Rainer Stiefelhagen [[1]](#References)*
 </div>
 
+In particular **py-motmetrics** supports `CLEAR-MOT`[[1,2]](#References) metrics and `ID-MEASURE`[[4]](#References) metrics. Both metrics attempt to find a minimum cost assignment between ground truth objects and predictions. However, while CLEAR-MOT solves the assignment problem on a local per-frame basis, `ID-MEASURE` solves the bipartite graph matching by finding the minimum cost of objects and predictions over all frames. This [blog-post](http://vision.cs.duke.edu/DukeMTMC/IDmeasures.html) by Ergys illustrates the differences in more detail.
+
 ### Features at a glance
 - *Variety of metrics* <br/>
-Provides MOTA, MOTP, track quality measures and more. The results are [comparable](#MOTChallengeCompatibility) with the popular [MOTChallenge][MOTChallenge] benchmarks.
+Provides MOTA, MOTP, track quality measures, global ID measures and more. The results are [comparable](#MOTChallengeCompatibility) with the popular [MOTChallenge][MOTChallenge] benchmarks.
 - *Distance agnostic* <br/>
 Supports Euclidean, Intersection over Union and other distances measures.
 - *Complete event history* <br/> 
@@ -37,13 +39,15 @@ print(mh.list_metrics_markdown())
 Name|Description
 :---|:---
 num_frames|Total number of frames.
-obj_frequencies|Total number of occurrences of individual objects.
+obj_frequencies|Total number of occurrences of individual objects over all frames.
+pred_frequencies|Total number of occurrences of individual predictions over all frames.
 num_matches|Total number matches.
 num_switches|Total number of track switches.
 num_false_positives|Total number of false positives (false-alarms).
 num_misses|Total number of misses.
 num_detections|Total number of detected objects including matches and switches.
-num_objects|Total number of objects.
+num_objects|Total number of unique object appearances over all frames.
+num_predictions|Total number of unique prediction appearances over all frames.
 num_unique_objects|Total number of unique object ids encountered.
 track_ratios|Ratio of assigned to total appearance count per unique object id.
 mostly_tracked|Number of objects tracked for at least 80 percent of lifespan.
@@ -54,6 +58,13 @@ motp|Multiple object tracker precision.
 mota|Multiple object tracker accuracy.
 precision|Number of detected objects over sum of detected and false positives.
 recall|Number of detections over number of objects.
+id_global_assignment|ID measures: Global min-cost assignment for ID measures.
+idfp|ID measures: Number of false positive matches after global min-cost matching.
+idfn|ID measures: Number of false negatives matches after global min-cost matching.
+idtp|ID measures: Number of true positives matches after global min-cost matching.
+idp|ID measures: global min-cost precision.
+idr|ID measures: global min-cost recall.
+idf1|ID measures: global min-cost F1 score.
 
 <a name="MOTChallengeCompatibility"></a>
 ### MOTChallenge compatibility
@@ -61,21 +72,23 @@ recall|Number of detections over number of objects.
 **py-motmetrics** produces results compatible with popular [MOTChallenge][MOTChallenge] benchmarks. Below are two results taken from MOTChallenge [Matlab devkit][devkit] corresponding to the results of the CEM tracker on the training set of the 2015 MOT 2DMark.
 
 ```
-        ... TUD-Campus
- Rcll  Prcn   FAR| GT  MT  PT  ML|   FP    FN  IDs   FM|  MOTA  MOTP MOTAL
- 58.2  94.1  0.18|  8   1   6   1|   13   150    7    7|  52.6  72.3  54.3
 
-         ... TUD-Stadtmitte
- Rcll  Prcn   FAR| GT  MT  PT  ML|   FP    FN  IDs   FM|  MOTA  MOTP MOTAL
- 60.9  94.0  0.25| 10   5   4   1|   45   452    7    6|  56.4  65.4  56.9
+TUD-Campus
+ IDF1  IDP  IDR| Rcll  Prcn   FAR| GT  MT  PT  ML|   FP    FN  IDs   FM| MOTA  MOTP MOTAL 
+ 55.8 73.0 45.1| 58.2  94.1  0.18|  8   1   6   1|   13   150    7    7| 52.6  72.3  54.3
+
+TUD-Stadtmitte
+ IDF1  IDP  IDR| Rcll  Prcn   FAR| GT  MT  PT  ML|   FP    FN  IDs   FM| MOTA  MOTP MOTAL 
+ 64.5 82.0 53.1| 60.9  94.0  0.25| 10   5   4   1|   45   452    7    6| 56.4  65.4  56.9
+
 ```
 
 In comparison to **py-motmetrics**
 
 ```
-                 Rcll   Prcn GT MT PT ML FP  FN IDs  FM   MOTA  MOTP
-TUD-Campus     58.22% 94.14%  8  1  6  1 13 150   7   7 52.65% 0.277
-TUD-Stadtmitte 60.90% 93.99% 10  5  4  1 45 452   7   6 56.40% 0.346
+                IDF1   IDP   IDR  Rcll  Prcn GT MT PT ML FP  FN IDs  FM  MOTA  MOTP
+TUD-Campus     55.8% 73.0% 45.1% 58.2% 94.1%  8  1  6  1 13 150   7   7 52.6% 0.277
+TUD-Stadtmitte 64.5% 82.0% 53.1% 60.9% 94.0% 10  5  4  1 45 452   7   6 56.4% 0.346
 ```
 
 Besides naming conventions, the only obvious differences are
@@ -129,8 +142,6 @@ pip install .
 pytest
 ```
 
-###
-
 ### Usage
 
 #### Populating the accumulator
@@ -157,22 +168,43 @@ acc.update(
 The code above updates an event accumulator with data from a single frame. Here we assume that pairwise object / hypothesis distances have already been computed. Note `np.nan` inside the distance matrix. It signals that `a` cannot be paired with hypothesis `2`. To inspect the current event history simple print the events associated with the accumulator.
 
 ```python
-print(acc.events) # a pandas DataFrame
+print(acc.events) # a pandas DataFrame containing all events
 
 """
                 Type  OId HId    D
 FrameId Event
-0       0      MATCH    a   1  0.1
-        1      MATCH    b   2  0.2
-        2         FP  NaN   3  NaN
+0       0        RAW    a   1  0.1
+        1        RAW    a   2  NaN
+        2        RAW    a   3  0.3
+        3        RAW    b   1  0.5
+        4        RAW    b   2  0.2
+        5        RAW    b   3  0.3
+        6      MATCH    a   1  0.1
+        7      MATCH    b   2  0.2
+        8         FP  NaN   3  NaN
+"""
+```
+
+The above data frame contains `RAW` and MOT events. To obtain just MOT events type
+
+```python
+print(acc.mot_events) # a pandas DataFrame containing MOT only events
+
+"""
+                Type  OId HId    D
+FrameId Event
+0       6      MATCH    a   1  0.1
+        7      MATCH    b   2  0.2
+        8         FP  NaN   3  NaN
 """
 ```
 
 Meaning object `a` was matched to hypothesis `1` with distance 0.1. Similarily, `b` was matched to `2` with distance 0.2. Hypothesis `3` could not be matched to any remaining object and generated a false positive (FP). Possible assignments are computed by minimizing the total assignment distance (Kuhn-Munkres algorithm).
 
 Continuing from above
+
 ```python
-df = acc.update(
+frameid = acc.update(
     ['a', 'b'],
     [1],
     [
@@ -180,18 +212,20 @@ df = acc.update(
         [0.4]
     ]
 )
-print(df)
+print(acc.mot_events.loc[frameid])
 
 """
-0      MATCH   a    1  0.2
-1       MISS   b  NaN  NaN
+        Type OId  HId    D
+Event
+2      MATCH   a    1  0.2
+3       MISS   b  NaN  NaN
 """
 ```
 
 While `a` was matched, `b` couldn't be matched because no hypotheses are left to pair with.
 
 ```python
-df = acc.update(
+frameid = acc.update(
     ['a', 'b'],
     [1, 3],
     [
@@ -199,15 +233,17 @@ df = acc.update(
         [0.1, 0.6]
     ]
 )
-print(df)
+print(acc.mot_events.loc[frameid])
 
 """
-0       MATCH   a   1  0.6
-1      SWITCH   b   3  0.6
+         Type OId HId    D
+Event
+4       MATCH   a   1  0.6
+5      SWITCH   b   3  0.6
 """
 ```
 
-`b` is now tracked by hypothesis `3` leading to a track switch. Note, although a pairing `(a, 3)` with cost less than 0.6 is possible, the algorithm prefers prefers to continue track assignments from past frames.
+`b` is now tracked by hypothesis `3` leading to a track switch. Note, although a pairing `(a, 3)` with cost less than 0.6 is possible, the algorithm prefers prefers to continue track assignments from past frames which is a property of MOT metrics. 
 
 #### Computing metrics
 Once the accumulator has been populated you can compute and display metrics. Continuing the example from above
@@ -272,9 +308,9 @@ strsummary = mm.io.render_summary(
 print(strsummary)
 
 """
-       Rcll   Prcn GT MT PT ML FP FN IDs  FM   MOTA  MOTP
-full 83.33% 83.33%  2  1  1  0  1  1   1   1 50.00% 0.340
-part 75.00% 75.00%  2  1  1  0  1  1   0   0 50.00% 0.167
+      IDF1   IDP   IDR  Rcll  Prcn GT MT PT ML FP FN IDs  FM  MOTA  MOTP
+full 83.3% 83.3% 83.3% 83.3% 83.3%  2  1  1  0  1  1   1   1 50.0% 0.340
+part 75.0% 75.0% 75.0% 75.0% 75.0%  2  1  1  0  1  1   0   0 50.0% 0.167
 """
 ```
 
@@ -296,16 +332,15 @@ strsummary = mm.io.render_summary(
 print(strsummary)
 
 """
-          Rcll   Prcn GT MT PT ML FP FN IDs  FM   MOTA  MOTP
-full    83.33% 83.33%  2  1  1  0  1  1   1   1 50.00% 0.340
-part    75.00% 75.00%  2  1  1  0  1  1   0   0 50.00% 0.167
-OVERALL 80.00% 80.00%  4  2  2  0  2  2   1   1 50.00% 0.275
+         IDF1   IDP   IDR  Rcll  Prcn GT MT PT ML FP FN IDs  FM  MOTA  MOTP
+full    83.3% 83.3% 83.3% 83.3% 83.3%  2  1  1  0  1  1   1   1 50.0% 0.340
+part    75.0% 75.0% 75.0% 75.0% 75.0%  2  1  1  0  1  1   0   0 50.0% 0.167
+OVERALL 80.0% 80.0% 80.0% 80.0% 80.0%  4  2  2  0  2  2   1   1 50.0% 0.275
 """
 ```
 
 #### Computing distances
-Up until this point we assumed the pairwise object/hypothesis distances to be known. Usually this is not the case. You are mostly given either rectangles or points (centroids) of related
-objects. To compute a distance matrix from them you can use `motmetrics.distance` module as shown below.
+Up until this point we assumed the pairwise object/hypothesis distances to be known. Usually this is not the case. You are mostly given either rectangles or points (centroids) of related objects. To compute a distance matrix from them you can use `motmetrics.distance` module as shown below.
 
 ##### Euclidean norm squared on points
 
@@ -362,7 +397,7 @@ EURASIP Journal on Image and Video Processing 2008.1 (2008): 1-10.
 2. Milan, Anton, et al. "Mot16: A benchmark for multi-object tracking." arXiv preprint arXiv:1603.00831 (2016).
 3. Li, Yuan, Chang Huang, and Ram Nevatia. "Learning to associate: Hybridboosted multi-target tracker for crowded scene." 
 Computer Vision and Pattern Recognition, 2009. CVPR 2009. IEEE Conference on. IEEE, 2009.
-
+4. Performance Measures and a Data Set for Multi-Target, Multi-Camera Tracking. E. Ristani, F. Solera, R. S. Zou, R. Cucchiara and C. Tomasi. ECCV 2016 Workshop on Benchmarking Multi-Target Tracking.
 
 ### License
 

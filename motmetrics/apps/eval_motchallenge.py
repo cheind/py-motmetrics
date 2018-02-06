@@ -84,5 +84,5 @@ if __name__ == '__main__':
     accs, names = compare_dataframes(gt, ts)
     
     logging.info('Running metrics')
-    summary = mh.compute_many(accs, names=names, metrics=mm.metrics.motchallenge_metrics)
+    summary = mh.compute_many(accs, names=names, metrics=mm.metrics.motchallenge_metrics, generate_overall=True)
     print(mm.io.render_summary(summary, formatters=mh.formatters, namemap=mm.io.motchallenge_metric_names))
