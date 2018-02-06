@@ -22,7 +22,7 @@ Supports Euclidean, Intersection over Union and other distances measures.
 - *Complete event history* <br/> 
 Tracks all relevant per-frame events suchs as correspondences, misses, false alarms and switches.
 - *Flexible solver backend* <br/> 
-Support for switching minimum assignment cost solvers. Supports `scipy`, `ortools`, `munkres` out of the box. Auto-tunes solver selection based on availability and problem sizes.
+Support for switching minimum assignment cost solvers. Supports `scipy`, `ortools`, `munkres` out of the box. Auto-tunes solver selection based on [availability and problem size](#SolverBackends).
 - *Easy to extend* <br/> 
 Events and summaries are utilizing [pandas][pandas] for data structures and analysis. New metrics can reuse already computed values from depending metrics.
 
@@ -389,6 +389,7 @@ mm.distances.iou_matrix(a, b, max_iou=0.5)
 """
 ```
 
+<a name="SolverBackends"></a>
 #### Solver backends
 For large datasets solving the minimum cost assignment becomes the dominant runtime part. **py-motmetrics** therefore supports various solvers out of the box (currently `scipy`, `ortools`, `munkres`). A runtime comparison for dense square matrices (i.e without `nan`) is shown below.
 
