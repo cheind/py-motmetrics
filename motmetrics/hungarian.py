@@ -1,6 +1,12 @@
 import numpy as np
 
-def linear_sum_assignment(costs, solver='scipy'):
+def linear_sum_assignment(costs, solver=None):
+
+    if solver is None:
+        solver = default_solver
+        if costs.size > 10000 and 'ortools' in available_solvers:
+            solver = 'ortools'
+
     solvers = {
         'scipy' : lambda costs: lsa_solve_scipy(costs),
         'munkres' : lambda costs: lsa_solve_munkres(costs),
@@ -57,13 +63,27 @@ def lsa_solve_ortools(costs):
     #
     # For small min-diffs and large costs in general there is a change of
     # overflowing.
+
     valid = np.isfinite(costs)
 
-    min_e = -5
-    min_diff = np.diff(np.unique(costs[valid])).min()
-    min_diff_e = int(np.log10(np.abs(min_diff)))
+    min_e = -8
+    unique = np.unique(costs[valid])
+
+    if unique.shape[0] == 1:
+        min_diff = unique[0]
+    elif unique.shape[0] > 1:
+        min_diff = np.diff(unique).min()
+    else:
+        min_diff = 1
+
+    min_diff_e = 0
+    if min_diff != 0.0:
+        min_diff_e = int(np.log10(np.abs(min_diff)))
+        if min_diff_e < 0:
+            min_diff_e -= 1
+    
     e = min(max(min_e, min_diff_e), 0)
-    f = 10**abs(e)      
+    f = 10**abs(e)
 
     assignment = pywrapgraph.LinearSumAssignment()
     for r in range(costs.shape[0]):
@@ -71,7 +91,12 @@ def lsa_solve_ortools(costs):
             if valid[r,c]:
                 assignment.AddArcWithCost(r, c, int(costs[r,c]*f))
     
-    solve_status = assignment.Solve()
+    if assignment.Solve() != assignment.OPTIMAL:
+        assert default_solver != 'ortools'
+        return linear_sum_assignment(costs, solver=default_solver)
+
+    if assignment.NumNodes() == 0:
+        return np.array([], dtype=np.int64), np.array([], dtype=np.int64)
 
     pairings = []
     for i in range(assignment.NumNodes()):        
@@ -79,3 +104,9 @@ def lsa_solve_ortools(costs):
 
     indices = np.array(pairings, dtype=np.int64)
     return indices[:,0], indices[:,1]
+
+
+import importlib
+available_solvers = [s for s in ['scipy', 'ortools', 'munkres'] if importlib.util.find_spec(s) is not None]
+assert len(available_solvers) > 0
+default_solver = available_solvers[0]
