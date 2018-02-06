@@ -141,8 +141,6 @@ pip install .
 pytest
 ```
 
-###
-
 ### Usage
 
 #### Populating the accumulator
@@ -169,22 +167,43 @@ acc.update(
 The code above updates an event accumulator with data from a single frame. Here we assume that pairwise object / hypothesis distances have already been computed. Note `np.nan` inside the distance matrix. It signals that `a` cannot be paired with hypothesis `2`. To inspect the current event history simple print the events associated with the accumulator.
 
 ```python
-print(acc.events) # a pandas DataFrame
+print(acc.events) # a pandas DataFrame containing all events
 
 """
                 Type  OId HId    D
 FrameId Event
-0       0      MATCH    a   1  0.1
-        1      MATCH    b   2  0.2
-        2         FP  NaN   3  NaN
+0       0        RAW    a   1  0.1
+        1        RAW    a   2  NaN
+        2        RAW    a   3  0.3
+        3        RAW    b   1  0.5
+        4        RAW    b   2  0.2
+        5        RAW    b   3  0.3
+        6      MATCH    a   1  0.1
+        7      MATCH    b   2  0.2
+        8         FP  NaN   3  NaN
+"""
+```
+
+The above data frame contains `RAW` and MOT events. To obtain just MOT events type
+
+```python
+print(acc.mot_events) # a pandas DataFrame containing MOT only events
+
+"""
+                Type  OId HId    D
+FrameId Event
+0       6      MATCH    a   1  0.1
+        7      MATCH    b   2  0.2
+        8         FP  NaN   3  NaN
 """
 ```
 
 Meaning object `a` was matched to hypothesis `1` with distance 0.1. Similarily, `b` was matched to `2` with distance 0.2. Hypothesis `3` could not be matched to any remaining object and generated a false positive (FP). Possible assignments are computed by minimizing the total assignment distance (Kuhn-Munkres algorithm).
 
 Continuing from above
+
 ```python
-df = acc.update(
+frameid = acc.update(
     ['a', 'b'],
     [1],
     [
@@ -192,18 +211,20 @@ df = acc.update(
         [0.4]
     ]
 )
-print(df)
+print(acc.mot_events.loc[frameid])
 
 """
-0      MATCH   a    1  0.2
-1       MISS   b  NaN  NaN
+        Type OId  HId    D
+Event
+2      MATCH   a    1  0.2
+3       MISS   b  NaN  NaN
 """
 ```
 
 While `a` was matched, `b` couldn't be matched because no hypotheses are left to pair with.
 
 ```python
-df = acc.update(
+frameid = acc.update(
     ['a', 'b'],
     [1, 3],
     [
@@ -211,15 +232,17 @@ df = acc.update(
         [0.1, 0.6]
     ]
 )
-print(df)
+print(acc.mot_events.loc[frameid])
 
 """
-0       MATCH   a   1  0.6
-1      SWITCH   b   3  0.6
+         Type OId HId    D
+Event
+4       MATCH   a   1  0.6
+5      SWITCH   b   3  0.6
 """
 ```
 
-`b` is now tracked by hypothesis `3` leading to a track switch. Note, although a pairing `(a, 3)` with cost less than 0.6 is possible, the algorithm prefers prefers to continue track assignments from past frames.
+`b` is now tracked by hypothesis `3` leading to a track switch. Note, although a pairing `(a, 3)` with cost less than 0.6 is possible, the algorithm prefers prefers to continue track assignments from past frames which is a property of MOT metrics. 
 
 #### Computing metrics
 Once the accumulator has been populated you can compute and display metrics. Continuing the example from above
@@ -284,9 +307,9 @@ strsummary = mm.io.render_summary(
 print(strsummary)
 
 """
-       Rcll   Prcn GT MT PT ML FP FN IDs  FM   MOTA  MOTP
-full 83.33% 83.33%  2  1  1  0  1  1   1   1 50.00% 0.340
-part 75.00% 75.00%  2  1  1  0  1  1   0   0 50.00% 0.167
+      IDF1   IDP   IDR  Rcll  Prcn GT MT PT ML FP FN IDs  FM  MOTA  MOTP
+full 83.3% 83.3% 83.3% 83.3% 83.3%  2  1  1  0  1  1   1   1 50.0% 0.340
+part 75.0% 75.0% 75.0% 75.0% 75.0%  2  1  1  0  1  1   0   0 50.0% 0.167
 """
 ```
 
@@ -308,16 +331,15 @@ strsummary = mm.io.render_summary(
 print(strsummary)
 
 """
-          Rcll   Prcn GT MT PT ML FP FN IDs  FM   MOTA  MOTP
-full    83.33% 83.33%  2  1  1  0  1  1   1   1 50.00% 0.340
-part    75.00% 75.00%  2  1  1  0  1  1   0   0 50.00% 0.167
-OVERALL 80.00% 80.00%  4  2  2  0  2  2   1   1 50.00% 0.275
+         IDF1   IDP   IDR  Rcll  Prcn GT MT PT ML FP FN IDs  FM  MOTA  MOTP
+full    83.3% 83.3% 83.3% 83.3% 83.3%  2  1  1  0  1  1   1   1 50.0% 0.340
+part    75.0% 75.0% 75.0% 75.0% 75.0%  2  1  1  0  1  1   0   0 50.0% 0.167
+OVERALL 80.0% 80.0% 80.0% 80.0% 80.0%  4  2  2  0  2  2   1   1 50.0% 0.275
 """
 ```
 
 #### Computing distances
-Up until this point we assumed the pairwise object/hypothesis distances to be known. Usually this is not the case. You are mostly given either rectangles or points (centroids) of related
-objects. To compute a distance matrix from them you can use `motmetrics.distance` module as shown below.
+Up until this point we assumed the pairwise object/hypothesis distances to be known. Usually this is not the case. You are mostly given either rectangles or points (centroids) of related objects. To compute a distance matrix from them you can use `motmetrics.distance` module as shown below.
 
 ##### Euclidean norm squared on points
 

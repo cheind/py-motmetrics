@@ -233,6 +233,11 @@ class MOTAccumulator(object):
             self.cached_events_df = MOTAccumulator.new_event_dataframe_with_data(self._indices, self._events)
             self.dirty_events = False
         return self.cached_events_df
+    
+    @property
+    def mot_events(self):
+        df = self.events
+        return df[df.Type != 'RAW']
 
     @staticmethod
     def new_event_dataframe():
