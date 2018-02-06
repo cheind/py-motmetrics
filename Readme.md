@@ -390,8 +390,7 @@ mm.distances.iou_matrix(a, b, max_iou=0.5)
 ```
 
 #### Solver backends
-For large datasets solving the minimum cost assignment becomes the dominant runtime part. **py-motmetrics**. 
-therefore supports various solvers out of the box (currently `scipy`, `ortools`, `munkres`).  A runtime comparison for dense square matrices (i.e without `nan`) is shown below.
+For large datasets solving the minimum cost assignment becomes the dominant runtime part. **py-motmetrics** therefore supports various solvers out of the box (currently `scipy`, `ortools`, `munkres`). A runtime comparison for dense square matrices (i.e without `nan`) is shown below.
 
 ```
 python -m motmetrics.apps.benchmark_solvers

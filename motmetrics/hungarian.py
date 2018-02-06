@@ -1,6 +1,24 @@
 import numpy as np
 
 def linear_sum_assignment(costs, solver=None):
+    """Solve a linear sum assignment problem (LSA).
+
+    For large datasets solving the minimum cost assignment becomes the dominant runtime part. 
+    We therefore support various solvers out of the box (currently scipy, ortools, munkres)
+    
+    Params
+    ------
+    costs : np.array
+        numpy matrix containing costs. Use NaN/Inf values for unassignable
+        row/column pairs.
+    
+    Kwargs
+    ------
+    solver : str, optional
+        Name of solver to use. If None uses the first available solver
+        for smaller problem sizes and if available 'ortools' solver
+        for larger problem sizes.
+    """
 
     if solver is None:
         solver = default_solver
@@ -15,6 +33,8 @@ def linear_sum_assignment(costs, solver=None):
     return solvers[solver.lower()](costs)
 
 def lsa_solve_scipy(costs):
+    """Solves the LSA problem using the scipy library."""
+
     from scipy.optimize import linear_sum_assignment as scipy_solve
    
     # Note there is an issue in scipy.optimize.linear_sum_assignment where
@@ -33,6 +53,7 @@ def lsa_solve_scipy(costs):
     return scipy_solve(costs)
 
 def lsa_solve_munkres(costs):
+    """Solves the LSA problem using the Munkres library."""
     from munkres import Munkres, DISALLOWED
     m = Munkres()
 
@@ -47,6 +68,7 @@ def lsa_solve_munkres(costs):
 
 
 def lsa_solve_ortools(costs):
+    """Solves the LSA problem using Google's optimization tools."""
     from ortools.graph import pywrapgraph
 
 
