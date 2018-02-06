@@ -21,8 +21,8 @@ Provides MOTA, MOTP, track quality measures, global ID measures and more. The re
 Supports Euclidean, Intersection over Union and other distances measures.
 - *Complete event history* <br/> 
 Tracks all relevant per-frame events suchs as correspondences, misses, false alarms and switches.
-- *Custom solver backend* <br/> 
-Support for switching minimum assignment cost solvers. Supports `scipy`, `ortools`, `munkres` out of the box. For large problem sizes `ortools` is automatically chosen, which offers a factor of 50 speedup compared to `scipy`. 
+- *Flexible solver backend* <br/> 
+Support for switching minimum assignment cost solvers. Supports `scipy`, `ortools`, `munkres` out of the box. Auto-tunes solver selection based on availability and problem sizes.
 - *Easy to extend* <br/> 
 Events and summaries are utilizing [pandas][pandas] for data structures and analysis. New metrics can reuse already computed values from depending metrics.
 
