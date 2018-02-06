@@ -23,5 +23,6 @@ install:
     - source activate pyenv
     - pip install pytest
     - pip install .
+    - pip install ortools
 
 script: pytest
