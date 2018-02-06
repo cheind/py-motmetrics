@@ -21,6 +21,8 @@ Provides MOTA, MOTP, track quality measures, global ID measures and more. The re
 Supports Euclidean, Intersection over Union and other distances measures.
 - *Complete event history* <br/> 
 Tracks all relevant per-frame events suchs as correspondences, misses, false alarms and switches.
+- *Custom solver backend* <br/> 
+Support for switching minimum assignment cost solvers. Supports `scipy`, `ortools`, `munkres` out of the box. For large problem sizes `ortools` is automatically chosen, which offers a factor of 50 speedup compared to `scipy`. 
 - *Easy to extend* <br/> 
 Events and summaries are utilizing [pandas][pandas] for data structures and analysis. New metrics can reuse already computed values from depending metrics.
 
@@ -387,8 +389,45 @@ mm.distances.iou_matrix(a, b, max_iou=0.5)
 """
 ```
 
+#### Solver backends
+For large datasets the solving the minimum cost assignment becomes the dominant runtime part. **py-motmetrics**. 
+therefore supports various solvers out of the box (currently `scipy`, `ortools`, `munkres`).  A runtime comparison for dense square matrices (i.e without `nan`) is shown below.
+
+```
+python -m motmetrics.apps.benchmark_solvers
+
+Solver runtimes on dense-square cost matrices
+                  Runtime [sec]
+Matrix    Solver
+3x3       scipy           0.000
+          ortools         0.000
+          munkres         0.001
+10x10     scipy           0.001
+          ortools         0.000
+          munkres         0.001
+100x100   scipy           0.023
+          ortools         0.012
+          munkres         1.297
+200x200   scipy           0.226
+          ortools         0.048
+          munkres        18.232
+500x500   scipy           5.539
+          ortools         0.322
+          munkres             -
+1000x1000 scipy               -
+          ortools         1.297
+          munkres             -
+5000x5000 scipy               -
+          ortools        33.322
+          munkres             -
+```
+
+For small problem sizes all method perform equally well. Small problem sizes usually occur when computing `CLEAR-MOT` metrics from individual frames. On large problem sizes only Google's [optimization tools](https://developers.google.com/optimization/) provide  acceptable performance characteristics. For this reason, **py-motmetrics** switches from `scipy` (the default) to `ortools` when problem sizes increase. 
+
+`ortools` and `munkres` can be installed via `pip install ortools` and `pip install munkres`.
+
 ### Running tests
-**py-motmetrics** uses the pytest framework. To run the tests, simply `cd` into the source directy and run `pytest`.
+**py-motmetrics** uses the pytest framework. To run the tests, simply `cd` into the source directly and run `pytest`.
 
 <a name="References"></a>
 ### References
