@@ -75,6 +75,7 @@ if __name__ == '__main__':
     tsfiles = [f for f in glob.glob(os.path.join(args.tests, '*.txt')) if not os.path.basename(f).startswith('eval')]
 
     logging.info('Found {} groundtruths and {} test files.'.format(len(gtfiles), len(tsfiles)))
+    logging.info('Available cost assignment solvers {}'.format(mm.hungarian.available_solvers))
     logging.info('Loading files.')
     
     gt = OrderedDict([(Path(f).parts[-3], mm.io.loadtxt(f, fmt=args.fmt, min_confidence=1)) for f in gtfiles])
@@ -84,5 +85,7 @@ if __name__ == '__main__':
     accs, names = compare_dataframes(gt, ts)
     
     logging.info('Running metrics')
+    
     summary = mh.compute_many(accs, names=names, metrics=mm.metrics.motchallenge_metrics, generate_overall=True)
     print(mm.io.render_summary(summary, formatters=mh.formatters, namemap=mm.io.motchallenge_metric_names))
+    logging.info('Completed')
