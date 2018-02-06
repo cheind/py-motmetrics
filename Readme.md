@@ -4,13 +4,14 @@
 
 The **py-motmetrics** library provides a Python implementation of metrics for benchmarking multiple object trackers (MOT).
 
-While benchmarking single object trackers is rather straightforward, measuring the performance of multiple object trackers needs careful design as multiple correspondence constellations can arise (see image below). A variety of methods have been proposed in the past and while there is no general agreement on a single method, the methods of [[1,2,3]](#References) have received considerable attention in recent years. **py-motmetrics** implements these [metrics](#Metrics).
+While benchmarking single object trackers is rather straightforward, measuring the performance of multiple object trackers needs careful design as multiple correspondence constellations can arise (see image below). A variety of methods have been proposed in the past and while there is no general agreement on a single method, the methods of [[1,2,3,4]](#References) have received considerable attention in recent years. **py-motmetrics** implements these [metrics](#Metrics).
 
 <div style="text-align:center;">
-
 ![](etc/mot.png)<br/>
 *Pictures courtesy of Bernardin, Keni, and Rainer Stiefelhagen [[1]](#References)*
 </div>
+
+In particular **py-motmetrics** supports `CLEAR-MOT`[[1,2]](#References) metrics and `ID-MEASURE`[[4]](#References) metrics. Both metrics attempt to find a minimum cost assignment between ground truth objects and predictions. However, while CLEAR-MOT solves the assignment problem on a local per-frame basis, `ID-MEASURE` solves the bipartite graph matching by finding the minimum cost of objects and predictions over all frames. This [blog-post](http://vision.cs.duke.edu/DukeMTMC/IDmeasures.html) by Ergys illustrates the differences in more detail.
 
 ### Features at a glance
 - *Variety of metrics* <br/>
