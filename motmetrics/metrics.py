@@ -378,7 +378,6 @@ def idf1(df, idtp, num_objects, num_predictions):
     """ID measures: global min-cost F1 score."""
     return 2 * idtp / (num_objects + num_predictions)
 
-
 def create():
     """Creates a MetricsHost and populates it with default metrics."""
     m = MetricsHost()
