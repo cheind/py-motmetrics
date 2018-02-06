@@ -7,6 +7,7 @@ The **py-motmetrics** library provides a Python implementation of metrics for be
 While benchmarking single object trackers is rather straightforward, measuring the performance of multiple object trackers needs careful design as multiple correspondence constellations can arise (see image below). A variety of methods have been proposed in the past and while there is no general agreement on a single method, the methods of [[1,2,3,4]](#References) have received considerable attention in recent years. **py-motmetrics** implements these [metrics](#Metrics).
 
 <div style="text-align:center;">
+
 ![](etc/mot.png)<br/>
 *Pictures courtesy of Bernardin, Keni, and Rainer Stiefelhagen [[1]](#References)*
 </div>
