@@ -50,7 +50,8 @@ def run():
     # Some solvers are too slow for larger problem sizes
     exclude_above = {
         'scipy': 500,
-        'ortools': 5000
+        'ortools': 5000,
+        'munkres': 200
     }    
     
     print(benchmark(square_sizes, exclude_above))
