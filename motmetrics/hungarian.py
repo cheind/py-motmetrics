@@ -22,10 +22,11 @@ def linear_sum_assignment(costs, solver=None):
 
     if solver is None:
         solver = default_solver
-        if costs.size > 10000 and 'ortools' in available_solvers:
-            solver = 'ortools'
+        #if costs.size > 10000 and 'ortools' in available_solvers:
+        #    solver = 'ortools'
 
     solvers = {
+        'fast_hungarian' : lambda costs: lsa_solve_fast_hungarian(costs),
         'scipy' : lambda costs: lsa_solve_scipy(costs),
         'munkres' : lambda costs: lsa_solve_munkres(costs),
         'ortools' : lambda costs: lsa_solve_ortools(costs)
@@ -51,6 +52,10 @@ def lsa_solve_scipy(costs):
         costs[inv] = INVDIST
 
     return scipy_solve(costs)
+
+def lsa_solve_fast_hungarian(costs):
+    from fast_hungarian import solve_minimum_cost
+    return solve_minimum_cost(costs)
 
 def lsa_solve_munkres(costs):
     """Solves the LSA problem using the Munkres library."""
@@ -129,6 +134,6 @@ def lsa_solve_ortools(costs):
 
 
 import importlib
-available_solvers = [s for s in ['scipy', 'ortools', 'munkres'] if importlib.util.find_spec(s) is not None]
+available_solvers = [s for s in ['fast_hungarian', 'scipy', 'ortools', 'munkres'] if importlib.util.find_spec(s) is not None]
 assert len(available_solvers) > 0
 default_solver = available_solvers[0]
