@@ -45,8 +45,8 @@ def run():
     import time
 
     square_sizes = [(3,3), (10,10), (100,100), (200,200), (500,500), (1000,1000), (5000,5000), (10000,10000)]
-    tall_sizes = [(3,2), (10,5), (100,10), (200,20)]
-    wide_sizes = [(2,3), (5,10), (10,100), (20,200)]
+    tall_sizes = [(3,2), (10,5), (100,10), (200,20), (500,50)]
+    wide_sizes = [(2,3), (5,10), (10,100), (20,200), (50,500)]
     
     # Some solvers are too slow for larger problem sizes
     exclude_above = {
