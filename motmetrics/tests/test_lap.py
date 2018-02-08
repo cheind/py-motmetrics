@@ -1,10 +1,10 @@
 from pytest import approx
 import numpy as np
-from motmetrics.hungarian import linear_sum_assignment as lsa, available_solvers
+from motmetrics.lap import linear_sum_assignment as lsa, available_solvers
 
 all_solvers = available_solvers
 
-def test_hungarian_solvers():
+def test_lap_solvers():
     assert len(all_solvers) > 0
 
     costs = np.array([[6, 9, 1],[10, 3, 2],[8, 7, 4.]])
