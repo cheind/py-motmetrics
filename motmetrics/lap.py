@@ -4,7 +4,7 @@ def linear_sum_assignment(costs, solver=None):
     """Solve a linear sum assignment problem (LSA).
 
     For large datasets solving the minimum cost assignment becomes the dominant runtime part. 
-    We therefore support various solvers out of the box (currently scipy, ortools, munkres)
+    We therefore support various solvers out of the box (currently lapsolver, scipy, ortools, munkres)
     
     Params
     ------
@@ -22,11 +22,9 @@ def linear_sum_assignment(costs, solver=None):
 
     if solver is None:
         solver = default_solver
-        #if costs.size > 10000 and 'ortools' in available_solvers:
-        #    solver = 'ortools'
 
     solvers = {
-        'fast_hungarian' : lambda costs: lsa_solve_fast_hungarian(costs),
+        'lapsolver' : lambda costs: lsa_solve_lapsolver(costs),
         'scipy' : lambda costs: lsa_solve_scipy(costs),
         'munkres' : lambda costs: lsa_solve_munkres(costs),
         'ortools' : lambda costs: lsa_solve_ortools(costs)
@@ -53,9 +51,10 @@ def lsa_solve_scipy(costs):
 
     return scipy_solve(costs)
 
-def lsa_solve_fast_hungarian(costs):
-    from fast_hungarian import solve_minimum_cost
-    return solve_minimum_cost(costs)
+def lsa_solve_lapsolver(costs):
+    """Solves the LSA problem using the lapsolver library."""
+    from lapsolver import solve_dense
+    return solve_dense(costs)
 
 def lsa_solve_munkres(costs):
     """Solves the LSA problem using the Munkres library."""
@@ -134,6 +133,6 @@ def lsa_solve_ortools(costs):
 
 
 import importlib
-available_solvers = [s for s in ['fast_hungarian', 'scipy', 'ortools', 'munkres'] if importlib.util.find_spec(s) is not None]
-assert len(available_solvers) > 0
+available_solvers = [s for s in ['lapsolver', 'scipy', 'ortools', 'munkres'] if importlib.util.find_spec(s) is not None]
+assert len(available_solvers) > 0, "No LAP solvers are available. Try `pip install lapsolver` or `pip install scipy`"
 default_solver = available_solvers[0]

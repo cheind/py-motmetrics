@@ -9,7 +9,7 @@ import numpy.ma as ma
 import pandas as pd
 from collections import OrderedDict
 from itertools import count
-from .hungarian import linear_sum_assignment
+from motmetrics.lap import linear_sum_assignment
 
 class MOTAccumulator(object):
     """Manage tracking events.

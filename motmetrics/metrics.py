@@ -7,7 +7,7 @@ https://github.com/cheind/py-motmetrics
 from __future__ import division
 from collections import OrderedDict, Iterable
 from motmetrics.mot import MOTAccumulator
-from motmetrics.hungarian import linear_sum_assignment
+from motmetrics.lap import linear_sum_assignment
 import pandas as pd
 import numpy as np
 import inspect

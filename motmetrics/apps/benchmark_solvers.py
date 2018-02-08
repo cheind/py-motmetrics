@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import sys
-from motmetrics.hungarian import linear_sum_assignment as lsa, available_solvers
+from motmetrics.lap import linear_sum_assignment as lsa, available_solvers
 
 
 def benchmark(sizes, exclude_above):
@@ -45,7 +45,8 @@ def run():
     import time
 
     square_sizes = [(3,3), (10,10), (100,100), (200,200), (500,500), (1000,1000), (5000,5000), (10000,10000)]
-    nonsquare_sizes = [(3,2), (10,5), (100,10), (200,20), (500,50), (1000,100), (5000,500), (10000,1000)]
+    tall_sizes = [(3,2), (10,5), (100,10), (200,20)]
+    wide_sizes = [(2,3), (5,10), (10,100), (20,200)]
     
     # Some solvers are too slow for larger problem sizes
     exclude_above = {
@@ -58,12 +59,16 @@ def run():
 
     exclude_above = {
         'munkres': 0, #does not work for non-square matrices
-        'scipy': 500,
-        'ortools': 5000
     }    
 
+    print(benchmark(tall_sizes, exclude_above))
 
-    print(benchmark(nonsquare_sizes, exclude_above))
+    exclude_above = {
+        'munkres': 0, #does not work for non-square matrices
+    }    
+
+    print(benchmark(wide_sizes, exclude_above))
+
 
 
 if __name__ == '__main__':
