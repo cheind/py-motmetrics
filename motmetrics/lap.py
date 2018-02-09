@@ -1,4 +1,5 @@
 import numpy as np
+from collections import OrderedDict
 
 def linear_sum_assignment(costs, solver=None):
     """Solve a linear sum assignment problem (LSA).
@@ -128,20 +129,37 @@ def lsa_solve_ortools(costs):
     indices = np.array(pairings, dtype=np.int64)
     return indices[:,0], indices[:,1]
 
+def lsa_solve_lapjv(costs):
+    from lap import lapjv
+
+    inv = ~np.isfinite(costs)
+    if inv.any():    
+        costs = costs.copy()    
+        valid = costs[~inv]
+        INVDIST = 2 * valid.max() + 1 if valid.shape[0] > 0 else 1.
+        costs[inv] = INVDIST
+
+    r = lapjv(costs, return_cost=False, extend_cost=True)
+    indices = np.array((range(costs.shape[0]), r[0]), dtype=np.int64).T        
+    indices = indices[indices[:, 1] != -1]
+    return indices[:,0], indices[:,1]
 
 def init_standard_solvers():
     import importlib
 
     global available_solvers, default_solver, solver_map
 
-    solver_map = {
-        'lapsolver' : lambda costs: lsa_solve_lapsolver(costs),
-        'scipy' : lambda costs: lsa_solve_scipy(costs),
-        'munkres' : lambda costs: lsa_solve_munkres(costs),
-        'ortools' : lambda costs: lsa_solve_ortools(costs)
-    }
+    solvers = [
+        ('lapsolver', lsa_solve_lapsolver),
+        ('lap', lsa_solve_lapjv),        
+        ('scipy', lsa_solve_scipy),
+        ('munkres', lsa_solve_munkres),
+        ('ortools', lsa_solve_ortools),
+    ]
 
-    available_solvers = [s for s in ['lapsolver', 'scipy', 'ortools', 'munkres'] if importlib.util.find_spec(s) is not None]
+    solver_map = dict(solvers)    
+    
+    available_solvers = [s[0] for s in solvers if importlib.util.find_spec(s[0]) is not None]
     if len(available_solvers) == 0:
         import warnings
         default_solver = None        

@@ -47,6 +47,7 @@ string.""", formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('tests', type=str, help='Directory containing tracker result files')
     parser.add_argument('--loglevel', type=str, help='Log level', default='info')
     parser.add_argument('--fmt', type=str, help='Data format', default='mot15-2D')
+    parser.add_argument('--solver', type=str, help='LAP solver to use')
     return parser.parse_args()
 
 def compare_dataframes(gts, ts):
@@ -70,6 +71,9 @@ if __name__ == '__main__':
     if not isinstance(loglevel, int):
         raise ValueError('Invalid log level: {} '.format(args.loglevel))        
     logging.basicConfig(level=loglevel, format='%(asctime)s %(levelname)s - %(message)s', datefmt='%I:%M:%S')
+
+    if args.solver:
+        mm.lap.default_solver = args.solver
 
     gtfiles = glob.glob(os.path.join(args.groundtruths, '*/gt/gt.txt'))
     tsfiles = [f for f in glob.glob(os.path.join(args.tests, '*.txt')) if not os.path.basename(f).startswith('eval')]
