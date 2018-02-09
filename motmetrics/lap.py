@@ -132,7 +132,13 @@ def lsa_solve_ortools(costs):
     return indices[:,0], indices[:,1]
 
 
-import importlib
-available_solvers = [s for s in ['lapsolver', 'scipy', 'ortools', 'munkres'] if importlib.util.find_spec(s) is not None]
-assert len(available_solvers) > 0, "No LAP solvers are available. Try `pip install lapsolver` or `pip install scipy`"
-default_solver = available_solvers[0]
+def init_standard_solvers():
+    import importlib
+
+    global available_solvers, default_solver
+
+    available_solvers = [s for s in ['scipy', 'ortools', 'munkres'] if importlib.util.find_spec(s) is not None]
+    assert len(available_solvers) > 0, "No LAP solvers are available. Try `pip install lapsolver` or `pip install scipy`"
+    default_solver = available_solvers[0]
+
+init_standard_solvers()
