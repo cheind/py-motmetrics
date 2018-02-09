@@ -75,7 +75,8 @@ if __name__ == '__main__':
     tsfiles = [f for f in glob.glob(os.path.join(args.tests, '*.txt')) if not os.path.basename(f).startswith('eval')]
 
     logging.info('Found {} groundtruths and {} test files.'.format(len(gtfiles), len(tsfiles)))
-    logging.info('Available cost assignment solvers {}'.format(mm.hungarian.available_solvers))
+    logging.info('Available LAP solvers {}'.format(mm.lap.available_solvers))
+    logging.info('Default LAP solver \'{}\''.format(mm.lap.default_solver))
     logging.info('Loading files.')
     
     gt = OrderedDict([(Path(f).parts[-3], mm.io.loadtxt(f, fmt=args.fmt, min_confidence=1)) for f in gtfiles])
