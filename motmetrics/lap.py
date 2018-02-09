@@ -14,22 +14,20 @@ def linear_sum_assignment(costs, solver=None):
     
     Kwargs
     ------
-    solver : str, optional
-        Name of solver to use. If None uses the first available solver
-        for smaller problem sizes and if available 'ortools' solver
-        for larger problem sizes.
+    solver : callable or str, optional
+        When str: name of solver to use.
+        When callable: function to invoke
+        When None: uses first available solver
     """
 
-    if solver is None:
-        solver = default_solver
+    solver = solver or default_solver
 
-    solvers = {
-        'lapsolver' : lambda costs: lsa_solve_lapsolver(costs),
-        'scipy' : lambda costs: lsa_solve_scipy(costs),
-        'munkres' : lambda costs: lsa_solve_munkres(costs),
-        'ortools' : lambda costs: lsa_solve_ortools(costs)
-    }
-    return solvers[solver.lower()](costs)
+    if isinstance(solver, str):
+        # Try resolve from string
+        solver = solver_map.get(solver, None)    
+    
+    assert callable(solver), 'Invalid LAP solver.'
+    return solver(costs)
 
 def lsa_solve_scipy(costs):
     """Solves the LSA problem using the scipy library."""
@@ -118,8 +116,7 @@ def lsa_solve_ortools(costs):
                 assignment.AddArcWithCost(r, c, int(costs[r,c]*f))
     
     if assignment.Solve() != assignment.OPTIMAL:
-        assert default_solver != 'ortools'
-        return linear_sum_assignment(costs, solver=default_solver)
+        return linear_sum_assignment(costs, solver='scipy')
 
     if assignment.NumNodes() == 0:
         return np.array([], dtype=np.int64), np.array([], dtype=np.int64)
@@ -135,10 +132,52 @@ def lsa_solve_ortools(costs):
 def init_standard_solvers():
     import importlib
 
-    global available_solvers, default_solver
+    global available_solvers, default_solver, solver_map
 
-    available_solvers = [s for s in ['scipy', 'ortools', 'munkres'] if importlib.util.find_spec(s) is not None]
-    assert len(available_solvers) > 0, "No LAP solvers are available. Try `pip install lapsolver` or `pip install scipy`"
-    default_solver = available_solvers[0]
+    solver_map = {
+        'lapsolver' : lambda costs: lsa_solve_lapsolver(costs),
+        'scipy' : lambda costs: lsa_solve_scipy(costs),
+        'munkres' : lambda costs: lsa_solve_munkres(costs),
+        'ortools' : lambda costs: lsa_solve_ortools(costs)
+    }
+
+    available_solvers = [s for s in ['lapsolver', 'scipy', 'ortools', 'munkres'] if importlib.util.find_spec(s) is not None]
+    if len(available_solvers) == 0:
+        import warnings
+        default_solver = None        
+        warnings.warn('No standard LAP solvers found. Consider `pip install lapsolver` or `pip install scipy`', category=RuntimeWarning)
+    else:
+        default_solver = available_solvers[0]
 
 init_standard_solvers()
+
+from contextlib import contextmanager
+
+@contextmanager
+def set_default_solver(newsolver):
+    '''Change the default solver within context.
+
+    Intended usage
+
+        costs = ...
+        mysolver = lambda x: ... # solver code that returns pairings
+
+        with lap.change_solver(mysolver): 
+            rids, cids = lap.linear_sum_assignment(costs)
+
+    Params
+    ------
+    newsolver : callable or str
+        new solver function
+    '''
+
+    global default_solver
+
+    oldsolver = default_solver
+    try:
+        default_solver = newsolver    
+        yield
+    finally:
+        default_solver = oldsolver
+    
+
