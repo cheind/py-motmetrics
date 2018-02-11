@@ -36,8 +36,8 @@ build_script:
 test_script:
   # Try building source wheel and install  
   - ps: >-
-    $wheel = cmd /r dir .\dist\*.tar.gz /b/s;
-    pip install --verbose $wheel
+      $wheel = cmd /r dir .\dist\*.tar.gz /b/s;
+      pip install --verbose $wheel
   - pytest --pyargs motmetrics
   
 on_success:
