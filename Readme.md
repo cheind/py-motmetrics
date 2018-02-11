@@ -391,40 +391,27 @@ mm.distances.iou_matrix(a, b, max_iou=0.5)
 
 <a name="SolverBackends"></a>
 #### Solver backends
-For large datasets solving the minimum cost assignment becomes the dominant runtime part. **py-motmetrics** therefore supports various solvers out of the box (currently `scipy`, `ortools`, `munkres`). A runtime comparison for dense square matrices (i.e without `nan`) is shown below.
+For large datasets solving the minimum cost assignment becomes the dominant runtime part. **py-motmetrics** therefore supports these solvers out of the box
+  - `lapsolver` - https://github.com/cheind/py-lapsolver
+  - `lapjv` - https://github.com/gatagat/lap
+  - `scipy` - https://github.com/scipy/scipy/tree/master/scipy  
+  - `ortools` - https://github.com/google/or-tools
+  - `munkres` - http://software.clapper.org/munkres/
 
+A comparison for different sized matrices is shown below (taken from [here](https://github.com/cheind/py-lapsolver#benchmarks))
+
+Please note that the x-axis is scaled logarithmically. Missing bars indicate excessive runtime or errors in returned result. 
+![](https://github.com/cheind/py-lapsolver/raw/master/lapsolver/etc/benchmark-dtype-numpy.float32.png)
+
+By default **py-motmetrics** will try to find a LAP solver in the order of the list above. In order to temporarly replace the default solver use
+
+```python
+costs = ...
+mysolver = lambda x: ... # solver code that returns pairings
+
+with lap.set_default_solver(mysolver): 
+    ...
 ```
-python -m motmetrics.apps.benchmark_solvers
-
-Solver runtimes on dense-square cost matrices
-                  Runtime [sec]
-Matrix    Solver
-3x3       scipy           0.000
-          ortools         0.000
-          munkres         0.001
-10x10     scipy           0.001
-          ortools         0.000
-          munkres         0.001
-100x100   scipy           0.023
-          ortools         0.012
-          munkres         1.297
-200x200   scipy           0.226
-          ortools         0.048
-          munkres        18.232
-500x500   scipy           5.539
-          ortools         0.322
-          munkres             -
-1000x1000 scipy               -
-          ortools         1.297
-          munkres             -
-5000x5000 scipy               -
-          ortools        33.322
-          munkres             -
-```
-
-For small problem sizes all method perform equally well. Small problem sizes usually appear in computing `CLEAR-MOT` metrics of individual frames. On larger problem sizes only Google's [optimization tool](https://developers.google.com/optimization/) provides  acceptable performance characteristics. For this reason **py-motmetrics** switches from `scipy` (the default) to `ortools` when problem sizes increase. 
-
-`ortools` and `munkres` can be installed via `pip install ortools` and `pip install munkres`.
 
 ### Running tests
 **py-motmetrics** uses the pytest framework. To run the tests, simply `cd` into the source directly and run `pytest`.

@@ -180,7 +180,7 @@ def set_default_solver(newsolver):
         costs = ...
         mysolver = lambda x: ... # solver code that returns pairings
 
-        with lap.change_solver(mysolver): 
+        with lap.set_default_solver(mysolver): 
             rids, cids = lap.linear_sum_assignment(costs)
 
     Params
