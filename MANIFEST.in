@@ -1,0 +1,3 @@
+include README.md LICENSE
+recursive-include motmetrics/data *
+recursive-include motmetrics/etc *

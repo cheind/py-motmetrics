@@ -8,7 +8,7 @@ While benchmarking single object trackers is rather straightforward, measuring t
 
 <div style="text-align:center;">
 
-![](etc/mot.png)<br/>
+![](motmetrics/etc/mot.png)<br/>
 *Pictures courtesy of Bernardin, Keni, and Rainer Stiefelhagen [[1]](#References)*
 </div>
 

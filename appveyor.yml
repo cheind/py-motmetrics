@@ -1,0 +1,70 @@
+environment:
+  TWINE_USERNAME: cheind
+  TWINE_PASSWORD:
+    secure: hnxMBvmJAGM1rQVOUbkGvQ==
+
+  # http://www.appveyor.com/docs/installed-software#python
+  matrix:
+    - PYTHON: "C:\\Miniconda36-x64"
+      PYTHON_VERSION: "3.6"
+      PYTHON_ARCH: "64"    
+    - PYTHON: "C:\\Miniconda36"
+      PYTHON_VERSION: "3.6"
+      PYTHON_ARCH: "32"    
+    - PYTHON: "C:\\Miniconda35-x64"
+      PYTHON_VERSION: "3.5"
+      PYTHON_ARCH: "64"    
+    - PYTHON: "C:\\Miniconda35"
+      PYTHON_VERSION: "3.5"
+      PYTHON_ARCH: "32"
+
+install:
+  - set "CONDA_ROOT=%PYTHON%"
+  - set "PATH=%CONDA_ROOT%;%CONDA_ROOT%\Scripts;%CONDA_ROOT%\Library\bin;%PATH%"
+  - conda config --set always_yes yes
+  - conda update -q conda
+  - conda config --set auto_update_conda no
+  - conda install -q pip pytest numpy
+  - pip install --upgrade pip
+  - pip install wheel
+  - pip install --upgrade --ignore-installed setuptools
+  - pip install lapsolver
+  
+build_script:
+  - python setup.py sdist
+  
+test_script:
+  # Try building source wheel and install  
+  - ps: >-
+    $wheel = cmd /r dir .\dist\*.tar.gz /b/s;
+    pip install --verbose $wheel
+  - pytest --pyargs motmetrics
+  
+on_success:
+  ps: >-
+    if ($env:APPVEYOR_REPO_TAG -eq $true -Or $env:APPVEYOR_REPO_BRANCH -eq "master") {
+      Write-Output ("Deploying to PyPI")
+      pip install --upgrade twine
+      # If powershell ever sees anything on stderr it thinks it's a fail.
+      # So we use cmd to redirect stderr to stdout before PS can see it.
+      cmd /c 'twine upload --skip-existing dist\* 2>&1'
+    } else {
+      Write-Output "Not deploying as this is not a tagged commit or commit on master"
+    }
+    
+artifacts:
+  - path: "dist\\*.whl"
+  - path: "dist\\*.tar.gz"
+    name: Wheels
+
+notifications:
+  - provider: Email
+    to:
+      - christoph.heindl@email.com
+    on_build_success: true
+    on_build_failure: true
+
+#branches:
+#  only:
+#    - master
+#    - develop

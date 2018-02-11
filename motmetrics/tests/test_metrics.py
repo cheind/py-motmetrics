@@ -5,6 +5,8 @@ import motmetrics as mm
 import pytest
 import os
 
+DATA_DIR = os.path.join(os.path.dirname(__file__), '../data')
+
 def test_metricscontainer_1():
     m = mm.metrics.MetricsHost()
     m.register(lambda df: 1., name='a')
@@ -116,14 +118,13 @@ def test_motchallenge_files():
         'TUD-Campus',
         'TUD-Stadtmitte',
     ]
-    reldir = os.path.join(os.path.dirname(__file__), '../../etc/data')
-
+    
     def compute_motchallenge(dname):
         df_gt = mm.io.loadtxt(os.path.join(dname,'gt.txt'))
         df_test = mm.io.loadtxt(os.path.join(dname,'test.txt'))
         return mm.utils.compare_to_groundtruth(df_gt, df_test, 'iou', distth=0.5)
 
-    accs = [compute_motchallenge(os.path.join(reldir, d)) for d in dnames]
+    accs = [compute_motchallenge(os.path.join(DATA_DIR, d)) for d in dnames]
 
     # For testing
     # [a.events.to_pickle(n) for (a,n) in zip(accs, dnames)]
