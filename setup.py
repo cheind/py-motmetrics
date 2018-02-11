@@ -22,5 +22,6 @@ setup(
     license='MIT',
     install_requires=required,
     packages=['motmetrics', 'motmetrics.tests', 'motmetrics.apps'],
+    include_package_data=True,
     keywords='tracker MOT evaluation metrics compare'
 )

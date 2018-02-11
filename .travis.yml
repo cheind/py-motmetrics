@@ -1,7 +1,7 @@
 language: python
 env:
-  - PYTHON=3.5 PANDAS=0.19.2
-  - PYTHON=3.6 PANDAS=0.19.2
+  - PYTHON=3.5 PANDAS>=0.19.2
+  - PYTHON=3.6 PANDAS>=0.19.2
 install:
     # Install conda
     - if [[ "$PYTHON" == "2.7" ]]; then
@@ -23,5 +23,6 @@ install:
     - source activate pyenv
     - pip install pytest
     - pip install .
+    - pip install ortools
 
 script: pytest

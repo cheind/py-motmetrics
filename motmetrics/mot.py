@@ -9,7 +9,7 @@ import numpy.ma as ma
 import pandas as pd
 from collections import OrderedDict
 from itertools import count
-from scipy.optimize import linear_sum_assignment
+from motmetrics.lap import linear_sum_assignment
 
 class MOTAccumulator(object):
     """Manage tracking events.
@@ -32,15 +32,16 @@ class MOTAccumulator(object):
         - `'SWITCH'` a match between a object and hypothesis was found but differs from previous assignment
         - `'MISS'` no match for an object was found
         - `'FP'` no match for an hypothesis was found (spurious detections)
+        - `'RAW'` events corresponding to raw input
     
     Events are tracked in a pandas Dataframe. The dataframe is hierarchically indexed by (`FrameId`, `EventId`),
     where `FrameId` is either provided during the call to `update` or auto-incremented when `auto_id` is set
     true during construction of MOTAccumulator. `EventId` is auto-incremented. The dataframe has the following
     columns 
-        - `Type` one of `('MATCH', 'SWITCH', 'MISS', 'FP')`
-        - `OId` object id or np.nan when `'FP'`
-        - `HId` hypothesis id or np.nan when `'MISS'`
-        - `D` distance or np.nan when `'FP'` or `'MISS'`
+        - `Type` one of `('MATCH', 'SWITCH', 'MISS', 'FP', 'RAW')`
+        - `OId` object id or np.nan when `'FP'` or `'RAW'` and object is not present
+        - `HId` hypothesis id or np.nan when `'MISS'` or `'RAW'` and hypothesis is not present
+        - `D` distance or np.nan when `'FP'` or `'MISS'` or `'RAW'` and either object/hypothesis is absent
     
     From the events and associated fields the entire tracking history can be recovered. Once the accumulator 
     has been populated with per-frame data use `metrics.summarize` to compute statistics. See `metrics.compute_metrics`
@@ -83,9 +84,13 @@ class MOTAccumulator(object):
     def reset(self):
         """Reset the accumulator to empty state."""
 
-        self.events = MOTAccumulator.new_event_dataframe()
+        self._events = []
+        self._indices = []
+        #self.events = MOTAccumulator.new_event_dataframe()
         self.m = {} # Pairings up to current timestamp  
         self.last_occurrence = {} # Tracks most recent occurance of object
+        self.dirty_events = True
+        self.cached_events_df = None
 
     def update(self, oids, hids, dists, frameid=None):
         """Updates the accumulator with frame specific objects/detections.
@@ -126,21 +131,43 @@ class MOTAccumulator(object):
         1. Bernardin, Keni, and Rainer Stiefelhagen. "Evaluating multiple object tracking performance: the CLEAR MOT metrics." 
         EURASIP Journal on Image and Video Processing 2008.1 (2008): 1-10.
         """
-            
+        
+        self.dirty_events = True
         oids = ma.array(oids, mask=np.zeros(len(oids)))
         hids = ma.array(hids, mask=np.zeros(len(hids)))  
-        dists = np.atleast_2d(dists).astype(float).reshape(oids.shape[0], hids.shape[0])
+        dists = np.atleast_2d(dists).astype(float).reshape(oids.shape[0], hids.shape[0]).copy()
 
         if frameid is None:            
             assert self.auto_id, 'auto-id is not enabled'
-            frameid = self.events.index.get_level_values(0).unique().shape[0]   
+            if len(self._indices) > 0:
+                frameid = self._indices[-1][0] + 1
+            else:
+                frameid = 0
         else:
             assert not self.auto_id, 'Cannot provide frame id when auto-id is enabled'
         
         eid = count()
-        dists, INVDIST = self._sanitize_dists(dists)
 
-        if oids.size * hids.size > 0:        
+        # 0. Record raw events
+
+        no = len(oids)
+        nh = len(hids)
+        
+        if no * nh > 0:
+            for i in range(no):
+                for j in range(nh):
+                    self._indices.append((frameid, next(eid)))
+                    self._events.append(['RAW', oids[i], hids[j], dists[i,j]])
+        elif no == 0:
+            for i in range(nh):
+                self._indices.append((frameid, next(eid)))
+                self._events.append(['RAW', np.nan, hids[i], np.nan])       
+        elif nh == 0:
+            for i in range(no):
+                self._indices.append((frameid, next(eid)))
+                self._events.append(['RAW', oids[i], np.nan, np.nan])
+
+        if oids.size * hids.size > 0:    
             # 1. Try to re-establish tracks from previous correspondences
             for i in range(oids.shape[0]):
                 if not oids[i] in self.m:
@@ -152,19 +179,22 @@ class MOTAccumulator(object):
                     continue
                 j = j[0]
 
-                if not dists[i, j] == INVDIST:
+                if np.isfinite(dists[i,j]):
                     oids[i] = ma.masked
                     hids[j] = ma.masked
                     self.m[oids.data[i]] = hids.data[j]
-                    self.events.loc[(frameid, next(eid)), :] = ['MATCH', oids.data[i], hids.data[j], dists[i, j]]
-            
+                    
+                    self._indices.append((frameid, next(eid)))
+                    self._events.append(['MATCH', oids.data[i], hids.data[j], dists[i, j]])
+
             # 2. Try to remaining objects/hypotheses
-            dists[oids.mask, :] = INVDIST
-            dists[:, hids.mask] = INVDIST
+            dists[oids.mask, :] = np.nan
+            dists[:, hids.mask] = np.nan
         
             rids, cids = linear_sum_assignment(dists)
+
             for i, j in zip(rids, cids):                
-                if dists[i, j] == INVDIST:
+                if not np.isfinite(dists[i,j]):
                     continue
                 
                 o = oids[i]
@@ -173,33 +203,45 @@ class MOTAccumulator(object):
                             self.m[o] != h and \
                             abs(frameid - self.last_occurrence[o]) <= self.max_switch_time
                 cat = 'SWITCH' if is_switch else 'MATCH'
-                self.events.loc[(frameid, next(eid)), :] = [cat, oids.data[i], hids.data[j], dists[i, j]]
+                self._indices.append((frameid, next(eid)))
+                self._events.append([cat, oids.data[i], hids.data[j], dists[i, j]])
                 oids[i] = ma.masked
                 hids[j] = ma.masked
                 self.m[o] = h
 
         # 3. All remaining objects are missed
         for o in oids[~oids.mask]:
-            self.events.loc[(frameid, next(eid)), :] = ['MISS', o, np.nan, np.nan]
+            self._indices.append((frameid, next(eid)))
+            self._events.append(['MISS', o, np.nan, np.nan])
         
         # 4. All remaining hypotheses are false alarms
         for h in hids[~hids.mask]:
-            self.events.loc[(frameid, next(eid)), :] = ['FP', np.nan, h, np.nan]
+            self._indices.append((frameid, next(eid)))
+            self._events.append(['FP', np.nan, h, np.nan])
 
         # 5. Update occurance state
-        for o in oids.data:
+        for o in oids.data:            
             self.last_occurrence[o] = frameid
 
-        if frameid in self.events.index:
-            return self.events.loc[frameid]
-        else:
-            return None
+        return frameid
+
+    @property
+    def events(self):
+        if self.dirty_events:
+            self.cached_events_df = MOTAccumulator.new_event_dataframe_with_data(self._indices, self._events)
+            self.dirty_events = False
+        return self.cached_events_df
+    
+    @property
+    def mot_events(self):
+        df = self.events
+        return df[df.Type != 'RAW']
 
     @staticmethod
     def new_event_dataframe():
         """Create a new DataFrame for event tracking."""
         idx = pd.MultiIndex(levels=[[],[]], labels=[[],[]], names=['FrameId','Event'])
-        cats = pd.Categorical([], categories=['FP', 'MISS', 'SWITCH', 'MATCH'])
+        cats = pd.Categorical([], categories=['RAW', 'FP', 'MISS', 'SWITCH', 'MATCH'])
         df = pd.DataFrame(
             OrderedDict([
                 ('Type', pd.Series(cats)),          # Type of event. One of FP (false positive), MISS, SWITCH, MATCH
@@ -210,20 +252,99 @@ class MOTAccumulator(object):
             index=idx
         )
         return df
-    
-    def _sanitize_dists(self, dists):
-        """Replace invalid distances."""
-        
-        dists = np.copy(dists)
-        
-        # Note there is an issue in scipy.optimize.linear_sum_assignment where
-        # it runs forever if an entire row/column is infinite or nan. We therefore
-        # make a copy of the distance matrix and compute a safe value that indicates
-        # 'cannot assign'. Also note + 1 is necessary in below inv-dist computation
-        # to make invdist bigger than max dist in case max dist is zero.
-        
-        valid_dists = dists[np.isfinite(dists)]
-        INVDIST = 2 * valid_dists.max() + 1 if valid_dists.shape[0] > 0 else 1.
-        dists[~np.isfinite(dists)] = INVDIST  
 
-        return dists, INVDIST
+    @staticmethod
+    def new_event_dataframe_with_data(indices, events):
+        """Create a new DataFrame filled with data.
+        
+        Params
+        ------
+        indices: list
+            list of tuples (frameid, eventid)
+        events: list
+            list of events where each event is a list containing
+            'Type', 'OId', HId', 'D'                    
+        """
+
+        tevents = list(zip(*events))
+
+        raw_type = pd.Categorical(tevents[0], categories=['RAW', 'FP', 'MISS', 'SWITCH', 'MATCH'], ordered=False)
+        series = [
+            pd.Series(raw_type, name='Type'),
+            pd.Series(tevents[1], dtype=str, name='OId'),
+            pd.Series(tevents[2], dtype=str, name='HId'),
+            pd.Series(tevents[3], dtype=float, name='D')
+        ]
+        
+        idx = pd.MultiIndex.from_tuples(indices, names=['FrameId','Event'])
+        df = pd.concat(series, axis=1)
+        df.index = idx
+        return df
+    
+
+
+    @staticmethod
+    def merge_event_dataframes(dfs, update_frame_indices=True, update_oids=True, update_hids=True, return_mappings=False):
+        """Merge dataframes.
+        
+        Params
+        ------
+        dfs : list of pandas.DataFrame or MotAccumulator
+            A list of event containers to merge
+        
+        Kwargs
+        ------
+        update_frame_indices : boolean, optional
+            Ensure that frame indices are unique in the merged container
+        update_oids : boolean, unique
+            Ensure that object ids are unique in the merged container
+        update_hids : boolean, unique
+            Ensure that hypothesis ids are unique in the merged container
+        return_mappings : boolean, unique
+            Whether or not to return mapping information
+
+        Returns
+        -------
+        df : pandas.DataFrame
+            Merged event data frame        
+        """
+
+        mapping_infos = []
+        new_oid = count()
+        new_hid = count()
+
+        r = MOTAccumulator.new_event_dataframe()
+        for df in dfs:
+
+            if isinstance(df, MOTAccumulator):
+                df = df.events
+
+            copy = df.copy()
+            infos = {}
+            
+            # Update index
+            if update_frame_indices:
+                next_frame_id = max(r.index.get_level_values(0).max()+1, r.index.get_level_values(0).unique().shape[0])
+                if np.isnan(next_frame_id):
+                    next_frame_id = 0
+                copy.index = copy.index.map(lambda x: (x[0]+next_frame_id, x[1]))
+                infos['frame_offset'] = next_frame_id
+
+            # Update object / hypothesis ids
+            if update_oids:                
+                oid_map = dict([oid, str(next(new_oid))] for oid in copy['OId'].dropna().unique())
+                copy['OId'] = copy['OId'].map(lambda x: oid_map[x], na_action='ignore')
+                infos['oid_map'] = oid_map
+            
+            if update_hids:
+                hid_map = dict([hid, str(next(new_hid))] for hid in copy['HId'].dropna().unique())
+                copy['HId'] = copy['HId'].map(lambda x: hid_map[x], na_action='ignore')
+                infos['hid_map'] = hid_map
+            
+            r = r.append(copy)
+            mapping_infos.append(infos)
+
+        if return_mappings:
+            return r, mapping_infos
+        else:            
+            return r

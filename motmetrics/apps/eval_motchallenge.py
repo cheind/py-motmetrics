@@ -47,6 +47,7 @@ string.""", formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('tests', type=str, help='Directory containing tracker result files')
     parser.add_argument('--loglevel', type=str, help='Log level', default='info')
     parser.add_argument('--fmt', type=str, help='Data format', default='mot15-2D')
+    parser.add_argument('--solver', type=str, help='LAP solver to use')
     return parser.parse_args()
 
 def compare_dataframes(gts, ts):
@@ -71,10 +72,15 @@ if __name__ == '__main__':
         raise ValueError('Invalid log level: {} '.format(args.loglevel))        
     logging.basicConfig(level=loglevel, format='%(asctime)s %(levelname)s - %(message)s', datefmt='%I:%M:%S')
 
+    if args.solver:
+        mm.lap.default_solver = args.solver
+
     gtfiles = glob.glob(os.path.join(args.groundtruths, '*/gt/gt.txt'))
     tsfiles = [f for f in glob.glob(os.path.join(args.tests, '*.txt')) if not os.path.basename(f).startswith('eval')]
 
     logging.info('Found {} groundtruths and {} test files.'.format(len(gtfiles), len(tsfiles)))
+    logging.info('Available LAP solvers {}'.format(mm.lap.available_solvers))
+    logging.info('Default LAP solver \'{}\''.format(mm.lap.default_solver))
     logging.info('Loading files.')
     
     gt = OrderedDict([(Path(f).parts[-3], mm.io.loadtxt(f, fmt=args.fmt, min_confidence=1)) for f in gtfiles])
@@ -84,5 +90,7 @@ if __name__ == '__main__':
     accs, names = compare_dataframes(gt, ts)
     
     logging.info('Running metrics')
-    summary = mh.compute_many(accs, names=names, metrics=mm.metrics.motchallenge_metrics)
+    
+    summary = mh.compute_many(accs, names=names, metrics=mm.metrics.motchallenge_metrics, generate_overall=True)
     print(mm.io.render_summary(summary, formatters=mh.formatters, namemap=mm.io.motchallenge_metric_names))
+    logging.info('Completed')
