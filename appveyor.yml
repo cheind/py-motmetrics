@@ -42,7 +42,7 @@ test_script:
   
 on_success:
   ps: >-
-    if ($env:APPVEYOR_REPO_TAG -eq $true -Or $env:APPVEYOR_REPO_BRANCH -eq "master") {
+    if ($env:APPVEYOR_REPO_BRANCH -eq "master") {
       Write-Output ("Deploying to PyPI")
       pip install --upgrade twine
       # If powershell ever sees anything on stderr it thinks it's a fail.
@@ -64,7 +64,7 @@ notifications:
     on_build_success: true
     on_build_failure: true
 
-#branches:
-#  only:
-#    - master
-#    - develop
+branches:
+  only:
+    - master
+    - develop
