@@ -32,6 +32,7 @@ install:
   
 build_script:
   - python setup.py sdist
+  - python setup.py bdist_wheel
   
 test_script:
   # Try building source wheel and install  
