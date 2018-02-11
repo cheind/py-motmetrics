@@ -5,6 +5,7 @@ import motmetrics.lap as lap
 
 def test_lap_solvers():
     assert len(lap.available_solvers) > 0
+    print(lap.available_solvers)
 
     costs = np.array([[6, 9, 1],[10, 3, 2],[8, 7, 4.]])
     costs_copy = costs.copy()
