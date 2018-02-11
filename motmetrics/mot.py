@@ -9,7 +9,7 @@ import numpy.ma as ma
 import pandas as pd
 from collections import OrderedDict
 from itertools import count
-from scipy.optimize import linear_sum_assignment
+from motmetrics.lap import linear_sum_assignment
 
 class MOTAccumulator(object):
     """Manage tracking events.
@@ -135,7 +135,7 @@ class MOTAccumulator(object):
         self.dirty_events = True
         oids = ma.array(oids, mask=np.zeros(len(oids)))
         hids = ma.array(hids, mask=np.zeros(len(hids)))  
-        dists = np.atleast_2d(dists).astype(float).reshape(oids.shape[0], hids.shape[0])
+        dists = np.atleast_2d(dists).astype(float).reshape(oids.shape[0], hids.shape[0]).copy()
 
         if frameid is None:            
             assert self.auto_id, 'auto-id is not enabled'
@@ -167,10 +167,7 @@ class MOTAccumulator(object):
                 self._indices.append((frameid, next(eid)))
                 self._events.append(['RAW', oids[i], np.nan, np.nan])
 
-
-        dists, INVDIST = MOTAccumulator.sanitize_dists(dists)
-
-        if oids.size * hids.size > 0:        
+        if oids.size * hids.size > 0:    
             # 1. Try to re-establish tracks from previous correspondences
             for i in range(oids.shape[0]):
                 if not oids[i] in self.m:
@@ -182,7 +179,7 @@ class MOTAccumulator(object):
                     continue
                 j = j[0]
 
-                if not dists[i, j] == INVDIST:
+                if np.isfinite(dists[i,j]):
                     oids[i] = ma.masked
                     hids[j] = ma.masked
                     self.m[oids.data[i]] = hids.data[j]
@@ -191,12 +188,13 @@ class MOTAccumulator(object):
                     self._events.append(['MATCH', oids.data[i], hids.data[j], dists[i, j]])
 
             # 2. Try to remaining objects/hypotheses
-            dists[oids.mask, :] = INVDIST
-            dists[:, hids.mask] = INVDIST
+            dists[oids.mask, :] = np.nan
+            dists[:, hids.mask] = np.nan
         
             rids, cids = linear_sum_assignment(dists)
+
             for i, j in zip(rids, cids):                
-                if dists[i, j] == INVDIST:
+                if not np.isfinite(dists[i,j]):
                     continue
                 
                 o = oids[i]
@@ -268,8 +266,6 @@ class MOTAccumulator(object):
             'Type', 'OId', HId', 'D'                    
         """
 
-        
-        
         tevents = list(zip(*events))
 
         raw_type = pd.Categorical(tevents[0], categories=['RAW', 'FP', 'MISS', 'SWITCH', 'MATCH'], ordered=False)
@@ -352,21 +348,3 @@ class MOTAccumulator(object):
             return r, mapping_infos
         else:            
             return r
-
-    @staticmethod    
-    def sanitize_dists(dists):
-        """Replace invalid distances."""
-        
-        dists = np.copy(dists)
-        
-        # Note there is an issue in scipy.optimize.linear_sum_assignment where
-        # it runs forever if an entire row/column is infinite or nan. We therefore
-        # make a copy of the distance matrix and compute a safe value that indicates
-        # 'cannot assign'. Also note + 1 is necessary in below inv-dist computation
-        # to make invdist bigger than max dist in case max dist is zero.
-        
-        valid_dists = dists[np.isfinite(dists)]
-        INVDIST = 2 * valid_dists.max() + 1 if valid_dists.shape[0] > 0 else 1.
-        dists[~np.isfinite(dists)] = INVDIST  
-
-        return dists, INVDIST

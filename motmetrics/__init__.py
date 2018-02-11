@@ -1,5 +1,6 @@
 
 from .mot import MOTAccumulator
+import motmetrics.lap
 import motmetrics.metrics
 import motmetrics.distances
 import motmetrics.io

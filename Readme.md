@@ -12,7 +12,7 @@ While benchmarking single object trackers is rather straightforward, measuring t
 *Pictures courtesy of Bernardin, Keni, and Rainer Stiefelhagen [[1]](#References)*
 </div>
 
-In particular **py-motmetrics** supports `CLEAR-MOT`[[1,2]](#References) metrics and `ID-MEASURE`[[4]](#References) metrics. Both metrics attempt to find a minimum cost assignment between ground truth objects and predictions. However, while CLEAR-MOT solves the assignment problem on a local per-frame basis, `ID-MEASURE` solves the bipartite graph matching by finding the minimum cost of objects and predictions over all frames. This [blog-post](http://vision.cs.duke.edu/DukeMTMC/IDmeasures.html) by Ergys illustrates the differences in more detail.
+In particular **py-motmetrics** supports `CLEAR-MOT`[[1,2]](#References) metrics and `ID`[[4]](#References) metrics. Both metrics attempt to find a minimum cost assignment between ground truth objects and predictions. However, while CLEAR-MOT solves the assignment problem on a local per-frame basis, `ID-MEASURE` solves the bipartite graph matching by finding the minimum cost of objects and predictions over all frames. This [blog-post](http://vision.cs.duke.edu/DukeMTMC/IDmeasures.html) by Ergys illustrates the differences in more detail.
 
 ### Features at a glance
 - *Variety of metrics* <br/>
@@ -21,6 +21,8 @@ Provides MOTA, MOTP, track quality measures, global ID measures and more. The re
 Supports Euclidean, Intersection over Union and other distances measures.
 - *Complete event history* <br/> 
 Tracks all relevant per-frame events suchs as correspondences, misses, false alarms and switches.
+- *Flexible solver backend* <br/> 
+Support for switching minimum assignment cost solvers. Supports `scipy`, `ortools`, `munkres` out of the box. Auto-tunes solver selection based on [availability and problem size](#SolverBackends).
 - *Easy to extend* <br/> 
 Events and summaries are utilizing [pandas][pandas] for data structures and analysis. New metrics can reuse already computed values from depending metrics.
 
@@ -387,8 +389,32 @@ mm.distances.iou_matrix(a, b, max_iou=0.5)
 """
 ```
 
+<a name="SolverBackends"></a>
+#### Solver backends
+For large datasets solving the minimum cost assignment becomes the dominant runtime part. **py-motmetrics** therefore supports these solvers out of the box
+  - `lapsolver` - https://github.com/cheind/py-lapsolver
+  - `lapjv` - https://github.com/gatagat/lap
+  - `scipy` - https://github.com/scipy/scipy/tree/master/scipy  
+  - `ortools` - https://github.com/google/or-tools
+  - `munkres` - http://software.clapper.org/munkres/
+
+A comparison for different sized matrices is shown below (taken from [here](https://github.com/cheind/py-lapsolver#benchmarks))
+
+Please note that the x-axis is scaled logarithmically. Missing bars indicate excessive runtime or errors in returned result. 
+![](https://github.com/cheind/py-lapsolver/raw/master/lapsolver/etc/benchmark-dtype-numpy.float32.png)
+
+By default **py-motmetrics** will try to find a LAP solver in the order of the list above. In order to temporarly replace the default solver use
+
+```python
+costs = ...
+mysolver = lambda x: ... # solver code that returns pairings
+
+with lap.set_default_solver(mysolver): 
+    ...
+```
+
 ### Running tests
-**py-motmetrics** uses the pytest framework. To run the tests, simply `cd` into the source directy and run `pytest`.
+**py-motmetrics** uses the pytest framework. To run the tests, simply `cd` into the source directly and run `pytest`.
 
 <a name="References"></a>
 ### References
