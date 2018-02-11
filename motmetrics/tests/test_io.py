@@ -1,8 +1,11 @@
 import motmetrics as mm
 import pandas as pd
+import os
+
+DATA_DIR = os.path.join(os.path.dirname(__file__), '../data')
 
 def test_load_vatic():
-    df = mm.io.loadtxt('etc/data/iotest/vatic.txt', fmt=mm.io.Format.VATIC_TXT)
+    df = mm.io.loadtxt(os.path.join(DATA_DIR, 'iotest/vatic.txt'), fmt=mm.io.Format.VATIC_TXT)
 
     expected = pd.DataFrame([
         #F,ID,Y,W,H,L,O,G,F,A1,A2,A3,A4
@@ -15,7 +18,7 @@ def test_load_vatic():
     assert (df.reset_index().values == expected.values).all()
 
 def test_load_motchallenge():
-    df = mm.io.loadtxt('etc/data/iotest/motchallenge.txt', fmt=mm.io.Format.MOT15_2D)
+    df = mm.io.loadtxt(os.path.join(DATA_DIR, 'iotest/motchallenge.txt'), fmt=mm.io.Format.MOT15_2D)
 
     expected = pd.DataFrame([
         (1,1,398,181,121,229,1,-1,-1), #Note -1 on x and y for correcting matlab

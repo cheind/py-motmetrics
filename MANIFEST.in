@@ -1,0 +1,3 @@
+include README.md LICENSE requirements.txt
+recursive-include motmetrics/data *
+recursive-include motmetrics/etc *
