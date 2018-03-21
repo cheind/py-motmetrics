@@ -146,7 +146,8 @@ def lsa_solve_lapjv(costs):
 
 def init_standard_solvers():
     import importlib
-
+    from importlib import util
+    
     global available_solvers, default_solver, solver_map
 
     solvers = [
