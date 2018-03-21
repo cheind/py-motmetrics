@@ -21,6 +21,7 @@ install:
     - deps='pip numpy scipy'
     - conda create -q -n pyenv python=$PYTHON pandas=$PANDAS $deps
     - source activate pyenv
+    - python -m pip install -U pip
     - pip install pytest
     - pip install .
     - pip install ortools
