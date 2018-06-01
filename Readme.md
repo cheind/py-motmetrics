@@ -1,10 +1,10 @@
 Docker implementation of py-motmetrics.
 Forked from: [py-motmetrics](https://github.com/cheind/py-motmetrics)
 
-##NOTES:
+## NOTES:
 Using pandas 0.21.0 due to pandas [bug](https://github.com/cheind/py-motmetrics/issues/10)
 
-##USAGE:
+## USAGE:
 Replace 'test' files in /data/test
 /data/train contains MOT 2D 2015 Ground Truth
 
