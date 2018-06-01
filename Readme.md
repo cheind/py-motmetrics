@@ -10,6 +10,7 @@ Replace 'test' files in /data/test
 
 # Build & Run image
 docker build -t desired-image-name -f Dockerfile .
+
 docker run desired-image-name
 
 
