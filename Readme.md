@@ -8,7 +8,8 @@ While benchmarking single object trackers is rather straightforward, measuring t
 
 <div style="text-align:center;">
 
-![](motmetrics/etc/mot.png)<br/>
+![](./motmetrics/etc/mot.png)<br/>
+
 *Pictures courtesy of Bernardin, Keni, and Rainer Stiefelhagen [[1]](#References)*
 </div>
 
@@ -431,6 +432,7 @@ Computer Vision and Pattern Recognition, 2009. CVPR 2009. IEEE Conference on. IE
 MIT License
 
 Copyright (c) 2017 Christoph Heindl
+Copyright (c) 2018 Toka
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
