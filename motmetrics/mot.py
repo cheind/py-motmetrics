@@ -1,7 +1,9 @@
 """py-motmetrics - metrics for multiple object tracker (MOT) benchmarking.
 
 Christoph Heindl, 2017
-https://github.com/cheind/py-motmetrics
+Toka, 2018
+Origin: https://github.com/cheind/py-motmetrics
+TOKA make it faster
 """
 
 import numpy as np
