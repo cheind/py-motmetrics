@@ -1,6 +1,7 @@
 """py-motmetrics - metrics for multiple object tracker (MOT) benchmarking.
 
 Christoph Heindl, 2017
+Toka, 2018
 https://github.com/cheind/py-motmetrics
 TOKA EXTENDED THIS FILE.
 """
@@ -10,6 +11,7 @@ import numpy as np
 
 from .mot import MOTAccumulator
 from .distances import iou_matrix, norm2squared_matrix
+from .preprocess import preprocessResult
 
 def compare_to_groundtruth(gt, dt, dist='iou', distfields=['X', 'Y', 'Width', 'Height'], distth=0.5):
     """Compare groundtruth and detector results.
@@ -72,7 +74,7 @@ def compare_to_groundtruth(gt, dt, dist='iou', distfields=['X', 'Y', 'Width', 'H
     
     return acc
 
-def CLEAR_MOT_M(gt, dt, dist='iou', distfields=['X', 'Y', 'Width', 'Height'], distth=0.5):
+def CLEAR_MOT_M(gt, dt, inifile, dist='iou', distfields=['X', 'Y', 'Width', 'Height'], distth=0.5, include_all = False):
     """Compare groundtruth and detector results.
 
     This method assumes both results are given in terms of DataFrames with at least the following fields
@@ -108,6 +110,11 @@ def CLEAR_MOT_M(gt, dt, dist='iou', distfields=['X', 'Y', 'Width', 'Height'], di
 
     acc = MOTAccumulator()
 
+    dt = preprocessResult(dt, gt, inifile)
+    if include_all:
+        gt = gt[gt['Confidence'] >= 0.99]
+    else:
+        gt = gt[ (gt['Confidence'] >= 0.99) & (gt['ClassId'] == 1) ]
     # We need to account for all frames reported either by ground truth or
     # detector. In case a frame is missing in GT this will lead to FPs, in 
     # case a frame is missing in detector results this will lead to FNs.

@@ -64,7 +64,7 @@ def compare_dataframes(gts, ts):
     for k, tsacc in ts.items():
         if k in gts:            
             logging.info('Evaluating {}...'.format(k))
-            accs.append(mm.utils.CLEAR_MOT_M(gts[k], tsacc, 'iou', distth=0.5))
+            accs.append(mm.utils.CLEAR_MOT_M(gts[k][0], tsacc, gts[k][1], 'iou', distth=0.5))
             names.append(k)
         else:
             logging.warning('No ground truth for {}, skipping.'.format(k))
@@ -112,7 +112,7 @@ if __name__ == '__main__':
     logging.info('Default LAP solver \'{}\''.format(mm.lap.default_solver))
     logging.info('Loading files.')
     
-    gt = OrderedDict([(seqs[i], mm.io.loadtxt(f, fmt=args.fmt, min_confidence=1)) for i, f in enumerate(gtfiles)])
+    gt = OrderedDict([(seqs[i], (mm.io.loadtxt(f, fmt=args.fmt), os.path.join(args.groundtruths, seqs[i], 'seqinfo.ini')) ) for i, f in enumerate(gtfiles)])
     ts = OrderedDict([(seqs[i], mm.io.loadtxt(f, fmt=args.fmt)) for i, f in enumerate(tsfiles)])    
 
     mh = mm.metrics.create()    
