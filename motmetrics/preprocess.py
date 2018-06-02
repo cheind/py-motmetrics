@@ -10,19 +10,11 @@ import pandas as pd
 from configparser import ConfigParser
 from motmetrics.lap import linear_sum_assignment
 import motmetrics.distances as mmd
-
-def boxiou(a, b):
-    rx1 = max(a[0], b[0])
-    rx2 = min(a[0]+a[2], b[0]+b[2])
-    ry1 = max(a[1], b[1])
-    ry2 = min(a[1]+a[3], b[1]+b[3])
-    if ry2>ry1 and rx2>rx1:
-        i = (ry2-ry1)*(rx2-rx1)
-        u = x.area()+y.area()-i
-        return float(i)/u
-    else: return 0.0
+import time
+import logging
 
 def preprocessResult(res, gt, inifile):
+    st = time.time()
     labels = ['ped',           # 1 
     'person_on_vhcl',    # 2 
     'car',               # 3 
@@ -44,43 +36,29 @@ def preprocessResult(res, gt, inifile):
     seqIni = ConfigParser()
     seqIni.read(inifile, encoding='utf8')
     F = int(seqIni['Sequence']['seqLength'])
+    todrop = []
     for t in range(1,F+1):
+        #st = time.time()
         resInFrame = res.loc[t]
         N = len(resInFrame)
 
         GTInFrame = gt.loc[t]
         Ngt = len(GTInFrame)
-        gtb = []
-        dtb = []
-        for i in range(len(GTInFrame)):
-            bgt = \
-                (GTInFrame.iloc[i]['X'],
-                 GTInFrame.iloc[i]['Y'],
-                 GTInFrame.iloc[i]['Width'],
-                 GTInFrame.iloc[i]['Height']
-                )
-            gtb.append(bgt)
-        for j in range(len(resInFrame)):
-            bres = \
-              (resInFrame.iloc[j]['X'],
-               resInFrame.iloc[j]['Y'],
-               resInFrame.iloc[j]['Width'],
-               resInFrame.iloc[j]['Height']
-              )
-            dtb.append(bres)
-        A = np.array(gtb)
-        B = np.array(dtb)
+        A = GTInFrame[['X','Y','Width','Height']].values
+        B = resInFrame[['X','Y','Width','Height']].values
         disM = mmd.iou_matrix(A, B, max_iou = 0.5)
+        #en = time.time()
+        #print('----', 'disM', en - st)
         le, ri = linear_sum_assignment(disM)
-        #print('-'*20)
+        flags = [1 if distractors[it['ClassId']] or it['Visibility']<0. else 0 for i,(k,it) in enumerate(GTInFrame.iterrows())]
+        hid = [k for k,it in resInFrame.iterrows()]
         for i, j in zip(le, ri):
             if not np.isfinite(disM[i, j]):
                 continue
-            #print(i, j, disM[i, j])
-            gtbox = GTInFrame.iloc[i]
-            resbox = resInFrame.iloc[j]
-            clsid = gtbox['ClassId']
-            #print(clsid, distractors[clsid], distractors[int(clsid)])
-            if distractors[clsid] or gtbox['Visibility']<0.:
-                res.drop(labels=(t, resbox.name), inplace=True)
-    return res
+            if flags[i]:
+                todrop.append((t, hid[j]))
+        #en = time.time()
+        #print('Frame %d: '%t, en - st)
+    ret = res.drop(labels=todrop)
+    logging.info('Preprocess take %.3f seconds and remove %d boxes.'%(time.time() - st, len(todrop)))
+    return ret

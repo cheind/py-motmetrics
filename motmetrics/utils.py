@@ -109,8 +109,12 @@ def CLEAR_MOT_M(gt, dt, inifile, dist='iou', distfields=['X', 'Y', 'Width', 'Hei
     compute_dist = compute_iou if dist.upper() == 'IOU' else compute_euc
 
     acc = MOTAccumulator()
-
+    #import time
+    #print('preprocess start.')
+    #pst = time.time()
     dt = preprocessResult(dt, gt, inifile)
+    #pen = time.time()
+    #print('preprocess take ', pen - pst)
     if include_all:
         gt = gt[gt['Confidence'] >= 0.99]
     else:
@@ -119,8 +123,9 @@ def CLEAR_MOT_M(gt, dt, inifile, dist='iou', distfields=['X', 'Y', 'Width', 'Hei
     # detector. In case a frame is missing in GT this will lead to FPs, in 
     # case a frame is missing in detector results this will lead to FNs.
     allframeids = gt.index.union(dt.index).levels[0]
-    
+    analysis = {'hyp':{}, 'obj':{}}
     for fid in allframeids:
+        #st = time.time()
         oids = np.empty(0)
         hids = np.empty(0)
         dists = np.empty((0,0))
@@ -128,14 +133,26 @@ def CLEAR_MOT_M(gt, dt, inifile, dist='iou', distfields=['X', 'Y', 'Width', 'Hei
         if fid in gt.index:
             fgt = gt.loc[fid] 
             oids = fgt.index.values
+            for oid in oids:
+                oid = int(oid)
+                if oid not in analysis['obj']:
+                    analysis['obj'][oid] = 0
+                analysis['obj'][oid] += 1
 
         if fid in dt.index:
             fdt = dt.loc[fid]
             hids = fdt.index.values
+            for hid in hids:
+                hid = int(hid)
+                if hid not in analysis['hyp']:
+                    analysis['hyp'][hid] = 0
+                analysis['hyp'][hid] += 1
 
         if oids.shape[0] > 0 and hids.shape[0] > 0:
             dists = compute_dist(fgt[distfields].values, fdt[distfields].values)
         
         acc.update(oids, hids, dists, frameid=fid)
+        #en = time.time()
+        #print(fid, ' time ', en - st)
     
-    return acc
+    return acc, analysis

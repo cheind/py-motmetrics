@@ -12,6 +12,8 @@ import pandas as pd
 import numpy as np
 import inspect
 import itertools
+import time
+import logging
 
 class MetricsHost:
     """Keeps track of metrics and intra metric dependencies."""
@@ -53,8 +55,12 @@ class MetricsHost:
 
         if deps is None:
             deps = []
-        elif deps is 'auto':            
-            deps = inspect.getargspec(fnc).args[1:] # assumes dataframe as first argument
+        elif deps is 'auto':
+            if inspect.getargspec(fnc).defaults is not None:
+                k = - len(inspect.getargspec(fnc).defaults)
+            else:
+                k = len(inspect.getargspec(fnc).args)
+            deps = inspect.getargspec(fnc).args[1:k] # assumes dataframe as first argument
 
         if name is None:
             name = fnc.__name__ # Relies on meaningful function names, i.e don't use for lambdas
@@ -100,7 +106,7 @@ class MetricsHost:
         df_formatted = pd.concat([df_fmt, df])
         return df_formatted.to_csv(sep="|", index=False)
 
-    def compute(self, df, metrics=None, return_dataframe=True, return_cached=False, name=None):
+    def compute(self, df, ana = None, metrics=None, return_dataframe=True, return_cached=False, name=None):
         """Compute metrics on the dataframe / accumulator.
         
         Params
@@ -138,8 +144,11 @@ class MetricsHost:
         df_map.noraw = df[df.Type != 'RAW']
 
         cache = {}
+        options = {'ana': ana}
         for mname in metrics:
-            cache[mname] = self._compute(df_map, mname, cache, parent='summarize')            
+            #st__ = time.time()
+            cache[mname] = self._compute(df_map, mname, cache, options, parent='summarize')
+            #print('caling %s take '%mname, time.time()-st__)
 
         if name is None:
             name = 0 
@@ -151,7 +160,7 @@ class MetricsHost:
             
         return pd.DataFrame(data, index=[name]) if return_dataframe else data     
 
-    def compute_many(self, dfs, metrics=None, names=None, generate_overall=False):
+    def compute_many(self, dfs, anas=None, metrics=None, names=None, generate_overall=False):
         """Compute metrics on multiple dataframe / accumulators.
         
         Params
@@ -180,29 +189,40 @@ class MetricsHost:
         """
 
         assert names is None or len(names) == len(dfs)
-
+        st = time.time()
         if names is None:
             names = range(len(dfs))
-
+        if anas is None:
+            anas = [None] * len(dfs)
         if generate_overall:
-            dfs += [MOTAccumulator.merge_event_dataframes(dfs)]
+            merged, infomap = MOTAccumulator.merge_event_dataframes(dfs, return_mappings = True)
+            dfs += [merged]
             names += ['OVERALL']
-
-        partials = [self.compute(acc, metrics=metrics, name=name) for acc, name in zip(dfs, names)]
+            anas += [MOTAccumulator.merge_analysis(anas, infomap)]
+        logging.info('mergeOverall: %.3f seconds.'%(time.time() - st))
+        partials = [self.compute(acc, ana=analysis, metrics=metrics, name=name) for acc, analysis, name in zip(dfs, anas, names)]
+        logging.info('partials: %.3f seconds.'%(time.time() - st))
         return pd.concat(partials)
 
-    def _compute(self, df_map, name, cache, parent=None):
+    def _compute(self, df_map, name, cache, options, parent=None):
         """Compute metric and resolve dependencies."""
         assert name in self.metrics, 'Cannot find metric {} required by {}.'.format(name, parent)        
-
+        already = cache.get(name, None)
+        if already is not None:
+            return already
         minfo = self.metrics[name]
         vals = []
         for depname in minfo['deps']:
             v = cache.get(depname, None)
             if v is None:
-                v = cache[depname] = self._compute(df_map, depname, cache, parent=name)
+                #st_ = time.time()
+                v = cache[depname] = self._compute(df_map, depname, cache, options, parent=name)
+                #print(name, 'depends', depname, 'calculating %s take '%depname, time.time()-st_)
             vals.append(v)
-        return minfo['fnc'](df_map, *vals)
+        if inspect.getargspec(minfo['fnc']).defaults is None:
+            return minfo['fnc'](df_map, *vals)
+        else:
+            return minfo['fnc'](df_map, *vals, **options)
 
 def num_frames(df):
     """Total number of frames."""
@@ -301,16 +321,21 @@ def recall(df, num_detections, num_objects):
     """Number of detections over number of objects."""
     return num_detections / num_objects
 
-def id_global_assignment(df):
+def id_global_assignment(df, ana = None):
     """ID measures: Global min-cost assignment for ID measures."""
-
+    #st1 = time.time()
     oids = df.full['OId'].dropna().unique()
     hids = df.full['HId'].dropna().unique()
     hids_idx = dict((h,i) for i,h in enumerate(hids))
+    #print('----'*2, '1', time.time()-st1)
+    if ana is None:
+        hcs = [len(df.raw[(df.raw.HId==h)].groupby(level=0)) for h in hids]
+        ocs = [len(df.raw[(df.raw.OId==o)].groupby(level=0)) for o in oids]
+    else:
+        hcs = [ana['hyp'][h] for h in hids]
+        ocs = [ana['obj'][o] for o in oids]
 
-    hcs = [len(df.raw[(df.raw.HId==h)].groupby(level=0)) for h in hids]
-    ocs = [len(df.raw[(df.raw.OId==o)].groupby(level=0)) for o in oids]
-
+    #print('----'*2, '2', time.time()-st1)
     no = oids.shape[0]
     nh = hids.shape[0]   
 
@@ -318,11 +343,13 @@ def id_global_assignment(df):
     df = df.set_index(['OId','HId']) 
     df = df.sort_index(level=[0,1])
 
+    #print('----'*2, '3', time.time()-st1)
     fpmatrix = np.full((no+nh, no+nh), 0.)
     fnmatrix = np.full((no+nh, no+nh), 0.)
     fpmatrix[no:, :nh] = np.nan
     fnmatrix[:no, nh:] = np.nan 
 
+    #print('----'*2, '4', time.time()-st1)
     for r, oc in enumerate(ocs):
         fnmatrix[r, :nh] = oc
         fnmatrix[r,nh+r] = oc
@@ -331,6 +358,7 @@ def id_global_assignment(df):
         fpmatrix[:no, c] = hc
         fpmatrix[c+no,c] = hc
 
+    #print('----'*2, '5', time.time()-st1)
     for r, o in enumerate(oids):
         df_o = df.loc[o, 'D'].dropna()
         for h, ex in df_o.groupby(level=0).count().iteritems():            
@@ -339,9 +367,11 @@ def id_global_assignment(df):
             fpmatrix[r,c] -= ex
             fnmatrix[r,c] -= ex
 
+    #print('----'*2, '6', time.time()-st1)
     costs = fpmatrix + fnmatrix    
     rids, cids = linear_sum_assignment(costs)
 
+    #print('----'*2, '7', time.time()-st1)
     return {
         'fpmatrix' : fpmatrix,
         'fnmatrix' : fnmatrix,

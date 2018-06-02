@@ -281,7 +281,17 @@ class MOTAccumulator(object):
         df.index = idx
         return df
     
-
+    @staticmethod
+    def merge_analysis(anas, infomap):
+        res = {'hyp':{}, 'obj':{}}
+        mapp = {'hyp': 'hid_map', 'obj':'oid_map'}
+        for ana, infom in zip(anas, infomap):
+            if ana is None: return None
+            for t in ana.keys():
+                for _id, cnt in ana[t].items():
+                    which = mapp[t]
+                    res[t][infom[which][_id]] = cnt
+        return res
 
     @staticmethod
     def merge_event_dataframes(dfs, update_frame_indices=True, update_oids=True, update_hids=True, return_mappings=False):

@@ -13,6 +13,7 @@ import motmetrics as mm
 import pandas as pd
 from collections import OrderedDict
 from pathlib import Path
+import time
 
 def parse_args():
     parser = argparse.ArgumentParser(description="""
@@ -60,16 +61,19 @@ string in the seqmap.""", formatter_class=argparse.RawTextHelpFormatter)
 
 def compare_dataframes(gts, ts):
     accs = []
+    anas = []
     names = []
     for k, tsacc in ts.items():
         if k in gts:            
             logging.info('Evaluating {}...'.format(k))
-            accs.append(mm.utils.CLEAR_MOT_M(gts[k][0], tsacc, gts[k][1], 'iou', distth=0.5))
+            acc, ana = mm.utils.CLEAR_MOT_M(gts[k][0], tsacc, gts[k][1], 'iou', distth=0.5)
+            accs.append(acc)
+            anas.append(ana)
             names.append(k)
         else:
             logging.warning('No ground truth for {}, skipping.'.format(k))
 
-    return accs, names
+    return accs, anas, names
 
 def parseSequences(seqmap):
     assert os.path.isfile(seqmap), 'Seqmap %s not found.'%seqmap
@@ -108,6 +112,8 @@ if __name__ == '__main__':
             exit(1)
 
     logging.info('Found {} groundtruths and {} test files.'.format(len(gtfiles), len(tsfiles)))
+    for seq in seqs:
+        logging.info('\t%s'%seq)
     logging.info('Available LAP solvers {}'.format(mm.lap.available_solvers))
     logging.info('Default LAP solver \'{}\''.format(mm.lap.default_solver))
     logging.info('Loading files.')
@@ -115,11 +121,13 @@ if __name__ == '__main__':
     gt = OrderedDict([(seqs[i], (mm.io.loadtxt(f, fmt=args.fmt), os.path.join(args.groundtruths, seqs[i], 'seqinfo.ini')) ) for i, f in enumerate(gtfiles)])
     ts = OrderedDict([(seqs[i], mm.io.loadtxt(f, fmt=args.fmt)) for i, f in enumerate(tsfiles)])    
 
-    mh = mm.metrics.create()    
-    accs, names = compare_dataframes(gt, ts)
+    mh = mm.metrics.create()
+    st = time.time()
+    accs, analysis, names = compare_dataframes(gt, ts)
+    logging.info('adding frames: %.3f seconds.'%(time.time()-st))
     
     logging.info('Running metrics')
     
-    summary = mh.compute_many(accs, names=names, metrics=mm.metrics.motchallenge_metrics, generate_overall=True)
+    summary = mh.compute_many(accs, anas = analysis, names=names, metrics=mm.metrics.motchallenge_metrics, generate_overall=True)
     print(mm.io.render_summary(summary, formatters=mh.formatters, namemap=mm.io.motchallenge_metric_names))
     logging.info('Completed')
