@@ -334,8 +334,8 @@ def id_global_assignment(df, ana = None):
         hcs = [len(df.raw[(df.raw.HId==h)].groupby(level=0)) for h in hids]
         ocs = [len(df.raw[(df.raw.OId==o)].groupby(level=0)) for o in oids]
     else:
-        hcs = [ana['hyp'][h] for h in hids]
-        ocs = [ana['obj'][o] for o in oids]
+        hcs = [ana['hyp'][int(h)] for h in hids]
+        ocs = [ana['obj'][int(o)] for o in oids]
 
     #print('----'*2, '2', time.time()-st1)
     no = oids.shape[0]

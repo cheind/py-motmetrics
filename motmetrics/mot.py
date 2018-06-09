@@ -290,9 +290,14 @@ class MOTAccumulator(object):
         for ana, infom in zip(anas, infomap):
             if ana is None: return None
             for t in ana.keys():
+                which = mapp[t]
+                if np.nan in infom[which]:
+                    res[t][int(infom[which][np.nan])] = 0
+                if 'nan' in infom[which]:
+                    res[t][int(infom[which]['nan'])] = 0
                 for _id, cnt in ana[t].items():
-                    which = mapp[t]
-                    res[t][infom[which][_id]] = cnt
+                    if _id not in infom[which]: _id = str(_id)
+                    res[t][int(infom[which][_id])] = cnt
         return res
 
     @staticmethod
