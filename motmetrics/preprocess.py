@@ -38,6 +38,7 @@ def preprocessResult(res, gt, inifile):
     F = int(seqIni['Sequence']['seqLength'])
     todrop = []
     for t in range(1,F+1):
+        if t not in res.index or t not in gt.index: continue
         #st = time.time()
         resInFrame = res.loc[t]
         N = len(resInFrame)
