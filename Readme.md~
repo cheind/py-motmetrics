@@ -435,16 +435,16 @@ Computer Vision and Pattern Recognition, 2009. CVPR 2009. IEEE Conference on. IE
 
 ## Docker implementation
 
-# Notes:
+## NOTES:
 Added docker support
-Using pandas 0.21.0 due to latest pandas version [bug](https://github.com/cheind/py-motmetrics/issues/10)
+Using pandas 0.21.0 due to pandas [bug](https://github.com/cheind/py-motmetrics/issues/10)
 
-# Update ground truth and test data:
+## USAGE:
 /data/train directory should contain MOT 2D 2015 Ground Truth files. 
 /data/test directory should contain your results.
 
-You can check usage and directory listing at 
-https://github.com/cheind/py-motmetrics/blob/master/motmetrics/apps/eval_motchallenge.py
+You can check
+
 
 # Build Image
 docker build -t desired-image-name -f Dockerfile .
