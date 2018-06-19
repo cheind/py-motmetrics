@@ -24,7 +24,7 @@ install:
   - conda config --set always_yes yes
   - conda update -q conda
   - conda config --set auto_update_conda no
-  - conda install -q pip pytest numpy
+  - conda install -q pip pytest numpy cython
   - python -m pip install -U pip
   - pip install wheel
   - pip install --upgrade --ignore-installed setuptools
