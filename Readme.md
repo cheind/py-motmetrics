@@ -1,9 +1,5 @@
 
 
-
-
-Original Readme Content:
-
 [![PyPI version](https://badge.fury.io/py/motmetrics.svg)](https://badge.fury.io/py/motmetrics) [![](https://travis-ci.org/cheind/py-motmetrics.svg?branch=master)](https://travis-ci.org/cheind/py-motmetrics)
 
 ## py-motmetrics
@@ -431,27 +427,22 @@ EURASIP Journal on Image and Video Processing 2008.1 (2008): 1-10.
 Computer Vision and Pattern Recognition, 2009. CVPR 2009. IEEE Conference on. IEEE, 2009.
 4. Performance Measures and a Data Set for Multi-Target, Multi-Camera Tracking. E. Ristani, F. Solera, R. S. Zou, R. Cucchiara and C. Tomasi. ECCV 2016 Workshop on Benchmarking Multi-Target Tracking.
 
+### Docker 
 
-
-## Docker implementation
-
-# Notes:
-Added docker support
-Using pandas 0.21.0 due to latest pandas version [bug](https://github.com/cheind/py-motmetrics/issues/10)
-
-# Update ground truth and test data:
+#### Update ground truth and test data:
 /data/train directory should contain MOT 2D 2015 Ground Truth files. 
 /data/test directory should contain your results.
 
 You can check usage and directory listing at 
 https://github.com/cheind/py-motmetrics/blob/master/motmetrics/apps/eval_motchallenge.py
 
-# Build Image
+#### Build Image
 docker build -t desired-image-name -f Dockerfile .
-# Run Image
+
+#### Run Image
 docker run desired-image-name
 
-
+(credits to [christosavg](https://github.com/christosavg))
 
 ### License
 
