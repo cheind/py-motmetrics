@@ -8,7 +8,7 @@
     - [pip install lapsolver]
     - pip install .
     - pytest
-    - deactivate motmetrics-env
+    - deactivate
     - conda env remove -n motmetrics-env
     - git add, commit
     - git flow release finish <VERSION>
