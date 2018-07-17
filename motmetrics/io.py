@@ -4,6 +4,8 @@
 
 Christoph Heindl, 2017
 https://github.com/cheind/py-motmetrics
+Modified by Toka, 2018
+fengweitao@sensetime.com
 """
 
 from enum import Enum
@@ -225,6 +227,8 @@ motchallenge_metric_names = {
     'num_switches' : 'IDs',
     'num_fragmentations' : 'FM',
     'mota' : 'MOTA',
-    'motp' : 'MOTP'
+    'motp' : 'MOTP',
+    'num_transfer' : 'IDt',
+    'num_ascend' : 'IDa',
 }
 """A list mappings for metric names to comply with MOTChallenge."""

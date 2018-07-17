@@ -54,19 +54,26 @@ string in the seqmap.""", formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('groundtruths', type=str, help='Directory containing ground truth files.')   
     parser.add_argument('tests', type=str, help='Directory containing tracker result files')
     parser.add_argument('seqmap', type=str, help='Text file containing all sequences name')
+    parser.add_argument('--log', type=str, help='a place to record result and outputfile of mistakes', default='')
     parser.add_argument('--loglevel', type=str, help='Log level', default='info')
     parser.add_argument('--fmt', type=str, help='Data format', default='mot15-2D')
     parser.add_argument('--solver', type=str, help='LAP solver to use')
     return parser.parse_args()
 
-def compare_dataframes(gts, ts):
+def compare_dataframes(gts, ts, vsflag = ''):
     accs = []
     anas = []
     names = []
     for k, tsacc in ts.items():
         if k in gts:            
             logging.info('Evaluating {}...'.format(k))
-            acc, ana = mm.utils.CLEAR_MOT_M(gts[k][0], tsacc, gts[k][1], 'iou', distth=0.5)
+            if vsflag!='':
+                fd = open(vsflag+'/'+k+'.log','w')
+            else:
+                fd = ''
+            acc, ana = mm.utils.CLEAR_MOT_M(gts[k][0], tsacc, gts[k][1], 'iou', distth=0.5, vflag=fd)
+            if fd!='':
+                fd.close()
             accs.append(acc)
             anas.append(ana)
             names.append(k)
@@ -123,7 +130,7 @@ if __name__ == '__main__':
 
     mh = mm.metrics.create()
     st = time.time()
-    accs, analysis, names = compare_dataframes(gt, ts)
+    accs, analysis, names = compare_dataframes(gt, ts, args.log)
     logging.info('adding frames: %.3f seconds.'%(time.time()-st))
     
     logging.info('Running metrics')

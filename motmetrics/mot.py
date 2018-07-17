@@ -91,10 +91,12 @@ class MOTAccumulator(object):
         #self.events = MOTAccumulator.new_event_dataframe()
         self.m = {} # Pairings up to current timestamp  
         self.last_occurrence = {} # Tracks most recent occurance of object
+        self.last_match = {} # Tracks most recent match of object
+        self.hypHistory = {}
         self.dirty_events = True
         self.cached_events_df = None
 
-    def update(self, oids, hids, dists, frameid=None):
+    def update(self, oids, hids, dists, frameid=None, vf=''):
         """Updates the accumulator with frame specific objects/detections.
 
         This method generates events based on the following algorithm [1]:
@@ -182,12 +184,14 @@ class MOTAccumulator(object):
                 j = j[0]
 
                 if np.isfinite(dists[i,j]):
+                    o = oids[i]
                     oids[i] = ma.masked
                     hids[j] = ma.masked
                     self.m[oids.data[i]] = hids.data[j]
                     
                     self._indices.append((frameid, next(eid)))
                     self._events.append(['MATCH', oids.data[i], hids.data[j], dists[i, j]])
+                    self.last_match[o] = frameid
 
             # 2. Try to remaining objects/hypotheses
             dists[oids.mask, :] = np.nan
@@ -205,6 +209,17 @@ class MOTAccumulator(object):
                             self.m[o] != h and \
                             abs(frameid - self.last_occurrence[o]) <= self.max_switch_time
                 cat = 'SWITCH' if is_switch else 'MATCH'
+                if cat=='SWITCH':
+                    if h not in self.hypHistory:
+                        subcat = 'ASCEND'
+                        self.hypHistory[h] = frameid
+                    else:
+                        subcat = 'TRANSFER'
+                    self._indices.append((frameid, next(eid)))
+                    self._events.append([subcat, oids.data[i], hids.data[j], dists[i, j]])
+                if vf!='' and cat=='SWITCH':
+                    vf.write('%s %d %d %d %d %d\n'%(subcat[:2], o, self.last_match[o], self.m[o], frameid, h))
+                self.last_match[o] = frameid
                 self._indices.append((frameid, next(eid)))
                 self._events.append([cat, oids.data[i], hids.data[j], dists[i, j]])
                 oids[i] = ma.masked
@@ -215,11 +230,15 @@ class MOTAccumulator(object):
         for o in oids[~oids.mask]:
             self._indices.append((frameid, next(eid)))
             self._events.append(['MISS', o, np.nan, np.nan])
+            if vf!='':
+                vf.write('FN %d %d\n'%(frameid, o))
         
         # 4. All remaining hypotheses are false alarms
         for h in hids[~hids.mask]:
             self._indices.append((frameid, next(eid)))
             self._events.append(['FP', np.nan, h, np.nan])
+            if vf!='':
+                vf.write('FP %d %d\n'%(frameid, h))
 
         # 5. Update occurance state
         for o in oids.data:            
@@ -243,7 +262,7 @@ class MOTAccumulator(object):
     def new_event_dataframe():
         """Create a new DataFrame for event tracking."""
         idx = pd.MultiIndex(levels=[[],[]], labels=[[],[]], names=['FrameId','Event'])
-        cats = pd.Categorical([], categories=['RAW', 'FP', 'MISS', 'SWITCH', 'MATCH'])
+        cats = pd.Categorical([], categories=['RAW', 'FP', 'MISS', 'SWITCH', 'MATCH', 'TRANSFER', 'ASCEND'])
         df = pd.DataFrame(
             OrderedDict([
                 ('Type', pd.Series(cats)),          # Type of event. One of FP (false positive), MISS, SWITCH, MATCH
@@ -270,7 +289,7 @@ class MOTAccumulator(object):
 
         tevents = list(zip(*events))
 
-        raw_type = pd.Categorical(tevents[0], categories=['RAW', 'FP', 'MISS', 'SWITCH', 'MATCH'], ordered=False)
+        raw_type = pd.Categorical(tevents[0], categories=['RAW', 'FP', 'MISS', 'SWITCH', 'MATCH', 'TRANSFER', 'ASCEND'], ordered=False)
         series = [
             pd.Series(raw_type, name='Type'),
             pd.Series(tevents[1], dtype=str, name='OId'),

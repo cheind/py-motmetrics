@@ -250,6 +250,14 @@ def num_switches(df):
     """Total number of track switches."""
     return df.noraw.Type.isin(['SWITCH']).sum()
 
+def num_transfer(df):
+    """Total number of track transfer."""
+    return df.noraw.Type.isin(['TRANSFER']).sum()
+
+def num_ascend(df):
+    """Total number of track ascend."""
+    return df.noraw.Type.isin(['ASCEND']).sum()
+
 def num_false_positives(df):
     """Total number of false positives (false-alarms)."""
     return df.noraw.Type.isin(['FP']).sum()
@@ -418,6 +426,8 @@ def create():
     m.register(pred_frequencies, formatter='{:d}'.format)
     m.register(num_matches, formatter='{:d}'.format)
     m.register(num_switches, formatter='{:d}'.format)
+    m.register(num_transfer, formatter='{:d}'.format)
+    m.register(num_ascend, formatter='{:d}'.format)
     m.register(num_false_positives, formatter='{:d}'.format)
     m.register(num_misses, formatter='{:d}'.format)
     m.register(num_detections, formatter='{:d}'.format)
@@ -460,6 +470,8 @@ motchallenge_metrics = [
     'num_switches',
     'num_fragmentations',
     'mota',
-    'motp'
+    'motp',
+    'num_transfer',
+    'num_ascend'
 ]
 """A list of all metrics from MOTChallenge."""
