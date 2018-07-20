@@ -225,7 +225,7 @@ class MOTAccumulator(object):
                     else:
                         subcat = 'TRANSFER'
                         pass
-                if vf!='' and (subcat = 'ASCEND' or subcat=='TRANSFER'):
+                if vf!='' and (subcat == 'ASCEND' or subcat=='TRANSFER'):
                     vf.write('%s %d %d %d %d %d\n'%(subcat[:2], o, self.last_match[o], self.m[o], frameid, h))
                 self.last_match[o] = frameid
                 self._indices.append((frameid, next(eid)))
