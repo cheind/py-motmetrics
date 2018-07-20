@@ -186,6 +186,7 @@ class MOTAccumulator(object):
 
                 if np.isfinite(dists[i,j]):
                     o = oids[i]
+                    h = hids[j]
                     oids[i] = ma.masked
                     hids[j] = ma.masked
                     self.m[oids.data[i]] = hids.data[j]
@@ -193,6 +194,7 @@ class MOTAccumulator(object):
                     self._indices.append((frameid, next(eid)))
                     self._events.append(['MATCH', oids.data[i], hids.data[j], dists[i, j]])
                     self.last_match[o] = frameid
+                    self.hypHistory[h] = frameid
 
             # 2. Try to remaining objects/hypotheses
             dists[oids.mask, :] = np.nan
@@ -215,24 +217,27 @@ class MOTAccumulator(object):
                     subcat = 'TRANSFER'
                     self._indices.append((frameid, next(eid)))
                     self._events.append([subcat, oids.data[i], hids.data[j], dists[i, j]])
-                self.res_m[h] = o
                 if cat=='SWITCH':
                     if h not in self.hypHistory:
                         subcat = 'ASCEND'
-                        self.hypHistory[h] = frameid
                         self._indices.append((frameid, next(eid)))
                         self._events.append([subcat, oids.data[i], hids.data[j], dists[i, j]])
                     else:
                         subcat = 'TRANSFER'
                         pass
                 if vf!='' and (subcat == 'ASCEND' or subcat=='TRANSFER'):
-                    vf.write('%s %d %d %d %d %d\n'%(subcat[:2], o, self.last_match[o], self.m[o], frameid, h))
+                    if subcat=='ASCEND':
+                        vf.write('%s %d %d %d %d %d\n'%(subcat[:2], o, self.last_match[o], self.m[o], frameid, h))
+                    elif subcat=='TRANSFER':
+                        vf.write('%s %d %d %d %d %d\n'%(subcat[:2], h, self.hypHistory[h], self.res_m[h], frameid, o))
+                self.hypHistory[h] = frameid
                 self.last_match[o] = frameid
                 self._indices.append((frameid, next(eid)))
                 self._events.append([cat, oids.data[i], hids.data[j], dists[i, j]])
                 oids[i] = ma.masked
                 hids[j] = ma.masked
                 self.m[o] = h
+                self.res_m[h] = o
 
         # 3. All remaining objects are missed
         for o in oids[~oids.mask]:
