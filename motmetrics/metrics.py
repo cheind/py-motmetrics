@@ -143,7 +143,8 @@ class MetricsHost:
         df_map = DfMap()
         df_map.full = df     
         df_map.raw = df[df.Type == 'RAW']
-        df_map.noraw = df[df.Type != 'RAW']
+        df_map.noraw = df[(df.Type != 'RAW') & (df.Type != 'ASCEND') & (df.Type != 'TRANSFER')]
+        df_map.extra = df[df.Type != 'RAW']
 
         cache = {}
         options = {'ana': ana}
@@ -252,11 +253,11 @@ def num_switches(df):
 
 def num_transfer(df):
     """Total number of track transfer."""
-    return df.noraw.Type.isin(['TRANSFER']).sum()
+    return df.extra.Type.isin(['TRANSFER']).sum()
 
 def num_ascend(df):
     """Total number of track ascend."""
-    return df.noraw.Type.isin(['ASCEND']).sum()
+    return df.extra.Type.isin(['ASCEND']).sum()
 
 def num_false_positives(df):
     """Total number of false positives (false-alarms)."""
