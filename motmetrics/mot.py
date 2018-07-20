@@ -89,7 +89,8 @@ class MOTAccumulator(object):
         self._events = []
         self._indices = []
         #self.events = MOTAccumulator.new_event_dataframe()
-        self.m = {} # Pairings up to current timestamp  
+        self.m = {} # Pairings up to current timestamp
+        self.res_m = {} # Result pairings up to now
         self.last_occurrence = {} # Tracks most recent occurance of object
         self.last_match = {} # Tracks most recent match of object
         self.hypHistory = {}
@@ -209,15 +210,22 @@ class MOTAccumulator(object):
                             self.m[o] != h and \
                             abs(frameid - self.last_occurrence[o]) <= self.max_switch_time
                 cat = 'SWITCH' if is_switch else 'MATCH'
+                subcat = ''
+                if h in self.res_m and o != self.res_m[h]:
+                    subcat = 'TRANSFER'
+                    self._indices.append((frameid, next(eid)))
+                    self._events.append([subcat, oids.data[i], hids.data[j], dists[i, j]])
+                self.res_m[h] = o
                 if cat=='SWITCH':
                     if h not in self.hypHistory:
                         subcat = 'ASCEND'
                         self.hypHistory[h] = frameid
+                        self._indices.append((frameid, next(eid)))
+                        self._events.append([subcat, oids.data[i], hids.data[j], dists[i, j]])
                     else:
                         subcat = 'TRANSFER'
-                    self._indices.append((frameid, next(eid)))
-                    self._events.append([subcat, oids.data[i], hids.data[j], dists[i, j]])
-                if vf!='' and cat=='SWITCH':
+                        pass
+                if vf!='' and (subcat = 'ASCEND' or subcat=='TRANSFER'):
                     vf.write('%s %d %d %d %d %d\n'%(subcat[:2], o, self.last_match[o], self.m[o], frameid, h))
                 self.last_match[o] = frameid
                 self._indices.append((frameid, next(eid)))
