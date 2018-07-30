@@ -223,7 +223,7 @@ class MOTAccumulator(object):
                         self._indices.append((frameid, next(eid)))
                         self._events.append([subcat, oids.data[i], hids.data[j], dists[i, j]])
                     else:
-                        subcat = 'TRANSFER'
+                        #subcat = 'TRANSFER'
                         pass
                 if vf!='' and (subcat == 'ASCEND' or subcat=='TRANSFER'):
                     if subcat=='ASCEND':
