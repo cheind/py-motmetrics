@@ -54,7 +54,7 @@ class MetricsHost:
         if deps is None:
             deps = []
         elif deps is 'auto':            
-            deps = inspect.getargspec(fnc).args[1:] # assumes dataframe as first argument
+            deps = inspect.getfullargspec(fnc).args[1:] # assumes dataframe as first argument
 
         if name is None:
             name = fnc.__name__ # Relies on meaningful function names, i.e don't use for lambdas
@@ -127,7 +127,7 @@ class MetricsHost:
             df = df.events
 
         if metrics is None:
-            metrics = self.names
+            metrics = motchallenge_metrics
         elif isinstance(metrics, str):
             metrics = [metrics]
 
@@ -148,6 +148,9 @@ class MetricsHost:
             data = cache
         else:
             data = OrderedDict([(k, cache[k]) for k in metrics])
+
+        print(metrics[0])
+        print(data[metrics[0]])
             
         return pd.DataFrame(data, index=[name]) if return_dataframe else data     
 
