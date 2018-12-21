@@ -1,3 +1,5 @@
+
+
 [![PyPI version](https://badge.fury.io/py/motmetrics.svg)](https://badge.fury.io/py/motmetrics) [![](https://travis-ci.org/cheind/py-motmetrics.svg?branch=master)](https://travis-ci.org/cheind/py-motmetrics)
 
 ## py-motmetrics
@@ -425,6 +427,23 @@ EURASIP Journal on Image and Video Processing 2008.1 (2008): 1-10.
 3. Li, Yuan, Chang Huang, and Ram Nevatia. "Learning to associate: Hybridboosted multi-target tracker for crowded scene." 
 Computer Vision and Pattern Recognition, 2009. CVPR 2009. IEEE Conference on. IEEE, 2009.
 4. Performance Measures and a Data Set for Multi-Target, Multi-Camera Tracking. E. Ristani, F. Solera, R. S. Zou, R. Cucchiara and C. Tomasi. ECCV 2016 Workshop on Benchmarking Multi-Target Tracking.
+
+### Docker 
+
+#### Update ground truth and test data:
+/data/train directory should contain MOT 2D 2015 Ground Truth files. 
+/data/test directory should contain your results.
+
+You can check usage and directory listing at 
+https://github.com/cheind/py-motmetrics/blob/master/motmetrics/apps/eval_motchallenge.py
+
+#### Build Image
+docker build -t desired-image-name -f Dockerfile .
+
+#### Run Image
+docker run desired-image-name
+
+(credits to [christosavg](https://github.com/christosavg))
 
 ### License
 

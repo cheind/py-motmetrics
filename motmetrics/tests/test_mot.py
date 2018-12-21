@@ -54,7 +54,8 @@ def test_events():
     expect.loc[(4, 5), :] = ['MATCH', 2, 'b', 5.]
     # frame 5 generates no events
 
-    assert pd.DataFrame.equals(acc.events, expect)
+    from pandas.util.testing import assert_frame_equal
+    assert_frame_equal(acc.events, expect)
     
 
 def test_max_switch_time():
@@ -115,9 +116,10 @@ def test_merge_dataframes():
     acc.update([1, 2], ['a', 'b'], [[1, 0.5], [0.3, 1]], frameid=2)
     acc.update([1, 2], ['a', 'b'], [[0.2, np.nan], [np.nan, 0.1]], frameid=3)
     
-    r, mappings = mm.MOTAccumulator.merge_event_dataframes([acc.events, acc.events], return_mappings=True)
+    r, mappings = mm.MOTAccumulator.merge_event_dataframes([acc.events, acc.events], return_mappings=True)    
 
     expect = mm.MOTAccumulator.new_event_dataframe()
+    
     expect.loc[(0, 0), :] = ['RAW', np.nan, mappings[0]['hid_map']['a'], np.nan]
     expect.loc[(0, 1), :] = ['RAW', np.nan, mappings[0]['hid_map']['b'], np.nan]
     expect.loc[(0, 2), :] = ['FP', np.nan, mappings[0]['hid_map']['a'], np.nan]
@@ -143,7 +145,6 @@ def test_merge_dataframes():
     expect.loc[(3, 5), :] = ['SWITCH', mappings[0]['oid_map'][2], mappings[0]['hid_map']['b'], 0.1]
 
     # Merge duplication
-    
     expect.loc[(4, 0), :] = ['RAW', np.nan, mappings[1]['hid_map']['a'], np.nan]
     expect.loc[(4, 1), :] = ['RAW', np.nan, mappings[1]['hid_map']['b'], np.nan]
     expect.loc[(4, 2), :] = ['FP', np.nan, mappings[1]['hid_map']['a'], np.nan]
@@ -167,5 +168,7 @@ def test_merge_dataframes():
     expect.loc[(7, 3), :] = ['RAW', mappings[1]['oid_map'][2], mappings[1]['hid_map']['b'], 0.1]            
     expect.loc[(7, 4), :] = ['SWITCH', mappings[1]['oid_map'][1], mappings[1]['hid_map']['a'], 0.2]
     expect.loc[(7, 5), :] = ['SWITCH', mappings[1]['oid_map'][2], mappings[1]['hid_map']['b'], 0.1]
+
+    from pandas.util.testing import assert_frame_equal
+    assert_frame_equal(r, expect)
     
-    assert pd.DataFrame.equals(r, expect)
