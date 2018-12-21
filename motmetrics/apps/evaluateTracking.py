@@ -14,6 +14,7 @@ import pandas as pd
 from collections import OrderedDict
 from pathlib import Path
 import time
+from tempfile import NamedTemporaryFile
 
 def parse_args():
     parser = argparse.ArgumentParser(description="""
@@ -58,6 +59,7 @@ string in the seqmap.""", formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('--loglevel', type=str, help='Log level', default='info')
     parser.add_argument('--fmt', type=str, help='Data format', default='mot15-2D')
     parser.add_argument('--solver', type=str, help='LAP solver to use')
+    parser.add_argument('--skip', type=int, default=0, help='skip frames n means choosing one frame for every (n+1) frames')
     return parser.parse_args()
 
 def compare_dataframes(gts, ts, vsflag = ''):
@@ -93,6 +95,23 @@ def parseSequences(seqmap):
     fd.close()
     return res
 
+def generateSkippedGT(gtfile, skip, fmt):
+    tf = NamedTemporaryFile(delete=False, mode='w')
+    with open(gtfile) as fd:
+        lines = fd.readlines()
+        for line in lines:
+            arr = line.strip().split(',')
+            fr = int(arr[0])
+            if fr%(skip+1)!=1:
+                continue
+            pos = line.find(',')
+            newline = str(fr//(skip+1)+1) + line[pos:]
+            tf.write(newline)
+    tf.close()
+    tempfile = tf.name
+    return tempfile
+
+
 if __name__ == '__main__':
 
     args = parse_args()
@@ -124,6 +143,10 @@ if __name__ == '__main__':
     logging.info('Available LAP solvers {}'.format(mm.lap.available_solvers))
     logging.info('Default LAP solver \'{}\''.format(mm.lap.default_solver))
     logging.info('Loading files.')
+
+    if args.skip>0 and 'mot' in args.fmt:
+        for i, gtfile in enumerate(gtfiles):
+            gtfiles[i] = generateSkippedGT(gtfile, args.skip, fmt=args.fmt)
     
     gt = OrderedDict([(seqs[i], (mm.io.loadtxt(f, fmt=args.fmt), os.path.join(args.groundtruths, seqs[i], 'seqinfo.ini')) ) for i, f in enumerate(gtfiles)])
     ts = OrderedDict([(seqs[i], mm.io.loadtxt(f, fmt=args.fmt)) for i, f in enumerate(tsfiles)])    
