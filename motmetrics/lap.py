@@ -28,7 +28,10 @@ def linear_sum_assignment(costs, solver=None):
         solver = solver_map.get(solver, None)    
     
     assert callable(solver), 'Invalid LAP solver.'
-    return solver(costs)
+    rids, cids = solver(costs)
+    rids = rids.astype(int)
+    cids = cids.astype(int)
+    return rids, cids
 
 def lsa_solve_scipy(costs):
     """Solves the LSA problem using the scipy library."""
