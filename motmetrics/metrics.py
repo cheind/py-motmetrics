@@ -276,7 +276,8 @@ def num_fragmentations(df, obj_frequencies):
         # Find first and last time object was not missed (track span). Then count
         # the number switches from NOT MISS to MISS state.
         dfo = df.noraw[df.noraw.OId == o]
-        dfo = dfo.sort_index()
+        if dfo.index.lexsort_depth != 2:
+            dfo = dfo.sort_index()
         notmiss = dfo[dfo.Type != 'MISS']
         if len(notmiss) == 0:
             continue
