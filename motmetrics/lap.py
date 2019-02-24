@@ -29,8 +29,8 @@ def linear_sum_assignment(costs, solver=None):
     
     assert callable(solver), 'Invalid LAP solver.'
     rids, cids = solver(costs)
-    rids = rids.astype(int)
-    cids = cids.astype(int)
+    rids = np.asarray(rids).astype(int)
+    cids = np.asarray(cids).astype(int)
     return rids, cids
 
 def lsa_solve_scipy(costs):
