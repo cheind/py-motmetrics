@@ -43,8 +43,10 @@ def test_events():
     expect.loc[(3, 1), :] = ['RAW', 1, 'b', np.nan]
     expect.loc[(3, 2), :] = ['RAW', 2, 'a', np.nan]
     expect.loc[(3, 3), :] = ['RAW', 2, 'b', 0.1]
-    expect.loc[(3, 4), :] = ['SWITCH', 1, 'a', 0.2]
-    expect.loc[(3, 5), :] = ['SWITCH', 2, 'b', 0.1]
+    expect.loc[(3, 4), :] = ['TRANSFER', 1, 'a', 0.2]
+    expect.loc[(3, 5), :] = ['SWITCH', 1, 'a', 0.2]
+    expect.loc[(3, 6), :] = ['TRANSFER', 2, 'b', 0.1]
+    expect.loc[(3, 7), :] = ['SWITCH', 2, 'b', 0.1]
 
     expect.loc[(4, 0), :] = ['RAW', 1, 'a', 5.]
     expect.loc[(4, 1), :] = ['RAW', 1, 'b', 1.]
@@ -64,14 +66,14 @@ def test_max_switch_time():
     frameid = acc.update([1, 2], ['a', 'b'], [[0.5, np.nan], [np.nan, 0.5]], frameid=2) # 1->b, 2->a 
 
     df = acc.events.loc[frameid]
-    assert ((df.Type == 'SWITCH') | (df.Type == 'RAW')).all()
+    assert ((df.Type == 'SWITCH') | (df.Type == 'RAW') | (df.Type == 'TRANSFER')).all()
 
     acc = mm.MOTAccumulator(max_switch_time=1)
     acc.update([1, 2], ['a', 'b'], [[1, 0.5], [0.3, 1]], frameid=1) # 1->a, 2->b
     frameid = acc.update([1, 2], ['a', 'b'], [[0.5, np.nan], [np.nan, 0.5]], frameid=5) # Later frame 1->b, 2->a 
 
     df = acc.events.loc[frameid]
-    assert ((df.Type == 'MATCH') | (df.Type == 'RAW')).all()
+    assert ((df.Type == 'MATCH') | (df.Type == 'RAW') | (df.Type == 'TRANSFER')).all()
 
 def test_auto_id():
     acc = mm.MOTAccumulator(auto_id=True)
@@ -105,7 +107,7 @@ def test_correct_average():
     acc.update([4], [4], [0])
 
     mh = mm.metrics.create()
-    metr = mh.compute(acc, metrics='mota', return_dataframe=False)
+    metr, cache = mh.compute(acc, metrics='mota', return_dataframe=False)
     assert metr['mota'] == approx(0.2)
 
 def test_merge_dataframes():
@@ -141,8 +143,10 @@ def test_merge_dataframes():
     expect.loc[(3, 1), :] = ['RAW', mappings[0]['oid_map'][1], mappings[0]['hid_map']['b'], np.nan]    
     expect.loc[(3, 2), :] = ['RAW', mappings[0]['oid_map'][2], mappings[0]['hid_map']['a'], np.nan]
     expect.loc[(3, 3), :] = ['RAW', mappings[0]['oid_map'][2], mappings[0]['hid_map']['b'], 0.1]            
-    expect.loc[(3, 4), :] = ['SWITCH', mappings[0]['oid_map'][1], mappings[0]['hid_map']['a'], 0.2]
-    expect.loc[(3, 5), :] = ['SWITCH', mappings[0]['oid_map'][2], mappings[0]['hid_map']['b'], 0.1]
+    expect.loc[(3, 4), :] = ['TRANSFER', mappings[0]['oid_map'][1], mappings[0]['hid_map']['a'], 0.2]
+    expect.loc[(3, 5), :] = ['SWITCH', mappings[0]['oid_map'][1], mappings[0]['hid_map']['a'], 0.2]
+    expect.loc[(3, 6), :] = ['TRANSFER', mappings[0]['oid_map'][2], mappings[0]['hid_map']['b'], 0.1]
+    expect.loc[(3, 7), :] = ['SWITCH', mappings[0]['oid_map'][2], mappings[0]['hid_map']['b'], 0.1]
 
     # Merge duplication
     expect.loc[(4, 0), :] = ['RAW', np.nan, mappings[1]['hid_map']['a'], np.nan]
@@ -166,8 +170,10 @@ def test_merge_dataframes():
     expect.loc[(7, 1), :] = ['RAW', mappings[1]['oid_map'][1], mappings[1]['hid_map']['b'], np.nan]    
     expect.loc[(7, 2), :] = ['RAW', mappings[1]['oid_map'][2], mappings[1]['hid_map']['a'], np.nan]
     expect.loc[(7, 3), :] = ['RAW', mappings[1]['oid_map'][2], mappings[1]['hid_map']['b'], 0.1]            
-    expect.loc[(7, 4), :] = ['SWITCH', mappings[1]['oid_map'][1], mappings[1]['hid_map']['a'], 0.2]
-    expect.loc[(7, 5), :] = ['SWITCH', mappings[1]['oid_map'][2], mappings[1]['hid_map']['b'], 0.1]
+    expect.loc[(7, 4), :] = ['TRANSFER', mappings[1]['oid_map'][1], mappings[1]['hid_map']['a'], 0.2]
+    expect.loc[(7, 5), :] = ['SWITCH', mappings[1]['oid_map'][1], mappings[1]['hid_map']['a'], 0.2]
+    expect.loc[(7, 6), :] = ['TRANSFER', mappings[1]['oid_map'][2], mappings[1]['hid_map']['b'], 0.1]
+    expect.loc[(7, 7), :] = ['SWITCH', mappings[1]['oid_map'][2], mappings[1]['hid_map']['b'], 0.1]
 
     from pandas.util.testing import assert_frame_equal
     assert_frame_equal(r, expect)

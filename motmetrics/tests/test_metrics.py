@@ -14,7 +14,7 @@ def test_metricscontainer_1():
     m.register(lambda df, a, b: a+b, deps=['a', 'b'], name='add')
     m.register(lambda df, a, b: a-b, deps=['a', 'b'], name='sub')
     m.register(lambda df, a, b: a*b, deps=['add', 'sub'], name='mul')
-    summary = m.compute(mm.MOTAccumulator.new_event_dataframe(), metrics=['mul','add'], name='x')
+    summary, cache = m.compute(mm.MOTAccumulator.new_event_dataframe(), metrics=['mul','add'], name='x')
     assert summary.columns.values.tolist() == ['mul','add']
     assert summary.iloc[0]['mul'] == -3.
     assert summary.iloc[0]['add'] == 3.
@@ -26,7 +26,7 @@ def test_metricscontainer_autodep():
     m.register(lambda df, a, b: a+b, name='add', deps='auto')
     m.register(lambda df, a, b: a-b, name='sub', deps='auto')
     m.register(lambda df, add, sub: add*sub, name='mul', deps='auto')
-    summary = m.compute(mm.MOTAccumulator.new_event_dataframe(), metrics=['mul','add'])
+    summary, cache = m.compute(mm.MOTAccumulator.new_event_dataframe(), metrics=['mul','add'])
     assert summary.columns.values.tolist() == ['mul','add']
     assert summary.iloc[0]['mul'] == -3.
     assert summary.iloc[0]['add'] == 3.
@@ -58,7 +58,7 @@ def test_metricscontainer_autoname():
 
     assert m.metrics['constant_a']['help'] == 'Constant a help.'
 
-    summary = m.compute(mm.MOTAccumulator.new_event_dataframe(), metrics=['mul','add'])
+    summary, cache = m.compute(mm.MOTAccumulator.new_event_dataframe(), metrics=['mul','add'])
     assert summary.columns.values.tolist() == ['mul','add']
     assert summary.iloc[0]['mul'] == -3.
     assert summary.iloc[0]['add'] == 3.
@@ -80,7 +80,7 @@ def test_mota_motp():
     acc.update([], [], [], frameid=5)
     
     mh = mm.metrics.create()
-    metr = mh.compute(acc, metrics=['motp', 'mota', 'num_predictions'], return_dataframe=False, return_cached=True)
+    metr, cache = mh.compute(acc, metrics=['motp', 'mota', 'num_predictions'], return_dataframe=False, return_cached=True)
 
     assert metr['num_matches'] == 4
     assert metr['num_false_positives'] == 2
@@ -110,7 +110,7 @@ def test_correct_average():
     acc.update([4], [4], [0])
 
     mh = mm.metrics.create()
-    metr = mh.compute(acc, metrics='mota', return_dataframe=False)
+    metr, cache = mh.compute(acc, metrics='mota', return_dataframe=False)
     assert metr['mota'] == approx(0.2)
 
 def test_motchallenge_files():
@@ -134,7 +134,7 @@ def test_motchallenge_files():
 
     print()
     print(mm.io.render_summary(summary, namemap=mm.io.motchallenge_metric_names, formatters=mh.formatters))
-
+    summary = summary[mm.metrics.motchallenge_metrics[:15]]
     expected = pd.DataFrame([
         [0.557659, 0.729730, 0.451253, 0.582173, 0.941441, 8.0, 1, 6, 1, 13, 150, 7, 7, 0.526462, 0.277201],
         [0.644619, 0.819760, 0.531142, 0.608997, 0.939920, 10.0, 5, 4, 1, 45, 452, 7, 6, 0.564014, 0.345904],
