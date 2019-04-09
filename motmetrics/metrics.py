@@ -184,7 +184,7 @@ class MetricsHost:
         else:
             data = OrderedDict([(k, cache[k]) for k in metrics])
 
-        ret = pd.DataFrame(data, index=[name]) if return_dataframe else data, cache
+        ret = pd.DataFrame(data, index=[name]) if return_dataframe else data
         return ret
 
     def compute_overall(self, partials, metrics = None, return_dataframe = True, return_cached = False, name = None):
@@ -266,12 +266,20 @@ class MetricsHost:
             names = range(len(dfs))
         if anas is None:
             anas = [None] * len(dfs)
-        partials = [self.compute(acc, ana=analysis, metrics=metrics, name=name) for acc, analysis, name in zip(dfs, anas, names)]
+        partials = [
+                    self.compute(acc,
+                                 ana=analysis,
+                                 metrics=metrics,
+                                 name=name,
+                                 return_cached=True,
+                                 return_dataframe=False
+                                )
+                    for acc, analysis, name in zip(dfs, anas, names)]
         logging.info('partials: %.3f seconds.'%(time.time() - st))
-        details = [i[1] for i in partials]
+        details = partials
         #for detail in details:
         #    print(detail)
-        partials = [i[0] for i in partials]
+        partials = [pd.DataFrame(OrderedDict([(k, i[k]) for k in metrics]), index=[name]) for i in partials]
         if generate_overall:
             names = 'OVERALL'
             # merged, infomap = MOTAccumulator.merge_event_dataframes(dfs, return_mappings = True)

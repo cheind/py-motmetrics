@@ -107,7 +107,7 @@ def test_correct_average():
     acc.update([4], [4], [0])
 
     mh = mm.metrics.create()
-    metr, cache = mh.compute(acc, metrics='mota', return_dataframe=False)
+    metr = mh.compute(acc, metrics='mota', return_dataframe=False)
     assert metr['mota'] == approx(0.2)
 
 def test_merge_dataframes():
