@@ -104,6 +104,10 @@ You can compare tracker results to ground truth in MOTChallenge format by
 ```
 python -m motmetrics.apps.eval_motchallenge --help
 ```
+For MOT16/17, you can run
+```
+python -m motmetrics.apps.evaluateTracking --help
+```
 
 ### Installation
 

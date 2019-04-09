@@ -5,7 +5,7 @@
 Christoph Heindl, 2017
 https://github.com/cheind/py-motmetrics
 Modified by Toka, 2018
-fengweitao@sensetime.com
+https://github.com/Helicopt/fast-py-MOTMetrics.git
 """
 
 from enum import Enum
@@ -230,5 +230,6 @@ motchallenge_metric_names = {
     'motp' : 'MOTP',
     'num_transfer' : 'IDt',
     'num_ascend' : 'IDa',
+    'num_migrate' : 'IDm',
 }
 """A list mappings for metric names to comply with MOTChallenge."""

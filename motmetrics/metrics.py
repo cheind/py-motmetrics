@@ -51,6 +51,10 @@ class MetricsHost:
         formatter: Format object, optional
             An optional default formatter when rendering metric results as string. I.e to
             render the result `0.35` as `35%` one would pass `{:.2%}.format`
+        fnc_m : Function or None, optional
+            Function that merges metric results. The number of arguments
+            is 1 + N, where N is the number of dependencies of the metric to be registered.
+            The order of the argument passed is `df, result_dep1, result_dep2, ...`.
         """        
 
         assert not fnc is None, 'No function given for metric {}'.format(name)
@@ -58,11 +62,11 @@ class MetricsHost:
         if deps is None:
             deps = []
         elif deps is 'auto':
-            if inspect.getargspec(fnc).defaults is not None:
-                k = - len(inspect.getargspec(fnc).defaults)
+            if inspect.getfullargspec(fnc).defaults is not None:
+                k = - len(inspect.getfullargspec(fnc).defaults)
             else:
-                k = len(inspect.getargspec(fnc).args)
-            deps = inspect.getargspec(fnc).args[1:k] # assumes dataframe as first argument
+                k = len(inspect.getfullargspec(fnc).args)
+            deps = inspect.getfullargspec(fnc).args[1:k] # assumes dataframe as first argument
 
         if name is None:
             name = fnc.__name__ # Relies on meaningful function names, i.e don't use for lambdas
@@ -76,11 +80,11 @@ class MetricsHost:
             if deps_m is None:
                 deps_m = []
             elif deps_m == 'auto':
-                if inspect.getargspec(fnc_m).defaults is not None:
-                    k = - len(inspect.getargspec(fnc_m).defaults)
+                if inspect.getfullargspec(fnc_m).defaults is not None:
+                    k = - len(inspect.getfullargspec(fnc_m).defaults)
                 else:
-                    k = len(inspect.getargspec(fnc_m).args)
-                deps_m = inspect.getargspec(fnc_m).args[1:k] # assumes dataframe as first argument
+                    k = len(inspect.getfullargspec(fnc_m).args)
+                deps_m = inspect.getfullargspec(fnc_m).args[1:k] # assumes dataframe as first argument
         else:
             deps_m = None
             #print(name, 'merge function is None')
@@ -99,7 +103,7 @@ class MetricsHost:
     def names(self):
         """Returns the name identifiers of all registered metrics."""
         return [v['name'] for v in self.metrics.values()]
-    
+
     @property
     def formatters(self):
         """Returns the formatters for all metrics that have associated formatters."""
@@ -126,14 +130,16 @@ class MetricsHost:
 
     def compute(self, df, ana = None, metrics=None, return_dataframe=True, return_cached=False, name=None):
         """Compute metrics on the dataframe / accumulator.
-        
+
         Params
         ------
         df : MOTAccumulator or pandas.DataFrame
             The dataframe to compute the metrics on
-        
+
         Kwargs
         ------
+        ana: dict or None, optional
+            To cache results for fast computation.
         metrics : string, list of string or None, optional
             The identifiers of the metrics to be computed. This method will only
             compute the minimal set of necessary metrics to fullfill the request.
@@ -146,7 +152,7 @@ class MetricsHost:
             When returning a pandas.DataFrame this is the index of the row containing
             the computed metric values.
         """ 
-        
+
         if isinstance(df, MOTAccumulator):
             df = df.events
 
@@ -159,7 +165,7 @@ class MetricsHost:
         df_map = DfMap()
         df_map.full = df     
         df_map.raw = df[df.Type == 'RAW']
-        df_map.noraw = df[(df.Type != 'RAW') & (df.Type != 'ASCEND') & (df.Type != 'TRANSFER')]
+        df_map.noraw = df[(df.Type != 'RAW') & (df.Type != 'ASCEND') & (df.Type != 'TRANSFER') & (df.Type != 'MIGRATE')]
         df_map.extra = df[df.Type != 'RAW']
 
         cache = {}
@@ -177,10 +183,36 @@ class MetricsHost:
             data = cache
         else:
             data = OrderedDict([(k, cache[k]) for k in metrics])
-            
-        return pd.DataFrame(data, index=[name]) if return_dataframe else data, cache
+
+        ret = pd.DataFrame(data, index=[name]) if return_dataframe else data, cache
+        return ret
 
     def compute_overall(self, partials, metrics = None, return_dataframe = True, return_cached = False, name = None):
+        """Compute overall metrics based on multiple results.
+
+        Params
+        ------
+        partials : list of metric results to combine overall
+
+        Kwargs
+        ------
+        metrics : string, list of string or None, optional
+            The identifiers of the metrics to be computed. This method will only
+            compute the minimal set of necessary metrics to fullfill the request.
+            If None is passed all registered metrics are computed.
+        return_dataframe : bool, optional
+            Return the result as pandas.DataFrame (default) or dict.
+        return_cached : bool, optional
+           If true all intermediate metrics required to compute the desired metrics are returned as well.
+        name : string, optional
+            When returning a pandas.DataFrame this is the index of the row containing
+            the computed metric values.
+
+        Returns
+        -------
+        df : pandas.DataFrame
+            A datafrom containing the metrics in columns and names in rows.
+        """
         if metrics is None:
             metrics = self.names
         elif isinstance(metrics, str):
@@ -200,14 +232,16 @@ class MetricsHost:
 
     def compute_many(self, dfs, anas=None, metrics=None, names=None, generate_overall=False):
         """Compute metrics on multiple dataframe / accumulators.
-        
+
         Params
         ------
         dfs : list of MOTAccumulator or list of pandas.DataFrame
             The data to compute metrics on.
-        
+
         Kwargs
         ------
+        anas: dict or None, optional
+            To cache results for fast computation.
         metrics : string, list of string or None, optional
             The identifiers of the metrics to be computed. This method will only
             compute the minimal set of necessary metrics to fullfill the request.
@@ -264,7 +298,7 @@ class MetricsHost:
                 v = cache[depname] = self._compute(df_map, depname, cache, options, parent=name)
                 #print(name, 'depends', depname, 'calculating %s take '%depname, time.time()-st_)
             vals.append(v)
-        if inspect.getargspec(minfo['fnc']).defaults is None:
+        if inspect.getfullargspec(minfo['fnc']).defaults is None:
             return minfo['fnc'](df_map, *vals)
         else:
             return minfo['fnc'](df_map, *vals, **options)
@@ -327,6 +361,11 @@ def num_ascend(df):
     """Total number of track ascend."""
     return df.extra.Type.isin(['ASCEND']).sum()
 simple_add_func.append(num_ascend)
+
+def num_migrate(df):
+    """Total number of track migrate."""
+    return df.extra.Type.isin(['MIGRATE']).sum()
+simple_add_func.append(num_migrate)
 
 def num_false_positives(df):
     """Total number of false positives (false-alarms)."""
@@ -526,6 +565,32 @@ def idf1(df, idtp, num_objects, num_predictions):
 def idf1_m(partials, idtp, num_objects, num_predictions):
     return 2 * idtp / (num_objects + num_predictions)
 
+# def iou_sum(df):
+#     """Extra measures: sum IoU of all matches"""
+#     return (1 - df.noraw[(df.noraw.Type=='MATCH')|(df.noraw.Type=='SWITCH')].D).sum()
+
+# simple_add_func.append(iou_sum)
+
+# def siou_sum(df):
+#     """Extra measures: sum IoU of all matches"""
+#     return (1 - df.noraw[(df.noraw.Type=='SWITCH')].D).sum()
+
+# simple_add_func.append(siou_sum)
+
+# def avg_iou(df, iou_sum, num_matches, num_switches):
+#     """Extra measures: average IoU of all pairs"""
+#     return iou_sum / (num_matches + num_switches)
+
+# def avg_iou_m(partials, iou_sum, num_matches, num_switches):
+#     return iou_sum / (num_matches + num_switches)
+
+# def switch_iou(df, siou_sum, num_switches):
+#     """Extra measures: average IoU of all switches"""
+#     return siou_sum / (num_switches)
+
+# def switch_iou_m(partials, siou_sum, num_switches):
+#     return siou_sum / (num_switches)
+
 for one in simple_add_func:
     name = one.__name__
     def getSimpleAdd(nm):
@@ -548,6 +613,7 @@ def create():
     m.register(num_switches, formatter='{:d}'.format)
     m.register(num_transfer, formatter='{:d}'.format)
     m.register(num_ascend, formatter='{:d}'.format)
+    m.register(num_migrate, formatter='{:d}'.format)
     m.register(num_false_positives, formatter='{:d}'.format)
     m.register(num_misses, formatter='{:d}'.format)
     m.register(num_detections, formatter='{:d}'.format)
@@ -563,7 +629,7 @@ def create():
     m.register(mota, formatter='{:.1%}'.format)
     m.register(precision, formatter='{:.1%}'.format)
     m.register(recall, formatter='{:.1%}'.format)
-    
+
     m.register(id_global_assignment)
     m.register(idfp)
     m.register(idfn)
@@ -572,7 +638,10 @@ def create():
     m.register(idr, formatter='{:.1%}'.format)
     m.register(idf1, formatter='{:.1%}'.format)
 
-
+    # m.register(iou_sum, formatter='{:.3f}'.format)
+    # m.register(siou_sum, formatter='{:.3f}'.format)
+    # m.register(avg_iou, formatter='{:.3f}'.format)
+    # m.register(switch_iou, formatter='{:.3f}'.format)
     return m
 
 motchallenge_metrics = [
@@ -592,6 +661,9 @@ motchallenge_metrics = [
     'mota',
     'motp',
     'num_transfer',
-    'num_ascend'
+    'num_ascend',
+    'num_migrate',
+    # 'avg_iou',
+    # 'switch_iou',
 ]
 """A list of all metrics from MOTChallenge."""
