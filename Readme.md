@@ -379,7 +379,7 @@ C = mm.distances.norm2squared_matrix(o, h, max_d2=5.)
 ##### Intersection over union norm for 2D rectangles
 ```python
 a = np.array([
-    [0, 0, 20, 100],    # Format X, Y, Width, Height
+    [0, 0, 1, 2],    # Format X, Y, Width, Height
     [0, 0, 0.8, 1.5],
 ])
 

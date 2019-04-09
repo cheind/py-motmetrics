@@ -157,7 +157,7 @@ class MetricsHost:
             df = df.events
 
         if metrics is None:
-            metrics = self.names
+            metrics = motchallenge_metrics
         elif isinstance(metrics, str):
             metrics = [metrics]
 

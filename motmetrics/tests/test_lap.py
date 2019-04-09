@@ -26,7 +26,7 @@ def test_change_solver():
     
     def mysolver(x):
         mysolver.called += 1
-        return None, None
+        return np.array([]), np.array([])
     mysolver.called = 0
 
     costs = np.array([[6, 9, 1],[10, 3, 2],[8, 7, 4.]])
