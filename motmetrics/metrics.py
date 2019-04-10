@@ -279,7 +279,7 @@ class MetricsHost:
         details = partials
         #for detail in details:
         #    print(detail)
-        partials = [pd.DataFrame(OrderedDict([(k, i[k]) for k in metrics]), index=[name]) for i in partials]
+        partials = [pd.DataFrame(OrderedDict([(k, i[k]) for k in metrics]), index=[name]) for i, name in zip(partials, names)]
         if generate_overall:
             names = 'OVERALL'
             # merged, infomap = MOTAccumulator.merge_event_dataframes(dfs, return_mappings = True)
