@@ -10,7 +10,8 @@ While benchmarking single object trackers is rather straightforward, measuring t
 
 <div style="text-align:center;">
 
-![](motmetrics/etc/mot.png)<br/>
+![](./motmetrics/etc/mot.png)<br/>
+
 *Pictures courtesy of Bernardin, Keni, and Rainer Stiefelhagen [[1]](#References)*
 </div>
 
@@ -102,6 +103,10 @@ Besides naming conventions, the only obvious differences are
 You can compare tracker results to ground truth in MOTChallenge format by
 ```
 python -m motmetrics.apps.eval_motchallenge --help
+```
+For MOT16/17, you can run
+```
+python -m motmetrics.apps.evaluateTracking --help
 ```
 
 ### Installation
@@ -450,6 +455,7 @@ docker run desired-image-name
 MIT License
 
 Copyright (c) 2017 Christoph Heindl
+Copyright (c) 2018 Toka
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

@@ -92,6 +92,38 @@ def test_mota_motp():
     assert metr['mota'] == approx(1. - (2 + 2 + 2) / 8)
     assert metr['motp'] == approx(11.1 / 6)
     
+def test_ids():
+    acc = mm.MOTAccumulator()
+
+    # No data
+    acc.update([], [], [], frameid=0)
+    # Match
+    acc.update([1, 2], ['a', 'b'], [[1, 0], [0, 1]], frameid=1)
+    # Switch also Transfer
+    acc.update([1, 2], ['a', 'b'], [[0.4, np.nan], [np.nan, 0.4]], frameid=2)
+    # Match
+    acc.update([1, 2], ['a', 'b'], [[0, 1], [1, 0]], frameid=3)
+    # Ascend (switch)
+    acc.update([1, 2], ['b', 'c'], [[1, 0], [0.4, 0.7]], frameid=4)
+    # Migrate (transfer)
+    acc.update([1, 3], ['b', 'c'], [[1, 0], [0.4, 0.7]], frameid=5)
+    # No data
+    acc.update([], [], [], frameid=6)
+
+    mh = mm.metrics.create()
+    metr = mh.compute(acc, metrics=['motp', 'mota', 'num_predictions', 'num_transfer', 'num_ascend', 'num_migrate'], return_dataframe=False, return_cached=True)
+    assert metr['num_matches'] == 7
+    assert metr['num_false_positives'] == 0
+    assert metr['num_misses'] == 0
+    assert metr['num_switches'] == 3
+    assert metr['num_transfer'] == 3
+    assert metr['num_ascend'] == 1
+    assert metr['num_migrate'] == 1
+    assert metr['num_detections'] == 10
+    assert metr['num_objects'] == 10
+    assert metr['num_predictions'] == 10
+    assert metr['mota'] == approx(1. - (0 + 0 + 3) / 10)
+    assert metr['motp'] == approx(1.6 / 10)
 
 def test_correct_average():
     # Tests what is being depicted in figure 3 of 'Evaluating MOT Performance'
@@ -134,11 +166,11 @@ def test_motchallenge_files():
 
     print()
     print(mm.io.render_summary(summary, namemap=mm.io.motchallenge_metric_names, formatters=mh.formatters))
-
+    # assert ((summary['num_transfer'] - summary['num_migrate']) == (summary['num_switches'] - summary['num_ascend'])).all() # False assertion
+    summary = summary[mm.metrics.motchallenge_metrics[:15]]
     expected = pd.DataFrame([
         [0.557659, 0.729730, 0.451253, 0.582173, 0.941441, 8.0, 1, 6, 1, 13, 150, 7, 7, 0.526462, 0.277201],
         [0.644619, 0.819760, 0.531142, 0.608997, 0.939920, 10.0, 5, 4, 1, 45, 452, 7, 6, 0.564014, 0.345904],
         [0.624296, 0.799176, 0.512211, 0.602640, 0.940268, 18.0, 6, 10, 2, 58, 602, 14, 13, 0.555116, 0.330177],
     ])
-
     np.testing.assert_allclose(summary, expected, atol=1e-3)

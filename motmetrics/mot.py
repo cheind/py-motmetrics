@@ -1,7 +1,9 @@
 """py-motmetrics - metrics for multiple object tracker (MOT) benchmarking.
 
 Christoph Heindl, 2017
-https://github.com/cheind/py-motmetrics
+Toka, 2018
+Origin: https://github.com/cheind/py-motmetrics
+TOKA make it faster
 """
 
 import numpy as np
@@ -13,46 +15,49 @@ from motmetrics.lap import linear_sum_assignment
 
 class MOTAccumulator(object):
     """Manage tracking events.
-    
-    This class computes per-frame tracking events from a given set of object / hypothesis 
+
+    This class computes per-frame tracking events from a given set of object / hypothesis
     ids and pairwise distances. Indended usage
 
         import motmetrics as mm
         acc = mm.MOTAccumulator()
         acc.update(['a', 'b'], [0, 1, 2], dists, frameid=0)
         ...
-        acc.update(['d'], [6,10], other_dists, frameid=76)        
+        acc.update(['d'], [6,10], other_dists, frameid=76)
         summary = mm.metrics.summarize(acc)
         print(mm.io.render_summary(summary))
 
     Update is called once per frame and takes objects / hypothesis ids and a pairwise distance
-    matrix between those (see distances module for support). Per frame max(len(objects), len(hypothesis)) 
+    matrix between those (see distances module for support). Per frame max(len(objects), len(hypothesis))
     events are generated. Each event type is one of the following
         - `'MATCH'` a match between a object and hypothesis was found
-        - `'SWITCH'` a match between a object and hypothesis was found but differs from previous assignment
+        - `'SWITCH'` a match between a object and hypothesis was found but differs from previous assignment (hypothesisid != previous)
         - `'MISS'` no match for an object was found
         - `'FP'` no match for an hypothesis was found (spurious detections)
         - `'RAW'` events corresponding to raw input
-    
+        - `'TRANSFER'` a match between a object and hypothesis was found but differs from previous assignment (objectid != previous)
+        - `'ASCEND'` a match between a object and hypothesis was found but differs from previous assignment  (hypothesisid is new)
+        - `'MIGRATE'` a match between a object and hypothesis was found but differs from previous assignment  (objectid is new)
+
     Events are tracked in a pandas Dataframe. The dataframe is hierarchically indexed by (`FrameId`, `EventId`),
     where `FrameId` is either provided during the call to `update` or auto-incremented when `auto_id` is set
     true during construction of MOTAccumulator. `EventId` is auto-incremented. The dataframe has the following
-    columns 
+    columns
         - `Type` one of `('MATCH', 'SWITCH', 'MISS', 'FP', 'RAW')`
         - `OId` object id or np.nan when `'FP'` or `'RAW'` and object is not present
         - `HId` hypothesis id or np.nan when `'MISS'` or `'RAW'` and hypothesis is not present
         - `D` distance or np.nan when `'FP'` or `'MISS'` or `'RAW'` and either object/hypothesis is absent
-    
-    From the events and associated fields the entire tracking history can be recovered. Once the accumulator 
+
+    From the events and associated fields the entire tracking history can be recovered. Once the accumulator
     has been populated with per-frame data use `metrics.summarize` to compute statistics. See `metrics.compute_metrics`
     for a list of metrics computed.
 
     References
     ----------
-    1. Bernardin, Keni, and Rainer Stiefelhagen. "Evaluating multiple object tracking performance: the CLEAR MOT metrics." 
+    1. Bernardin, Keni, and Rainer Stiefelhagen. "Evaluating multiple object tracking performance: the CLEAR MOT metrics."
     EURASIP Journal on Image and Video Processing 2008.1 (2008): 1-10.
     2. Milan, Anton, et al. "Mot16: A benchmark for multi-object tracking." arXiv preprint arXiv:1603.00831 (2016).
-    3. Li, Yuan, Chang Huang, and Ram Nevatia. "Learning to associate: Hybridboosted multi-target tracker for crowded scene." 
+    3. Li, Yuan, Chang Huang, and Ram Nevatia. "Learning to associate: Hybridboosted multi-target tracker for crowded scene."
     Computer Vision and Pattern Recognition, 2009. CVPR 2009. IEEE Conference on. IEEE, 2009.
     """
 
@@ -68,10 +73,10 @@ class MOTAccumulator(object):
             false also results in an error.
 
         max_switch_time : scalar, optional
-            Allows specifying an upper bound on the timespan an unobserved but 
-            tracked object is allowed to generate track switch events. Useful if groundtruth 
-            objects leaving the field of view keep their ID when they reappear, 
-            but your tracker is not capable of recognizing this (resulting in 
+            Allows specifying an upper bound on the timespan an unobserved but
+            tracked object is allowed to generate track switch events. Useful if groundtruth
+            objects leaving the field of view keep their ID when they reappear,
+            but your tracker is not capable of recognizing this (resulting in
             track switch events). The default is that there is no upper bound
             on the timespan. In units of frame timestamps. When using auto_id
             in units of count.
@@ -79,7 +84,7 @@ class MOTAccumulator(object):
 
         self.auto_id = auto_id
         self.max_switch_time = max_switch_time
-        self.reset()       
+        self.reset()
 
     def reset(self):
         """Reset the accumulator to empty state."""
@@ -87,40 +92,43 @@ class MOTAccumulator(object):
         self._events = []
         self._indices = []
         #self.events = MOTAccumulator.new_event_dataframe()
-        self.m = {} # Pairings up to current timestamp  
+        self.m = {} # Pairings up to current timestamp
+        self.res_m = {} # Result pairings up to now
         self.last_occurrence = {} # Tracks most recent occurance of object
+        self.last_match = {} # Tracks most recent match of object
+        self.hypHistory = {}
         self.dirty_events = True
         self.cached_events_df = None
 
-    def update(self, oids, hids, dists, frameid=None):
+    def update(self, oids, hids, dists, frameid=None, vf=''):
         """Updates the accumulator with frame specific objects/detections.
 
         This method generates events based on the following algorithm [1]:
         1. Try to carry forward already established tracks. If any paired object / hypothesis
-        from previous timestamps are still visible in the current frame, create a 'MATCH' 
+        from previous timestamps are still visible in the current frame, create a 'MATCH'
         event between them.
         2. For the remaining constellations minimize the total object / hypothesis distance
         error (Kuhn-Munkres algorithm). If a correspondence made contradicts a previous
         match create a 'SWITCH' else a 'MATCH' event.
         3. Create 'MISS' events for all remaining unassigned objects.
         4. Create 'FP' events for all remaining unassigned hypotheses.
-        
+
         Params
         ------
-        oids : N array 
+        oids : N array
             Array of object ids.
-        hids : M array 
+        hids : M array
             Array of hypothesis ids.
         dists: NxM array
             Distance matrix. np.nan values to signal do-not-pair constellations.
-            See `distances` module for support methods.  
+            See `distances` module for support methods.
 
         Kwargs
         ------
         frameId : id
             Unique frame id. Optional when MOTAccumulator.auto_id is specified during
             construction.
-
+        vf: file to log details
         Returns
         -------
         frame_events : pd.DataFrame
@@ -128,16 +136,16 @@ class MOTAccumulator(object):
 
         References
         ----------
-        1. Bernardin, Keni, and Rainer Stiefelhagen. "Evaluating multiple object tracking performance: the CLEAR MOT metrics." 
+        1. Bernardin, Keni, and Rainer Stiefelhagen. "Evaluating multiple object tracking performance: the CLEAR MOT metrics."
         EURASIP Journal on Image and Video Processing 2008.1 (2008): 1-10.
         """
-        
+
         self.dirty_events = True
         oids = ma.array(oids, mask=np.zeros(len(oids)))
-        hids = ma.array(hids, mask=np.zeros(len(hids)))  
+        hids = ma.array(hids, mask=np.zeros(len(hids)))
         dists = np.atleast_2d(dists).astype(float).reshape(oids.shape[0], hids.shape[0]).copy()
 
-        if frameid is None:            
+        if frameid is None:
             assert self.auto_id, 'auto-id is not enabled'
             if len(self._indices) > 0:
                 frameid = self._indices[-1][0] + 1
@@ -145,14 +153,14 @@ class MOTAccumulator(object):
                 frameid = 0
         else:
             assert not self.auto_id, 'Cannot provide frame id when auto-id is enabled'
-        
+
         eid = count()
 
         # 0. Record raw events
 
         no = len(oids)
         nh = len(hids)
-        
+
         if no * nh > 0:
             for i in range(no):
                 for j in range(nh):
@@ -161,66 +169,98 @@ class MOTAccumulator(object):
         elif no == 0:
             for i in range(nh):
                 self._indices.append((frameid, next(eid)))
-                self._events.append(['RAW', np.nan, hids[i], np.nan])       
+                self._events.append(['RAW', np.nan, hids[i], np.nan])
         elif nh == 0:
             for i in range(no):
                 self._indices.append((frameid, next(eid)))
                 self._events.append(['RAW', oids[i], np.nan, np.nan])
 
-        if oids.size * hids.size > 0:    
+        if oids.size * hids.size > 0:
             # 1. Try to re-establish tracks from previous correspondences
             for i in range(oids.shape[0]):
                 if not oids[i] in self.m:
                     continue
 
-                hprev = self.m[oids[i]]                    
-                j, = np.where(hids==hprev)  
+                hprev = self.m[oids[i]]
+                j, = np.where(hids==hprev)
                 if j.shape[0] == 0:
                     continue
                 j = j[0]
 
                 if np.isfinite(dists[i,j]):
+                    o = oids[i]
+                    h = hids[j]
                     oids[i] = ma.masked
                     hids[j] = ma.masked
                     self.m[oids.data[i]] = hids.data[j]
-                    
+
                     self._indices.append((frameid, next(eid)))
                     self._events.append(['MATCH', oids.data[i], hids.data[j], dists[i, j]])
+                    self.last_match[o] = frameid
+                    self.hypHistory[h] = frameid
 
             # 2. Try to remaining objects/hypotheses
             dists[oids.mask, :] = np.nan
             dists[:, hids.mask] = np.nan
-        
+
             rids, cids = linear_sum_assignment(dists)
 
-            for i, j in zip(rids, cids):                
+            for i, j in zip(rids, cids):
                 if not np.isfinite(dists[i,j]):
                     continue
-                
+
                 o = oids[i]
                 h = hids.data[j]
                 is_switch = o in self.m and \
                             self.m[o] != h and \
                             abs(frameid - self.last_occurrence[o]) <= self.max_switch_time
-                cat = 'SWITCH' if is_switch else 'MATCH'
+                cat1 = 'SWITCH' if is_switch else 'MATCH'
+                if cat1=='SWITCH':
+                    if h not in self.hypHistory:
+                        subcat = 'ASCEND'
+                        self._indices.append((frameid, next(eid)))
+                        self._events.append([subcat, oids.data[i], hids.data[j], dists[i, j]])
+                is_transfer = h in self.res_m and \
+                              self.res_m[h] != o #and \
+                              # abs(frameid - self.last_occurrence[o]) <= self.max_switch_time # ignore this condition temporarily
+                cat2 = 'TRANSFER' if is_transfer else 'MATCH'
+                if cat2=='TRANSFER':
+                    if o not in self.last_match:
+                        subcat = 'MIGRATE'
+                        self._indices.append((frameid, next(eid)))
+                        self._events.append([subcat, oids.data[i], hids.data[j], dists[i, j]])
+                    self._indices.append((frameid, next(eid)))
+                    self._events.append([cat2, oids.data[i], hids.data[j], dists[i, j]])
+                if vf!='' and (cat1!='MATCH' or cat2!='MATCH'):
+                    if cat1=='SWITCH':
+                        vf.write('%s %d %d %d %d %d\n'%(subcat[:2], o, self.last_match[o], self.m[o], frameid, h))
+                    if cat2=='TRANSFER':
+                        vf.write('%s %d %d %d %d %d\n'%(subcat[:2], h, self.hypHistory[h], self.res_m[h], frameid, o))
+                self.hypHistory[h] = frameid
+                self.last_match[o] = frameid
                 self._indices.append((frameid, next(eid)))
-                self._events.append([cat, oids.data[i], hids.data[j], dists[i, j]])
+                self._events.append([cat1, oids.data[i], hids.data[j], dists[i, j]])
                 oids[i] = ma.masked
                 hids[j] = ma.masked
                 self.m[o] = h
+                self.res_m[h] = o
 
         # 3. All remaining objects are missed
         for o in oids[~oids.mask]:
             self._indices.append((frameid, next(eid)))
             self._events.append(['MISS', o, np.nan, np.nan])
-        
+            if vf!='':
+                vf.write('FN %d %d\n'%(frameid, o))
+
         # 4. All remaining hypotheses are false alarms
         for h in hids[~hids.mask]:
             self._indices.append((frameid, next(eid)))
             self._events.append(['FP', np.nan, h, np.nan])
+            if vf!='':
+                vf.write('FP %d %d\n'%(frameid, h))
 
         # 5. Update occurance state
-        for o in oids.data:            
+        for o in oids.data:
             self.last_occurrence[o] = frameid
 
         return frameid
@@ -231,7 +271,7 @@ class MOTAccumulator(object):
             self.cached_events_df = MOTAccumulator.new_event_dataframe_with_data(self._indices, self._events)
             self.dirty_events = False
         return self.cached_events_df
-    
+
     @property
     def mot_events(self):
         df = self.events
@@ -241,13 +281,13 @@ class MOTAccumulator(object):
     def new_event_dataframe():
         """Create a new DataFrame for event tracking."""
         idx = pd.MultiIndex(levels=[[],[]], labels=[[],[]], names=['FrameId','Event'])
-        cats = pd.Categorical([], categories=['RAW', 'FP', 'MISS', 'SWITCH', 'MATCH'])
+        cats = pd.Categorical([], categories=['RAW', 'FP', 'MISS', 'SWITCH', 'MATCH', 'TRANSFER', 'ASCEND', 'MIGRATE'])
         df = pd.DataFrame(
             OrderedDict([
                 ('Type', pd.Series(cats)),          # Type of event. One of FP (false positive), MISS, SWITCH, MATCH
                 ('OId', pd.Series(dtype=object)),      # Object ID or -1 if FP. Using float as missing values will be converted to NaN anyways.
                 ('HId', pd.Series(dtype=object)),      # Hypothesis ID or NaN if MISS. Using float as missing values will be converted to NaN anyways.
-                ('D', pd.Series(dtype=float)),      # Distance or NaN when FP or MISS            
+                ('D', pd.Series(dtype=float)),      # Distance or NaN when FP or MISS
             ]),
             index=idx
         )
@@ -256,42 +296,57 @@ class MOTAccumulator(object):
     @staticmethod
     def new_event_dataframe_with_data(indices, events):
         """Create a new DataFrame filled with data.
-        
+
         Params
         ------
         indices: list
             list of tuples (frameid, eventid)
         events: list
             list of events where each event is a list containing
-            'Type', 'OId', HId', 'D'                    
+            'Type', 'OId', HId', 'D'
         """
 
         tevents = list(zip(*events))
 
-        raw_type = pd.Categorical(tevents[0], categories=['RAW', 'FP', 'MISS', 'SWITCH', 'MATCH'], ordered=False)
+        raw_type = pd.Categorical(tevents[0], categories=['RAW', 'FP', 'MISS', 'SWITCH', 'MATCH', 'TRANSFER', 'ASCEND', 'MIGRATE'], ordered=False)
         series = [
             pd.Series(raw_type, name='Type'),
             pd.Series(tevents[1], dtype=object, name='OId'),
             pd.Series(tevents[2], dtype=object, name='HId'),
             pd.Series(tevents[3], dtype=float, name='D')
         ]
-        
+
         idx = pd.MultiIndex.from_tuples(indices, names=['FrameId','Event'])
         df = pd.concat(series, axis=1)
         df.index = idx
         return df
-    
 
+    @staticmethod
+    def merge_analysis(anas, infomap):
+        res = {'hyp':{}, 'obj':{}}
+        mapp = {'hyp': 'hid_map', 'obj':'oid_map'}
+        for ana, infom in zip(anas, infomap):
+            if ana is None: return None
+            for t in ana.keys():
+                which = mapp[t]
+                if np.nan in infom[which]:
+                    res[t][int(infom[which][np.nan])] = 0
+                if 'nan' in infom[which]:
+                    res[t][int(infom[which]['nan'])] = 0
+                for _id, cnt in ana[t].items():
+                    if _id not in infom[which]: _id = str(_id)
+                    res[t][int(infom[which][_id])] = cnt
+        return res
 
     @staticmethod
     def merge_event_dataframes(dfs, update_frame_indices=True, update_oids=True, update_hids=True, return_mappings=False):
         """Merge dataframes.
-        
+
         Params
         ------
         dfs : list of pandas.DataFrame or MotAccumulator
             A list of event containers to merge
-        
+
         Kwargs
         ------
         update_frame_indices : boolean, optional
@@ -306,7 +361,7 @@ class MOTAccumulator(object):
         Returns
         -------
         df : pandas.DataFrame
-            Merged event data frame        
+            Merged event data frame
         """
 
         mapping_infos = []
@@ -321,7 +376,7 @@ class MOTAccumulator(object):
 
             copy = df.copy()
             infos = {}
-            
+
             # Update index
             if update_frame_indices:
                 next_frame_id = max(r.index.get_level_values(0).max()+1, r.index.get_level_values(0).unique().shape[0])
@@ -331,20 +386,20 @@ class MOTAccumulator(object):
                 infos['frame_offset'] = next_frame_id
 
             # Update object / hypothesis ids
-            if update_oids:                
+            if update_oids:
                 oid_map = dict([oid, str(next(new_oid))] for oid in copy['OId'].dropna().unique())
                 copy['OId'] = copy['OId'].map(lambda x: oid_map[x], na_action='ignore')
                 infos['oid_map'] = oid_map
-            
+
             if update_hids:
                 hid_map = dict([hid, str(next(new_hid))] for hid in copy['HId'].dropna().unique())
                 copy['HId'] = copy['HId'].map(lambda x: hid_map[x], na_action='ignore')
                 infos['hid_map'] = hid_map
-            
+
             r = r.append(copy)
             mapping_infos.append(infos)
 
         if return_mappings:
             return r, mapping_infos
-        else:            
+        else:
             return r
