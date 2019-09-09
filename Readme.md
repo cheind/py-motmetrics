@@ -415,6 +415,12 @@ with lap.set_default_solver(mysolver):
     ...
 ```
 
+### Testing on my own dataset
+Ensure you have a groundtruth and results files in the proper [MOT format](https://motchallenge.net/instructions/)
+
+``` python -m motmetrics.apps.eval_my_dataset --groundtruth <path_to_gt_file> --test <path_to_test_file> ```
+
+
 ### Running tests
 **py-motmetrics** uses the pytest framework. To run the tests, simply `cd` into the source directly and run `pytest`.
 
