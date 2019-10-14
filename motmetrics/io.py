@@ -10,6 +10,8 @@ from enum import Enum
 import pandas as pd
 import numpy as np
 import io
+import scipy.io
+import xmltodict
 
 class Format(Enum):
     """Enumerates supported file formats."""
@@ -24,6 +26,17 @@ class Format(Enum):
     """Vondrick, Carl, Donald Patterson, and Deva Ramanan. "Efficiently scaling up crowdsourced video annotation." International Journal of Computer Vision 101.1 (2013): 184-204.
     https://github.com/cvondrick/vatic
     """
+
+    DETRAC_MAT = 'detrac-mat'
+    """Wen, Longyin et al. "UA-DETRAC: A New Benchmark and Protocol for Multi-Object Detection and Tracking." arXiv preprint arXiv:arXiv:1511.04136 (2016).
+    http://detrac-db.rit.albany.edu/download
+    """
+
+    DETRAC_XML = 'detrac-xml'
+    """Wen, Longyin et al. "UA-DETRAC: A New Benchmark and Protocol for Multi-Object Detection and Tracking." arXiv preprint arXiv:arXiv:1511.04136 (2016).
+    http://detrac-db.rit.albany.edu/download
+    """
+
 
 
 def load_motchallenge(fname, **kwargs):
@@ -160,6 +173,126 @@ def load_vatictxt(fname, **kwargs):
 
         return df
 
+def load_detrac_mat(fname, **kwargs):
+    """Loads UA-DETRAC annotations data from mat files
+       Competition Site: http://detrac-db.rit.albany.edu/download
+       
+       File contains a nested structure of 2d arrays for indexed by frame id
+       and Object ID. Separate arrays for top, left, width and height are given.
+    
+    Params
+    ------
+    fname : str
+        Filename to load data from
+
+    Kwargs
+    ------
+    Currently none of these arguments used.
+
+    Returns
+    ------
+    df : pandas.DataFrame 
+        The returned dataframe has the following columns
+            'X', 'Y', 'Width', 'Height', 'Confidence', 'ClassId', 'Visibility'
+        The dataframe is indexed by ('FrameId', 'Id')    
+    """
+    
+    matData = scipy.io.loadmat(fname)
+
+    frameList = matData['gtInfo'][0][0][4][0]
+    leftArray = matData['gtInfo'][0][0][0]
+    topArray = matData['gtInfo'][0][0][1]
+    widthArray = matData['gtInfo'][0][0][3]
+    heightArray = matData['gtInfo'][0][0][2]
+
+    parsedGT = []
+    for f in frameList: 
+        ids = [i+1 for i,v in enumerate(leftArray[f-1]) if v>0]
+        for i in ids:
+            row = []
+            row.append(f)
+            row.append(i)
+            row.append(leftArray[f-1,i-1])
+            row.append(topArray[f-1,i-1])
+            row.append(widthArray[f-1,i-1])
+            row.append(heightArray[f-1,i-1])
+            row.append(1)
+            row.append(-1)
+            row.append(-1)
+            row.append(-1)
+            parsedGT.append(row)    
+    
+    df = pd.DataFrame(parsedGT,
+                      columns=['FrameId', 'Id', 'X', 'Y', 'Width', 'Height', 'Confidence', 'ClassId', 'Visibility', 'unused'])
+    df.set_index(['FrameId', 'Id'],inplace=True)
+        
+    # Account for matlab convention.
+    df[['X', 'Y']] -= (1, 1)
+
+    # Removed trailing column
+    del df['unused']
+
+    return df
+
+def load_detrac_xml(fname, **kwargs):
+    """Loads UA-DETRAC annotations data from xml files
+       Competition Site: http://detrac-db.rit.albany.edu/download
+    
+    Params
+    ------
+    fname : str
+        Filename to load data from
+
+    Kwargs
+    ------
+    Currently none of these arguments used.
+
+    Returns
+    ------
+    df : pandas.DataFrame 
+        The returned dataframe has the following columns
+            'X', 'Y', 'Width', 'Height', 'Confidence', 'ClassId', 'Visibility'
+        The dataframe is indexed by ('FrameId', 'Id')    
+    """
+    
+    with open(fname) as fd:
+        doc = xmltodict.parse(fd.read())
+    frameList = doc['sequence']['frame']
+    
+    parsedGT = []
+    for f in frameList:
+        fid = int(f['@num'])
+        targetList = f['target_list']['target']
+        if type(targetList) != list:
+            targetList = [targetList]
+
+        for t in targetList:
+            row = []
+            row.append(fid)
+            row.append(int(t['@id']))
+            row.append(float(t['box']['@left']))
+            row.append(float(t['box']['@top']))
+            row.append(float(t['box']['@width']))
+            row.append(float(t['box']['@height']))
+            row.append(1)
+            row.append(-1)
+            row.append(-1)
+            row.append(-1)
+            parsedGT.append(row)      
+    
+    df = pd.DataFrame(parsedGT,
+                      columns=['FrameId', 'Id', 'X', 'Y', 'Width', 'Height', 'Confidence', 'ClassId', 'Visibility', 'unused'])
+    df.set_index(['FrameId', 'Id'],inplace=True)
+        
+    # Account for matlab convention.
+    df[['X', 'Y']] -= (1, 1)
+
+    # Removed trailing column
+    del df['unused']
+
+    return df
+
+
 def loadtxt(fname, fmt=Format.MOT15_2D, **kwargs):
     """Load data from any known format."""
     fmt = Format(fmt)
@@ -167,7 +300,9 @@ def loadtxt(fname, fmt=Format.MOT15_2D, **kwargs):
     switcher = {
         Format.MOT16: load_motchallenge,
         Format.MOT15_2D: load_motchallenge,
-        Format.VATIC_TXT: load_vatictxt
+        Format.VATIC_TXT: load_vatictxt,
+        Format.DETRAC_MAT: load_detrac_mat,
+        Format.DETRAC_XML: load_detrac_xml
     }
     func = switcher.get(fmt)
     return func(fname, **kwargs)
