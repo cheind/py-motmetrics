@@ -212,8 +212,8 @@ def load_detrac_mat(fname, **kwargs):
             row = []
             row.append(f)
             row.append(i)
-            row.append(leftArray[f-1,i-1])
-            row.append(topArray[f-1,i-1])
+            row.append(leftArray[f-1,i-1] - widthArray[f-1,i-1] / 2)
+            row.append(topArray[f-1,i-1] - heightArray[f-1,i-1])
             row.append(widthArray[f-1,i-1])
             row.append(heightArray[f-1,i-1])
             row.append(1)
