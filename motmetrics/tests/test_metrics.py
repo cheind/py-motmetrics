@@ -63,6 +63,21 @@ def test_metricscontainer_autoname():
     assert summary.iloc[0]['mul'] == -3.
     assert summary.iloc[0]['add'] == 3.
 
+def test_metrics_with_no_events():
+    acc = mm.MOTAccumulator()
+
+    mh = mm.metrics.create()
+    metr = mh.compute(
+        acc,
+        metrics=['motp', 'mota', 'num_predictions'],
+        return_dataframe=False,
+        return_cached=True)
+    assert np.isnan(metr['mota'])
+    assert np.isnan(metr['motp'])
+    assert metr['num_predictions'] == 0
+    assert metr['num_objects'] == 0
+    assert metr['num_detections'] == 0
+
 def test_assignment_metrics_with_empty_groundtruth():
     acc = mm.MOTAccumulator(auto_id=True)
     # Empty groundtruth.
