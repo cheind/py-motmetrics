@@ -444,34 +444,34 @@ simple_add_func.append(num_fragmentations)
 
 def motp(df, num_detections):
     """Multiple object tracker precision."""
-    return df.noraw['D'].sum() / num_detections
+    return _qdiv(df.noraw['D'].sum(), num_detections)
 
 def motp_m(partials, num_detections):
     res = 0
     for v in partials:
         res += v['motp'] * v['num_detections']
-    return res / num_detections
+    return _qdiv(res, num_detections)
 
 def mota(df, num_misses, num_switches, num_false_positives, num_objects):
     """Multiple object tracker accuracy."""
-    return 1. - (num_misses + num_switches + num_false_positives) / num_objects
+    return 1. - _qdiv(num_misses + num_switches + num_false_positives, num_objects)
 
 def mota_m(partials, num_misses, num_switches, num_false_positives, num_objects):
-    return 1. - (num_misses + num_switches + num_false_positives) / num_objects
+    return 1. - _qdiv(num_misses + num_switches + num_false_positives, num_objects)
 
 def precision(df, num_detections, num_false_positives):
     """Number of detected objects over sum of detected and false positives."""
-    return num_detections / (num_false_positives + num_detections)
+    return _qdiv(num_detections, num_false_positives + num_detections)
 
 def precision_m(partials, num_detections, num_false_positives):
-    return num_detections / (num_false_positives + num_detections)
+    return _qdiv(num_detections, num_false_positives + num_detections)
 
 def recall(df, num_detections, num_objects):
     """Number of detections over number of objects."""
-    return num_detections / num_objects
+    return _qdiv(num_detections, num_objects)
 
 def recall_m(partials, num_detections, num_objects):
-    return num_detections / num_objects
+    return _qdiv(num_detections, num_objects)
 
 def id_global_assignment(df, ana = None):
     """ID measures: Global min-cost assignment for ID measures."""
@@ -558,24 +558,29 @@ simple_add_func.append(idtp)
 
 def idp(df, idtp, idfp):
     """ID measures: global min-cost precision."""
-    return idtp / (idtp + idfp)
+    return _qdiv(idtp, idtp + idfp)
 
 def idp_m(partials, idtp, idfp):
-    return idtp / (idtp + idfp)
+    return _qdiv(idtp, idtp + idfp)
 
 def idr(df, idtp, idfn):
     """ID measures: global min-cost recall."""
-    return idtp / (idtp + idfn)
+    return _qdiv(idtp, idtp + idfn)
 
 def idr_m(partials, idtp, idfn):
-    return idtp / (idtp + idfn)
+    return _qdiv(idtp, idtp + idfn)
 
 def idf1(df, idtp, num_objects, num_predictions):
     """ID measures: global min-cost F1 score."""
-    return 2 * idtp / (num_objects + num_predictions)
+    return _qdiv(2 * idtp, num_objects + num_predictions)
 
 def idf1_m(partials, idtp, num_objects, num_predictions):
-    return 2 * idtp / (num_objects + num_predictions)
+    return _qdiv(2 * idtp, num_objects + num_predictions)
+
+def _qdiv(a, b):
+    """Quiet divide function that does not warn about (0 / 0)."""
+    is_nan = np.logical_and(a == 0, b == 0)
+    return np.where(is_nan, np.nan, np.true_divide(a, np.where(is_nan, 1., b)))
 
 # def iou_sum(df):
 #     """Extra measures: sum IoU of all matches"""
