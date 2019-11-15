@@ -492,8 +492,8 @@ def id_global_assignment(df, ana = None):
     nh = hids.shape[0]   
 
     df = df.raw.reset_index()    
-    df = df.set_index(['OId','HId']) 
-    df = df.sort_index(level=[0,1])
+    df = df.set_index('OId')
+    df = df.sort_index()
 
     #print('----'*2, '3', time.time()-st1)
     fpmatrix = np.full((no+nh, no+nh), 0.)
@@ -512,7 +512,11 @@ def id_global_assignment(df, ana = None):
 
     #print('----'*2, '5', time.time()-st1)
     for r, o in enumerate(oids):
-        df_o = df.loc[o, 'D'].dropna()
+        # Select non-empty events for this object.
+        # Pass a list to loc[] to ensure that it returns DataFrame not Series.
+        df_o = df.loc[[o], ['HId', 'D']].dropna()
+        # Re-index by hypothesis and select single column.
+        df_o = df_o.set_index('HId').loc[:, 'D']
         for h, ex in df_o.groupby(level=0).count().iteritems():            
             c = hids_idx[h]
 
