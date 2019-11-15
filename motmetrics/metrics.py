@@ -333,7 +333,8 @@ def id_global_assignment(df):
 
     for r, o in enumerate(oids):
         # Select non-empty events for this object.
-        df_o = df.loc[o, ['HId', 'D']].dropna()
+        # Pass a list to loc[] to ensure that it returns DataFrame not Series.
+        df_o = df.loc[[o], ['HId', 'D']].dropna()
         # Re-index by hypothesis and select single column.
         df_o = df_o.set_index('HId').loc[:, 'D']
         for h, ex in df_o.groupby(level=0).count().iteritems():            
