@@ -16,6 +16,7 @@ import inspect
 import itertools
 import time
 import logging
+import warnings
 
 class MetricsHost:
     """Keeps track of metrics and intra metric dependencies."""
@@ -579,8 +580,9 @@ def idf1_m(partials, idtp, num_objects, num_predictions):
 
 def _qdiv(a, b):
     """Quiet divide function that does not warn about (0 / 0)."""
-    is_nan = np.logical_and(a == 0, b == 0)
-    return np.where(is_nan, np.nan, np.true_divide(a, np.where(is_nan, 1., b)))
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', RuntimeWarning)
+        return np.true_divide(a, b)
 
 # def iou_sum(df):
 #     """Extra measures: sum IoU of all matches"""
