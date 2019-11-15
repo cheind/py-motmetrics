@@ -63,6 +63,81 @@ def test_metricscontainer_autoname():
     assert summary.iloc[0]['mul'] == -3.
     assert summary.iloc[0]['add'] == 3.
 
+def test_metrics_with_no_events():
+    acc = mm.MOTAccumulator()
+
+    mh = mm.metrics.create()
+    metr = mh.compute(
+        acc,
+        metrics=['motp', 'mota', 'num_predictions'],
+        return_dataframe=False,
+        return_cached=True)
+    assert np.isnan(metr['mota'])
+    assert np.isnan(metr['motp'])
+    assert metr['num_predictions'] == 0
+    assert metr['num_objects'] == 0
+    assert metr['num_detections'] == 0
+
+def test_assignment_metrics_with_empty_groundtruth():
+    acc = mm.MOTAccumulator(auto_id=True)
+    # Empty groundtruth.
+    acc.update([], [1, 2, 3, 4], [])
+    acc.update([], [1, 2, 3, 4], [])
+    acc.update([], [1, 2, 3, 4], [])
+    acc.update([], [1, 2, 3, 4], [])
+
+    mh = mm.metrics.create()
+    metr = mh.compute(acc, return_dataframe=False, metrics=[
+        'num_matches', 'num_false_positives', 'num_misses',
+        'idtp', 'idfp', 'idfn',
+    ])
+    assert metr['num_matches'] == 0
+    assert metr['num_false_positives'] == 16
+    assert metr['num_misses'] == 0
+    assert metr['idtp'] == 0
+    assert metr['idfp'] == 16
+    assert metr['idfn'] == 0
+
+def test_assignment_metrics_with_empty_predictions():
+    acc = mm.MOTAccumulator(auto_id=True)
+    # Empty predictions.
+    acc.update([1, 2, 3, 4], [], [])
+    acc.update([1, 2, 3, 4], [], [])
+    acc.update([1, 2, 3, 4], [], [])
+    acc.update([1, 2, 3, 4], [], [])
+
+    mh = mm.metrics.create()
+    metr = mh.compute(acc, return_dataframe=False, metrics=[
+        'num_matches', 'num_false_positives', 'num_misses',
+        'idtp', 'idfp', 'idfn',
+    ])
+    assert metr['num_matches'] == 0
+    assert metr['num_false_positives'] == 0
+    assert metr['num_misses'] == 16
+    assert metr['idtp'] == 0
+    assert metr['idfp'] == 0
+    assert metr['idfn'] == 16
+
+def test_assignment_metrics_with_both_empty():
+    acc = mm.MOTAccumulator(auto_id=True)
+    # Empty groundtruth and empty predictions.
+    acc.update([], [], [])
+    acc.update([], [], [])
+    acc.update([], [], [])
+    acc.update([], [], [])
+
+    mh = mm.metrics.create()
+    metr = mh.compute(acc, return_dataframe=False, metrics=[
+        'num_matches', 'num_false_positives', 'num_misses',
+        'idtp', 'idfp', 'idfn',
+    ])
+    assert metr['num_matches'] == 0
+    assert metr['num_false_positives'] == 0
+    assert metr['num_misses'] == 0
+    assert metr['idtp'] == 0
+    assert metr['idfp'] == 0
+    assert metr['idfn'] == 0
+
 def test_mota_motp():
     acc = mm.MOTAccumulator()
 

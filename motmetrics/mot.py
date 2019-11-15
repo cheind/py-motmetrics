@@ -306,6 +306,9 @@ class MOTAccumulator(object):
             'Type', 'OId', HId', 'D'
         """
 
+        if len(events) == 0:
+            return MOTAccumulator.new_event_dataframe()
+
         tevents = list(zip(*events))
 
         raw_type = pd.Categorical(tevents[0], categories=['RAW', 'FP', 'MISS', 'SWITCH', 'MATCH', 'TRANSFER', 'ASCEND', 'MIGRATE'], ordered=False)
