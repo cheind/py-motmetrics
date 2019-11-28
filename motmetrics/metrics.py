@@ -481,9 +481,11 @@ def id_global_assignment(df, ana = None):
     hids = df.full['HId'].dropna().unique()
     hids_idx = dict((h,i) for i,h in enumerate(hids))
     #print('----'*2, '1', time.time()-st1)
+    flat = df.raw.reset_index()
     if ana is None:
-        hcs = [len(df.raw[(df.raw.HId==h)].groupby(level=0)) for h in hids]
-        ocs = [len(df.raw[(df.raw.OId==o)].groupby(level=0)) for o in oids]
+        # Count number of frames where each (non-empty) OId and HId appears.
+        hcs = list(flat.set_index('HId')['FrameId'].groupby('HId').nunique()[hids])
+        ocs = list(flat.set_index('OId')['FrameId'].groupby('OId').nunique()[oids])
     else:
         hcs = [ana['hyp'][int(h)] for h in hids if h!='nan' and np.isfinite(float(h))]
         ocs = [ana['obj'][int(o)] for o in oids if o!='nan' and np.isfinite(float(o))]
@@ -492,9 +494,9 @@ def id_global_assignment(df, ana = None):
     no = oids.shape[0]
     nh = hids.shape[0]   
 
-    df = df.raw.reset_index()    
-    df = df.set_index('OId')
-    df = df.sort_index()
+    # Count frames where object and hypothesis appear with non-empty distance.
+    dists = flat.set_index(['OId', 'HId'])['D'].dropna()
+    tpcs = dict(dists.groupby(['OId', 'HId']).count())
 
     #print('----'*2, '3', time.time()-st1)
     fpmatrix = np.full((no+nh, no+nh), 0.)
@@ -512,17 +514,9 @@ def id_global_assignment(df, ana = None):
         fpmatrix[c+no,c] = hc
 
     #print('----'*2, '5', time.time()-st1)
-    for r, o in enumerate(oids):
-        # Select non-empty events for this object.
-        # Pass a list to loc[] to ensure that it returns DataFrame not Series.
-        df_o = df.loc[[o], ['HId', 'D']].dropna()
-        # Re-index by hypothesis and select single column.
-        df_o = df_o.set_index('HId').loc[:, 'D']
-        for h, ex in df_o.groupby(level=0).count().iteritems():            
-            c = hids_idx[h]
-
-            fpmatrix[r,c] -= ex
-            fnmatrix[r,c] -= ex
+    for (r, c), ex in tpcs.items():
+        fpmatrix[r,c] -= ex
+        fnmatrix[r,c] -= ex
 
     #print('----'*2, '6', time.time()-st1)
     #print(fpmatrix.shape, fnmatrix.shape)
