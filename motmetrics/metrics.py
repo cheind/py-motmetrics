@@ -479,6 +479,7 @@ def id_global_assignment(df, ana = None):
     #st1 = time.time()
     oids = df.full['OId'].dropna().unique()
     hids = df.full['HId'].dropna().unique()
+    oids_idx = dict((o,i) for i,o in enumerate(oids))
     hids_idx = dict((h,i) for i,h in enumerate(hids))
     #print('----'*2, '1', time.time()-st1)
     flat = df.raw.reset_index()
@@ -514,7 +515,8 @@ def id_global_assignment(df, ana = None):
         fpmatrix[c+no,c] = hc
 
     #print('----'*2, '5', time.time()-st1)
-    for (r, c), ex in tpcs.items():
+    for (oid, hid), ex in tpcs.items():
+        r, c = oids_idx[oid], hids_idx[hid]
         fpmatrix[r,c] -= ex
         fnmatrix[r,c] -= ex
 
