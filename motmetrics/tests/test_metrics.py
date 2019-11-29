@@ -138,6 +138,30 @@ def test_assignment_metrics_with_both_empty():
     assert metr['idfp'] == 0
     assert metr['idfn'] == 0
 
+def accum_random_uniform(rand, seq_len, num_objs, num_hyps, objs_per_frame, hyps_per_frame):
+    acc = mm.MOTAccumulator(auto_id=True)
+    for t in range(seq_len):
+        # Choose subset of objects present in this frame.
+        objs = rand.choice(num_objs, objs_per_frame, replace=False)
+        # Choose subset of hypotheses present in this frame.
+        hyps = rand.choice(num_hyps, hyps_per_frame, replace=False)
+        dist = rand.uniform(size=(objs_per_frame, hyps_per_frame))
+        # is_valid = (dist < sparsity)
+        # dist[~is_valid] = np.nan
+        acc.update(objs, hyps, dist)
+    return acc
+
+def extract_counts(acc):
+    df_map = mm.metrics.events_to_df_map(acc.events)
+    return mm.metrics.extract_counts_from_df_map(df_map)
+
+def test_benchmark_extract_counts_from_df_map(benchmark):
+    rand = np.random.RandomState(0)
+    acc = accum_random_uniform(
+            rand, seq_len=100, num_objs=50, num_hyps=5000,
+            objs_per_frame=20, hyps_per_frame=40)
+    benchmark(extract_counts, acc)
+
 def test_mota_motp():
     acc = mm.MOTAccumulator()
 
