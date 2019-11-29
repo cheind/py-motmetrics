@@ -23,6 +23,7 @@ install:
     - source activate pyenv
     - python -m pip install -U pip
     - pip install pytest
+    - pip install pytest-benchmark
     - pip install .
     - pip install ortools
 
