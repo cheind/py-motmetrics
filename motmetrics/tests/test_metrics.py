@@ -146,8 +146,6 @@ def accum_random_uniform(rand, seq_len, num_objs, num_hyps, objs_per_frame, hyps
         # Choose subset of hypotheses present in this frame.
         hyps = rand.choice(num_hyps, hyps_per_frame, replace=False)
         dist = rand.uniform(size=(objs_per_frame, hyps_per_frame))
-        # is_valid = (dist < sparsity)
-        # dist[~is_valid] = np.nan
         acc.update(objs, hyps, dist)
     return acc
 
