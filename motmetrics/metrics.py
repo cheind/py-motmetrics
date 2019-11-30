@@ -162,12 +162,7 @@ class MetricsHost:
         elif isinstance(metrics, str):
             metrics = [metrics]
 
-        class DfMap : pass
-        df_map = DfMap()
-        df_map.full = df     
-        df_map.raw = df[df.Type == 'RAW']
-        df_map.noraw = df[(df.Type != 'RAW') & (df.Type != 'ASCEND') & (df.Type != 'TRANSFER') & (df.Type != 'MIGRATE')]
-        df_map.extra = df[df.Type != 'RAW']
+        df_map = events_to_df_map(df)
 
         cache = {}
         options = {'ana': ana}
@@ -474,63 +469,72 @@ def recall(df, num_detections, num_objects):
 def recall_m(partials, num_detections, num_objects):
     return _qdiv(num_detections, num_objects)
 
-def id_global_assignment(df, ana = None):
-    """ID measures: Global min-cost assignment for ID measures."""
-    #st1 = time.time()
+def events_to_df_map(df):
+    class DfMap : pass
+    df_map = DfMap()
+    df_map.full = df
+    df_map.raw = df[df.Type == 'RAW']
+    df_map.noraw = df[(df.Type != 'RAW') & (df.Type != 'ASCEND') & (df.Type != 'TRANSFER') & (df.Type != 'MIGRATE')]
+    df_map.extra = df[df.Type != 'RAW']
+    return df_map
+
+def extract_counts_from_df_map(df):
+    """
+    Returns:
+        Tuple (ocs, hcs, tps).
+        ocs: Dict from object id to count.
+        hcs: Dict from hypothesis id to count.
+        tps: Dict from (object id, hypothesis id) to true-positive count.
+        The ids are arbitrary, they might NOT be consecutive integers from 0.
+    """
     oids = df.full['OId'].dropna().unique()
     hids = df.full['HId'].dropna().unique()
-    hids_idx = dict((h,i) for i,h in enumerate(hids))
-    #print('----'*2, '1', time.time()-st1)
-    if ana is None:
-        hcs = [len(df.raw[(df.raw.HId==h)].groupby(level=0)) for h in hids]
-        ocs = [len(df.raw[(df.raw.OId==o)].groupby(level=0)) for o in oids]
-    else:
-        hcs = [ana['hyp'][int(h)] for h in hids if h!='nan' and np.isfinite(float(h))]
-        ocs = [ana['obj'][int(o)] for o in oids if o!='nan' and np.isfinite(float(o))]
 
-    #print('----'*2, '2', time.time()-st1)
-    no = oids.shape[0]
-    nh = hids.shape[0]   
+    flat = df.raw.reset_index()
+    # Exclude events that do not belong to either set.
+    flat = flat[flat['OId'].isin(oids) | flat['HId'].isin(hids)]
+    # Count number of frames where each (non-empty) OId and HId appears.
+    ocs = flat.set_index('OId')['FrameId'].groupby('OId').nunique().to_dict()
+    hcs = flat.set_index('HId')['FrameId'].groupby('HId').nunique().to_dict()
+    # Count frames where object and hypothesis appear with non-empty distance.
+    dists = flat.set_index(['OId', 'HId'])['D'].dropna()
+    tps = dists.groupby(['OId', 'HId']).count().to_dict()
+    return ocs, hcs, tps
 
-    df = df.raw.reset_index()    
-    df = df.set_index('OId')
-    df = df.sort_index()
+def id_global_assignment(df, ana = None):
+    """ID measures: Global min-cost assignment for ID measures."""
+    ocs, hcs, tps = extract_counts_from_df_map(df)
+    oids = sorted(ocs.keys())
+    hids = sorted(hcs.keys())
+    oids_idx = dict((o, i) for i, o in enumerate(oids))
+    hids_idx = dict((h, i) for i, h in enumerate(hids))
+    no = len(ocs)
+    nh = len(hcs)
 
-    #print('----'*2, '3', time.time()-st1)
     fpmatrix = np.full((no+nh, no+nh), 0.)
     fnmatrix = np.full((no+nh, no+nh), 0.)
     fpmatrix[no:, :nh] = np.nan
     fnmatrix[:no, nh:] = np.nan 
 
-    #print('----'*2, '4', time.time()-st1)
-    for r, oc in enumerate(ocs):
+    for oid, oc in ocs.items():
+        r = oids_idx[oid]
         fnmatrix[r, :nh] = oc
         fnmatrix[r,nh+r] = oc
 
-    for c, hc in enumerate(hcs):
+    for hid, hc in hcs.items():
+        c = hids_idx[hid]
         fpmatrix[:no, c] = hc
         fpmatrix[c+no,c] = hc
 
-    #print('----'*2, '5', time.time()-st1)
-    for r, o in enumerate(oids):
-        # Select non-empty events for this object.
-        # Pass a list to loc[] to ensure that it returns DataFrame not Series.
-        df_o = df.loc[[o], ['HId', 'D']].dropna()
-        # Re-index by hypothesis and select single column.
-        df_o = df_o.set_index('HId').loc[:, 'D']
-        for h, ex in df_o.groupby(level=0).count().iteritems():            
-            c = hids_idx[h]
+    for (oid, hid), ex in tps.items():
+        r = oids_idx[oid]
+        c = hids_idx[hid]
+        fpmatrix[r,c] -= ex
+        fnmatrix[r,c] -= ex
 
-            fpmatrix[r,c] -= ex
-            fnmatrix[r,c] -= ex
-
-    #print('----'*2, '6', time.time()-st1)
-    #print(fpmatrix.shape, fnmatrix.shape)
     costs = fpmatrix + fnmatrix    
-    #print(costs.shape)
     rids, cids = linear_sum_assignment(costs)
 
-    #print('----'*2, '7', time.time()-st1)
     return {
         'fpmatrix' : fpmatrix,
         'fnmatrix' : fnmatrix,
