@@ -496,9 +496,10 @@ def extract_counts_from_df_map(df):
     # Count number of frames where each (non-empty) OId and HId appears.
     ocs = flat.set_index('OId')['FrameId'].groupby('OId').nunique().to_dict()
     hcs = flat.set_index('HId')['FrameId'].groupby('HId').nunique().to_dict()
-    # Count frames where object and hypothesis appear with non-empty distance.
-    dists = flat.set_index(['OId', 'HId'])['D'].dropna()
-    tps = dists.groupby(['OId', 'HId']).count().to_dict()
+    # Select three columns of interest and index by ('OId', 'HId').
+    dists = flat[['OId', 'HId', 'D']].set_index(['OId', 'HId']).dropna()
+    # Count events with non-empty distance for each pair.
+    tps = dists.groupby(['OId', 'HId'])['D'].count().to_dict()
     return ocs, hcs, tps
 
 def id_global_assignment(df, ana = None):
