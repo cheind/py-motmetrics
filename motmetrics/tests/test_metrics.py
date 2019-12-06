@@ -138,6 +138,68 @@ def test_assignment_metrics_with_both_empty():
     assert metr['idfp'] == 0
     assert metr['idfn'] == 0
 
+def extract_counts(acc):
+    df_map = mm.metrics.events_to_df_map(acc.events)
+    return mm.metrics.extract_counts_from_df_map(df_map)
+
+def test_extract_counts():
+    acc = mm.MOTAccumulator()
+    # All FP
+    acc.update([], ['a', 'b'], [], frameid=0)
+    # All miss
+    acc.update([1, 2], [], [], frameid=1)
+    # Match
+    acc.update([1, 2], ['a', 'b'], [[1, 0.5], [0.3, 1]], frameid=2)
+    # Switch
+    acc.update([1, 2], ['a', 'b'], [[0.2, np.nan], [np.nan, 0.1]], frameid=3)
+    # Match. Better new match is available but should prefer history
+    acc.update([1, 2], ['a', 'b'], [[5, 1], [1, 5]], frameid=4)
+    # No data
+    acc.update([], [], [], frameid=5)
+
+    ocs, hcs, tps = extract_counts(acc)
+
+    assert ocs == {1: 4, 2: 4}
+    assert hcs == {'a': 4, 'b': 4}
+    expected_tps = {
+            (1, 'a'): 3,
+            (1, 'b'): 2,
+            (2, 'a'): 2,
+            (2, 'b'): 3,
+    }
+    assert tps == expected_tps
+
+def test_extract_pandas_series_issue():
+    """Reproduce issue that arises with pd.Series but not pd.DataFrame.
+
+    >>> data = [[0, 1, 0.1], [0, 1, 0.2], [0, 1, 0.3]]
+    >>> df = pd.DataFrame(data, columns=['x', 'y', 'z']).set_index(['x', 'y'])
+    >>> df['z'].groupby(['x', 'y']).count()
+    {(0, 1): 3}
+
+    >>> data = [[0, 1, 0.1], [0, 1, 0.2]]
+    >>> df = pd.DataFrame(data, columns=['x', 'y', 'z']).set_index(['x', 'y'])
+    >>> df['z'].groupby(['x', 'y']).count()
+    {'x': 1, 'y': 1}
+
+    >>> df[['z']].groupby(['x', 'y'])['z'].count().to_dict()
+    {(0, 1): 2}
+    """
+    acc = mm.MOTAccumulator(auto_id=True)
+    acc.update([0], [1], [[0.1]])
+    acc.update([0], [1], [[0.1]])
+    ocs, hcs, tps = extract_counts(acc)
+    assert ocs == {0: 2}
+    assert hcs == {1: 2}
+    assert tps == {(0, 1): 2}
+
+def test_benchmark_extract_counts_from_df_map(benchmark):
+    rand = np.random.RandomState(0)
+    acc = accum_random_uniform(
+            rand, seq_len=100, num_objs=50, num_hyps=5000,
+            objs_per_frame=20, hyps_per_frame=40)
+    benchmark(extract_counts, acc)
+
 def accum_random_uniform(rand, seq_len, num_objs, num_hyps, objs_per_frame, hyps_per_frame):
     acc = mm.MOTAccumulator(auto_id=True)
     for t in range(seq_len):
@@ -148,17 +210,6 @@ def accum_random_uniform(rand, seq_len, num_objs, num_hyps, objs_per_frame, hyps
         dist = rand.uniform(size=(objs_per_frame, hyps_per_frame))
         acc.update(objs, hyps, dist)
     return acc
-
-def extract_counts(acc):
-    df_map = mm.metrics.events_to_df_map(acc.events)
-    return mm.metrics.extract_counts_from_df_map(df_map)
-
-def test_benchmark_extract_counts_from_df_map(benchmark):
-    rand = np.random.RandomState(0)
-    acc = accum_random_uniform(
-            rand, seq_len=100, num_objs=50, num_hyps=5000,
-            objs_per_frame=20, hyps_per_frame=40)
-    benchmark(extract_counts, acc)
 
 def test_mota_motp():
     acc = mm.MOTAccumulator()
