@@ -90,26 +90,6 @@ def test_auto_id():
     with pytest.raises(AssertionError):
         acc.update([1, 2, 3, 4], [], [])
 
-def test_correct_average():
-    # Tests what is being depicted in figure 3 of 'Evaluating MOT Performance'
-    acc = mm.MOTAccumulator(auto_id=True)
-
-    # No track
-    acc.update([1, 2, 3, 4], [], [])
-    acc.update([1, 2, 3, 4], [], [])
-    acc.update([1, 2, 3, 4], [], [])
-    acc.update([1, 2, 3, 4], [], [])
-
-    # Track single
-    acc.update([4], [4], [0])
-    acc.update([4], [4], [0])
-    acc.update([4], [4], [0])
-    acc.update([4], [4], [0])
-
-    mh = mm.metrics.create()
-    metr = mh.compute(acc, metrics='mota', return_dataframe=False)
-    assert metr['mota'] == approx(0.2)
-
 def test_merge_dataframes():
     acc = mm.MOTAccumulator()
 
