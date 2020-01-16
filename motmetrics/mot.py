@@ -161,19 +161,40 @@ class MOTAccumulator(object):
         no = len(oids)
         nh = len(hids)
 
-        if no * nh > 0:
-            for i in range(no):
-                for j in range(nh):
-                    self._indices.append((frameid, next(eid)))
-                    self._events.append(['RAW', oids[i], hids[j], dists[i,j]])
-        elif no == 0:
-            for i in range(nh):
-                self._indices.append((frameid, next(eid)))
-                self._events.append(['RAW', np.nan, hids[i], np.nan])
-        elif nh == 0:
-            for i in range(no):
-                self._indices.append((frameid, next(eid)))
-                self._events.append(['RAW', oids[i], np.nan, np.nan])
+        # There must be at least one RAW event per object and hypothesis.
+        # Record all finite distances as RAW events.
+        valid_i, valid_j = np.where(np.isfinite(dists))
+        valid_dists = dists[valid_i, valid_j]
+        # TODO: Replace for loop with extend?
+        for i, j, dist_ij in zip(valid_i, valid_j, valid_dists):
+            self._indices.append((frameid, next(eid)))
+            self._events.append(['RAW', oids[i], hids[j], dist_ij])
+        # Add a RAW event for objects and hypotheses that were present but did
+        # not overlap with anything.
+        used_i = set(valid_i)
+        used_j = set(valid_j)
+        unused_i = set(range(no)) - used_i
+        unused_j = set(range(nh)) - used_j
+        for i in unused_i:
+            self._indices.append((frameid, next(eid)))
+            self._events.append(['RAW', oids[i], np.nan, np.nan])
+        for j in unused_j:
+            self._indices.append((frameid, next(eid)))
+            self._events.append(['RAW', np.nan, hids[j], np.nan])
+
+        # if no * nh > 0:
+        #     for i in range(no):
+        #         for j in range(nh):
+        #             self._indices.append((frameid, next(eid)))
+        #             self._events.append(['RAW', oids[i], hids[j], dists[i,j]])
+        # elif no == 0:
+        #     for i in range(nh):
+        #         self._indices.append((frameid, next(eid)))
+        #         self._events.append(['RAW', np.nan, hids[i], np.nan])
+        # elif nh == 0:
+        #     for i in range(no):
+        #         self._indices.append((frameid, next(eid)))
+        #         self._events.append(['RAW', oids[i], np.nan, np.nan])
 
         if oids.size * hids.size > 0:
             # 1. Try to re-establish tracks from previous correspondences
