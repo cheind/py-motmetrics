@@ -172,20 +172,16 @@ class MOTAccumulator(object):
             self._events.append(['RAW', oids[i], hids[j], dist_ij])
         # Add a RAW event for objects and hypotheses that were present but did
         # not overlap with anything.
-        used_i = set(valid_i)
-        used_j = set(valid_j)
-        unused_i = set(range(no)) - used_i
-        unused_j = set(range(nh)) - used_j
-        # used_i = np.unique(valid_i)
-        # used_j = np.unique(valid_j)
-        # unused_i = np.setdiff1d(np.arange(no), used_i)
-        # unused_j = np.setdiff1d(np.arange(nh), used_j)
-        for i in unused_i:
+        used_i = np.unique(valid_i)
+        used_j = np.unique(valid_j)
+        unused_i = np.setdiff1d(np.arange(no), used_i)
+        unused_j = np.setdiff1d(np.arange(nh), used_j)
+        for oid in oids[unused_i]:
             self._indices.append((frameid, next(eid)))
-            self._events.append(['RAW', oids[i], np.nan, np.nan])
-        for j in unused_j:
+            self._events.append(['RAW', oid, np.nan, np.nan])
+        for hid in hids[unused_j]:
             self._indices.append((frameid, next(eid)))
-            self._events.append(['RAW', np.nan, hids[j], np.nan])
+            self._events.append(['RAW', np.nan, hid, np.nan])
 
         if oids.size * hids.size > 0:
             # 1. Try to re-establish tracks from previous correspondences
