@@ -306,8 +306,8 @@ class MOTAccumulator(object):
         df = pd.DataFrame(
             OrderedDict([
                 ('Type', pd.Series(cats)),          # Type of event. One of FP (false positive), MISS, SWITCH, MATCH
-                ('OId', pd.Series(dtype=object)),      # Object ID or -1 if FP. Using float as missing values will be converted to NaN anyways.
-                ('HId', pd.Series(dtype=object)),      # Hypothesis ID or NaN if MISS. Using float as missing values will be converted to NaN anyways.
+                ('OId', pd.Series(dtype=float)),      # Object ID or -1 if FP. Using float as missing values will be converted to NaN anyways.
+                ('HId', pd.Series(dtype=float)),      # Hypothesis ID or NaN if MISS. Using float as missing values will be converted to NaN anyways.
                 ('D', pd.Series(dtype=float)),      # Distance or NaN when FP or MISS
             ]),
             index=idx
@@ -335,8 +335,8 @@ class MOTAccumulator(object):
         raw_type = pd.Categorical(tevents[0], categories=['RAW', 'FP', 'MISS', 'SWITCH', 'MATCH', 'TRANSFER', 'ASCEND', 'MIGRATE'], ordered=False)
         series = [
             pd.Series(raw_type, name='Type'),
-            pd.Series(tevents[1], dtype=object, name='OId'),
-            pd.Series(tevents[2], dtype=object, name='HId'),
+            pd.Series(tevents[1], dtype=float, name='OId'),
+            pd.Series(tevents[2], dtype=float, name='HId'),
             pd.Series(tevents[3], dtype=float, name='D')
         ]
 

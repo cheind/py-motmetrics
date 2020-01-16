@@ -145,27 +145,27 @@ def extract_counts(acc):
 def test_extract_counts():
     acc = mm.MOTAccumulator()
     # All FP
-    acc.update([], ['a', 'b'], [], frameid=0)
+    acc.update([], [1, 2], [], frameid=0)
     # All miss
     acc.update([1, 2], [], [], frameid=1)
     # Match
-    acc.update([1, 2], ['a', 'b'], [[1, 0.5], [0.3, 1]], frameid=2)
+    acc.update([1, 2], [1, 2], [[1, 0.5], [0.3, 1]], frameid=2)
     # Switch
-    acc.update([1, 2], ['a', 'b'], [[0.2, np.nan], [np.nan, 0.1]], frameid=3)
+    acc.update([1, 2], [1, 2], [[0.2, np.nan], [np.nan, 0.1]], frameid=3)
     # Match. Better new match is available but should prefer history
-    acc.update([1, 2], ['a', 'b'], [[5, 1], [1, 5]], frameid=4)
+    acc.update([1, 2], [1, 2], [[5, 1], [1, 5]], frameid=4)
     # No data
     acc.update([], [], [], frameid=5)
 
     ocs, hcs, tps = extract_counts(acc)
 
     assert ocs == {1: 4, 2: 4}
-    assert hcs == {'a': 4, 'b': 4}
+    assert hcs == {1: 4, 2: 4}
     expected_tps = {
-            (1, 'a'): 3,
-            (1, 'b'): 2,
-            (2, 'a'): 2,
-            (2, 'b'): 3,
+            (1, 1): 3,
+            (1, 2): 2,
+            (2, 1): 2,
+            (2, 2): 3,
     }
     assert tps == expected_tps
 
@@ -215,15 +215,15 @@ def test_mota_motp():
     acc = mm.MOTAccumulator()
 
     # All FP
-    acc.update([], ['a', 'b'], [], frameid=0)
+    acc.update([], [1, 2], [], frameid=0)
     # All miss
     acc.update([1, 2], [], [], frameid=1)
     # Match
-    acc.update([1, 2], ['a', 'b'], [[1, 0.5], [0.3, 1]], frameid=2)
+    acc.update([1, 2], [1, 2], [[1, 0.5], [0.3, 1]], frameid=2)
     # Switch
-    acc.update([1, 2], ['a', 'b'], [[0.2, np.nan], [np.nan, 0.1]], frameid=3)
+    acc.update([1, 2], [1, 2], [[0.2, np.nan], [np.nan, 0.1]], frameid=3)
     # Match. Better new match is available but should prefer history
-    acc.update([1, 2], ['a', 'b'], [[5, 1], [1, 5]], frameid=4)
+    acc.update([1, 2], [1, 2], [[5, 1], [1, 5]], frameid=4)
     # No data
     acc.update([], [], [], frameid=5)
     
@@ -246,15 +246,15 @@ def test_ids():
     # No data
     acc.update([], [], [], frameid=0)
     # Match
-    acc.update([1, 2], ['a', 'b'], [[1, 0], [0, 1]], frameid=1)
+    acc.update([1, 2], [1, 2], [[1, 0], [0, 1]], frameid=1)
     # Switch also Transfer
-    acc.update([1, 2], ['a', 'b'], [[0.4, np.nan], [np.nan, 0.4]], frameid=2)
+    acc.update([1, 2], [1, 2], [[0.4, np.nan], [np.nan, 0.4]], frameid=2)
     # Match
-    acc.update([1, 2], ['a', 'b'], [[0, 1], [1, 0]], frameid=3)
+    acc.update([1, 2], [1, 2], [[0, 1], [1, 0]], frameid=3)
     # Ascend (switch)
-    acc.update([1, 2], ['b', 'c'], [[1, 0], [0.4, 0.7]], frameid=4)
+    acc.update([1, 2], [2, 3], [[1, 0], [0.4, 0.7]], frameid=4)
     # Migrate (transfer)
-    acc.update([1, 3], ['b', 'c'], [[1, 0], [0.4, 0.7]], frameid=5)
+    acc.update([1, 3], [2, 3], [[1, 0], [0.4, 0.7]], frameid=5)
     # No data
     acc.update([], [], [], frameid=6)
 
