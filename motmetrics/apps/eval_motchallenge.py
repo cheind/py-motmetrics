@@ -13,6 +13,7 @@ import pandas as pd
 from collections import OrderedDict
 from pathlib import Path
 
+
 def parse_args():
     parser = argparse.ArgumentParser(description="""
 Compute metrics for trackers using MOTChallenge ground-truth data.
@@ -53,6 +54,7 @@ string.""", formatter_class=argparse.RawTextHelpFormatter)
                         help='Disable ID metrics')
     return parser.parse_args()
 
+
 def compare_dataframes(gts, ts):
     accs = []
     names = []
@@ -65,6 +67,7 @@ def compare_dataframes(gts, ts):
             logging.warning('No ground truth for {}, skipping.'.format(k))
 
     return accs, names
+
 
 if __name__ == '__main__':
 

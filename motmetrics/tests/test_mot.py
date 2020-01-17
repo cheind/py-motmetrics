@@ -5,6 +5,7 @@ import motmetrics as mm
 import os
 import pytest
 
+
 def test_events():
     acc = mm.MOTAccumulator()
 
@@ -73,6 +74,7 @@ def test_max_switch_time():
     df = acc.events.loc[frameid]
     assert ((df.Type == 'MATCH') | (df.Type == 'RAW') | (df.Type == 'TRANSFER')).all()
 
+
 def test_auto_id():
     acc = mm.MOTAccumulator(auto_id=True)
     acc.update([1, 2, 3, 4], [], [])
@@ -87,6 +89,7 @@ def test_auto_id():
     acc = mm.MOTAccumulator(auto_id=False)
     with pytest.raises(AssertionError):
         acc.update([1, 2, 3, 4], [], [])
+
 
 def test_merge_dataframes():
     acc = mm.MOTAccumulator()

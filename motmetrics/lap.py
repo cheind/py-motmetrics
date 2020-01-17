@@ -1,5 +1,7 @@
+from contextlib import contextmanager
 import numpy as np
 from collections import OrderedDict
+
 
 def linear_sum_assignment(costs, solver=None):
     """Solve a linear sum assignment problem (LSA).
@@ -33,6 +35,7 @@ def linear_sum_assignment(costs, solver=None):
     cids = np.asarray(cids).astype(int)
     return rids, cids
 
+
 def lsa_solve_scipy(costs):
     """Solves the LSA problem using the scipy library."""
 
@@ -53,10 +56,12 @@ def lsa_solve_scipy(costs):
 
     return scipy_solve(costs)
 
+
 def lsa_solve_lapsolver(costs):
     """Solves the LSA problem using the lapsolver library."""
     from lapsolver import solve_dense
     return solve_dense(costs)
+
 
 def lsa_solve_munkres(costs):
     """Solves the LSA problem using the Munkres library."""
@@ -70,13 +75,12 @@ def lsa_solve_munkres(costs):
         costs[inv] = DISALLOWED
 
     indices = np.array(m.compute(costs), dtype=np.int64)
-    return indices[:,0], indices[:,1]
+    return indices[:, 0], indices[:, 1]
 
 
 def lsa_solve_ortools(costs):
     """Solves the LSA problem using Google's optimization tools."""
     from ortools.graph import pywrapgraph
-
 
     # Google OR tools only support integer costs. Here's our attempt
     # to convert from floating point to integer:
@@ -116,8 +120,8 @@ def lsa_solve_ortools(costs):
     assignment = pywrapgraph.LinearSumAssignment()
     for r in range(costs.shape[0]):
         for c in range(costs.shape[1]):
-            if valid[r,c]:
-                assignment.AddArcWithCost(r, c, int(costs[r,c]*f))
+            if valid[r, c]:
+                assignment.AddArcWithCost(r, c, int(costs[r, c] * f))
 
     if assignment.Solve() != assignment.OPTIMAL:
         return linear_sum_assignment(costs, solver='scipy')
@@ -130,7 +134,8 @@ def lsa_solve_ortools(costs):
         pairings.append([i, assignment.RightMate(i)])
 
     indices = np.array(pairings, dtype=np.int64)
-    return indices[:,0], indices[:,1]
+    return indices[:, 0], indices[:, 1]
+
 
 def lsa_solve_lapjv(costs):
     from lap import lapjv
@@ -145,7 +150,8 @@ def lsa_solve_lapjv(costs):
     r = lapjv(costs, return_cost=False, extend_cost=True)
     indices = np.array((range(costs.shape[0]), r[0]), dtype=np.int64).T
     indices = indices[indices[:, 1] != -1]
-    return indices[:,0], indices[:,1]
+    return indices[:, 0], indices[:, 1]
+
 
 def init_standard_solvers():
     import importlib
@@ -171,9 +177,9 @@ def init_standard_solvers():
     else:
         default_solver = available_solvers[0]
 
+
 init_standard_solvers()
 
-from contextlib import contextmanager
 
 @contextmanager
 def set_default_solver(newsolver):

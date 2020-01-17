@@ -13,6 +13,7 @@ from .mot import MOTAccumulator
 from .distances import iou_matrix, norm2squared_matrix
 from .preprocess import preprocessResult
 
+
 def compare_to_groundtruth(gt, dt, dist='iou', distfields=['X', 'Y', 'Width', 'Height'], distth=0.5):
     """Compare groundtruth and detector results.
 
@@ -57,7 +58,7 @@ def compare_to_groundtruth(gt, dt, dist='iou', distfields=['X', 'Y', 'Width', 'H
     for fid in allframeids:
         oids = np.empty(0)
         hids = np.empty(0)
-        dists = np.empty((0,0))
+        dists = np.empty((0, 0))
 
         if fid in gt.index:
             fgt = gt.loc[fid]
@@ -74,7 +75,8 @@ def compare_to_groundtruth(gt, dt, dist='iou', distfields=['X', 'Y', 'Width', 'H
 
     return acc
 
-def CLEAR_MOT_M(gt, dt, inifile, dist='iou', distfields=['X', 'Y', 'Width', 'Height'], distth=0.5, include_all = False, vflag = ''):
+
+def CLEAR_MOT_M(gt, dt, inifile, dist='iou', distfields=['X', 'Y', 'Width', 'Height'], distth=0.5, include_all=False, vflag=''):
     """Compare groundtruth and detector results.
 
     This method assumes both results are given in terms of DataFrames with at least the following fields
@@ -118,17 +120,17 @@ def CLEAR_MOT_M(gt, dt, inifile, dist='iou', distfields=['X', 'Y', 'Width', 'Hei
     if include_all:
         gt = gt[gt['Confidence'] >= 0.99]
     else:
-        gt = gt[ (gt['Confidence'] >= 0.99) & (gt['ClassId'] == 1) ]
+        gt = gt[(gt['Confidence'] >= 0.99) & (gt['ClassId'] == 1)]
     # We need to account for all frames reported either by ground truth or
     # detector. In case a frame is missing in GT this will lead to FPs, in
     # case a frame is missing in detector results this will lead to FNs.
     allframeids = gt.index.union(dt.index).levels[0]
-    analysis = {'hyp':{}, 'obj':{}}
+    analysis = {'hyp': {}, 'obj': {}}
     for fid in allframeids:
         #st = time.time()
         oids = np.empty(0)
         hids = np.empty(0)
-        dists = np.empty((0,0))
+        dists = np.empty((0, 0))
 
         if fid in gt.index:
             fgt = gt.loc[fid]
@@ -151,7 +153,7 @@ def CLEAR_MOT_M(gt, dt, inifile, dist='iou', distfields=['X', 'Y', 'Width', 'Hei
         if oids.shape[0] > 0 and hids.shape[0] > 0:
             dists = compute_dist(fgt[distfields].values, fdt[distfields].values)
 
-        acc.update(oids, hids, dists, frameid=fid, vf = vflag)
+        acc.update(oids, hids, dists, frameid=fid, vf=vflag)
         #en = time.time()
         #print(fid, ' time ', en - st)
 

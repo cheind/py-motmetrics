@@ -16,6 +16,7 @@ from pathlib import Path
 import time
 from tempfile import NamedTemporaryFile
 
+
 def parse_args():
     parser = argparse.ArgumentParser(description="""
 Compute metrics for trackers using MOTChallenge ground-truth data with data preprocess.
@@ -63,19 +64,20 @@ string in the seqmap.""", formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('--iou', type=float, default=0.5, help='special IoU threshold requirement for small targets')
     return parser.parse_args()
 
-def compare_dataframes(gts, ts, vsflag = '', iou = 0.5):
+
+def compare_dataframes(gts, ts, vsflag='', iou=0.5):
     accs = []
     anas = []
     names = []
     for k, tsacc in ts.items():
         if k in gts:
             logging.info('Evaluating {}...'.format(k))
-            if vsflag!='':
-                fd = open(vsflag+'/'+k+'.log','w')
+            if vsflag != '':
+                fd = open(vsflag + '/' + k + '.log', 'w')
             else:
                 fd = ''
             acc, ana = mm.utils.CLEAR_MOT_M(gts[k][0], tsacc, gts[k][1], 'iou', distth=iou, vflag=fd)
-            if fd!='':
+            if fd != '':
                 fd.close()
             accs.append(acc)
             anas.append(ana)
@@ -85,16 +87,19 @@ def compare_dataframes(gts, ts, vsflag = '', iou = 0.5):
 
     return accs, anas, names
 
+
 def parseSequences(seqmap):
-    assert os.path.isfile(seqmap), 'Seqmap %s not found.'%seqmap
+    assert os.path.isfile(seqmap), 'Seqmap %s not found.' % seqmap
     fd = open(seqmap)
     res = []
     for row in fd.readlines():
         row = row.strip()
-        if row=='' or row=='name' or row[0]=='#': continue
+        if row == '' or row == 'name' or row[0] == '#':
+            continue
         res.append(row)
     fd.close()
     return res
+
 
 def generateSkippedGT(gtfile, skip, fmt):
     tf = NamedTemporaryFile(delete=False, mode='w')
@@ -103,10 +108,10 @@ def generateSkippedGT(gtfile, skip, fmt):
         for line in lines:
             arr = line.strip().split(',')
             fr = int(arr[0])
-            if fr%(skip+1)!=1:
+            if fr % (skip + 1) != 1:
                 continue
             pos = line.find(',')
-            newline = str(fr//(skip+1)+1) + line[pos:]
+            newline = str(fr // (skip + 1) + 1) + line[pos:]
             tf.write(newline)
     tf.close()
     tempfile = tf.name
@@ -127,38 +132,38 @@ if __name__ == '__main__':
 
     seqs = parseSequences(args.seqmap)
     gtfiles = [os.path.join(args.groundtruths, i, 'gt/gt.txt') for i in seqs]
-    tsfiles = [os.path.join(args.tests, '%s.txt'%i) for i in seqs]
+    tsfiles = [os.path.join(args.tests, '%s.txt' % i) for i in seqs]
 
     for gtfile in gtfiles:
         if not os.path.isfile(gtfile):
-            logging.error('gt File %s not found.'%gtfile)
+            logging.error('gt File %s not found.' % gtfile)
             exit(1)
     for tsfile in tsfiles:
         if not os.path.isfile(tsfile):
-            logging.error('res File %s not found.'%tsfile)
+            logging.error('res File %s not found.' % tsfile)
             exit(1)
 
     logging.info('Found {} groundtruths and {} test files.'.format(len(gtfiles), len(tsfiles)))
     for seq in seqs:
-        logging.info('\t%s'%seq)
+        logging.info('\t%s' % seq)
     logging.info('Available LAP solvers {}'.format(mm.lap.available_solvers))
     logging.info('Default LAP solver \'{}\''.format(mm.lap.default_solver))
     logging.info('Loading files.')
 
-    if args.skip>0 and 'mot' in args.fmt:
+    if args.skip > 0 and 'mot' in args.fmt:
         for i, gtfile in enumerate(gtfiles):
             gtfiles[i] = generateSkippedGT(gtfile, args.skip, fmt=args.fmt)
 
-    gt = OrderedDict([(seqs[i], (mm.io.loadtxt(f, fmt=args.fmt), os.path.join(args.groundtruths, seqs[i], 'seqinfo.ini')) ) for i, f in enumerate(gtfiles)])
+    gt = OrderedDict([(seqs[i], (mm.io.loadtxt(f, fmt=args.fmt), os.path.join(args.groundtruths, seqs[i], 'seqinfo.ini'))) for i, f in enumerate(gtfiles)])
     ts = OrderedDict([(seqs[i], mm.io.loadtxt(f, fmt=args.fmt)) for i, f in enumerate(tsfiles)])
 
     mh = mm.metrics.create()
     st = time.time()
-    accs, analysis, names = compare_dataframes(gt, ts, args.log, 1.-args.iou)
-    logging.info('adding frames: %.3f seconds.'%(time.time()-st))
+    accs, analysis, names = compare_dataframes(gt, ts, args.log, 1. - args.iou)
+    logging.info('adding frames: %.3f seconds.' % (time.time() - st))
 
     logging.info('Running metrics')
 
-    summary = mh.compute_many(accs, anas = analysis, names=names, metrics=mm.metrics.motchallenge_metrics, generate_overall=True)
+    summary = mh.compute_many(accs, anas=analysis, names=names, metrics=mm.metrics.motchallenge_metrics, generate_overall=True)
     print(mm.io.render_summary(summary, formatters=mh.formatters, namemap=mm.io.motchallenge_metric_names))
     logging.info('Completed')

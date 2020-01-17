@@ -13,6 +13,7 @@ import motmetrics.distances as mmd
 import time
 import logging
 
+
 def preprocessResult(res, gt, inifile):
     st = time.time()
     labels = ['ped',           # 1
@@ -29,30 +30,31 @@ def preprocessResult(res, gt, inifile):
     'reflection',        # 12
     'crowd'          # 13
     ]
-    distractors_ = ['person_on_vhcl','static_person','distractor','reflection']
-    distractors = {i+1 : x in distractors_ for i,x in enumerate(labels)}
+    distractors_ = ['person_on_vhcl', 'static_person', 'distractor', 'reflection']
+    distractors = {i + 1: x in distractors_ for i, x in enumerate(labels)}
     for i in distractors_:
         distractors[i] = 1
     seqIni = ConfigParser()
     seqIni.read(inifile, encoding='utf8')
     F = int(seqIni['Sequence']['seqLength'])
     todrop = []
-    for t in range(1,F+1):
-        if t not in res.index or t not in gt.index: continue
+    for t in range(1, F + 1):
+        if t not in res.index or t not in gt.index:
+            continue
         #st = time.time()
         resInFrame = res.loc[t]
         N = len(resInFrame)
 
         GTInFrame = gt.loc[t]
         Ngt = len(GTInFrame)
-        A = GTInFrame[['X','Y','Width','Height']].values
-        B = resInFrame[['X','Y','Width','Height']].values
-        disM = mmd.iou_matrix(A, B, max_iou = 0.5)
+        A = GTInFrame[['X', 'Y', 'Width', 'Height']].values
+        B = resInFrame[['X', 'Y', 'Width', 'Height']].values
+        disM = mmd.iou_matrix(A, B, max_iou=0.5)
         #en = time.time()
         #print('----', 'disM', en - st)
         le, ri = linear_sum_assignment(disM)
-        flags = [1 if distractors[it['ClassId']] or it['Visibility']<0. else 0 for i,(k,it) in enumerate(GTInFrame.iterrows())]
-        hid = [k for k,it in resInFrame.iterrows()]
+        flags = [1 if distractors[it['ClassId']] or it['Visibility'] < 0. else 0 for i, (k, it) in enumerate(GTInFrame.iterrows())]
+        hid = [k for k, it in resInFrame.iterrows()]
         for i, j in zip(le, ri):
             if not np.isfinite(disM[i, j]):
                 continue
@@ -61,5 +63,5 @@ def preprocessResult(res, gt, inifile):
         #en = time.time()
         #print('Frame %d: '%t, en - st)
     ret = res.drop(labels=todrop)
-    logging.info('Preprocess take %.3f seconds and remove %d boxes.'%(time.time() - st, len(todrop)))
+    logging.info('Preprocess take %.3f seconds and remove %d boxes.' % (time.time() - st, len(todrop)))
     return ret

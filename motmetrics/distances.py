@@ -8,6 +8,7 @@ Fast implement by TOKA
 
 import numpy as np
 
+
 def norm2squared_matrix(objs, hyps, max_d2=float('inf')):
     """Computes the squared Euclidean distance matrix between object and hypothesis points.
 
@@ -35,7 +36,7 @@ def norm2squared_matrix(objs, hyps, max_d2=float('inf')):
     hyps = np.atleast_2d(hyps).astype(float)
 
     if objs.size == 0 or hyps.size == 0:
-        return np.empty((0,0))
+        return np.empty((0, 0))
 
     assert hyps.shape[1] == objs.shape[1], "Dimension mismatch"
 
