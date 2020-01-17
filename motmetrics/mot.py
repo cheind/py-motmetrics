@@ -323,9 +323,9 @@ class MOTAccumulator(object):
         Params
         ------
         indices: dict
-            dict with fields 'FrameId' and 'Event'
-        events: list
-            dict with fields 'Type', 'OId', 'HId'
+            dict of lists with fields 'FrameId' and 'Event'
+        events: dict
+            dict of lists with fields 'Type', 'OId', 'HId', 'D'
         """
 
         if len(events) == 0:

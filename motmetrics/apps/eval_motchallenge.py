@@ -48,6 +48,8 @@ string.""", formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('--loglevel', type=str, help='Log level', default='info')
     parser.add_argument('--fmt', type=str, help='Data format', default='mot15-2D')
     parser.add_argument('--solver', type=str, help='LAP solver to use')
+    parser.add_argument('--id_solver', type=str, help='LAP solver to use')
+    parser.add_argument('--exclude_id', type=str, help='Disable ID metrics')
     return parser.parse_args()
 
 def compare_dataframes(gts, ts):
@@ -88,9 +90,14 @@ if __name__ == '__main__':
 
     mh = mm.metrics.create()    
     accs, names = compare_dataframes(gt, ts)
+
+    metrics = list(mm.metrics.motchallenge_metrics)
+    if args.exclude_id:
+        metrics = [x for x in metrics if not x.startswith('id')]
     
     logging.info('Running metrics')
     
-    summary = mh.compute_many(accs, names=names, metrics=mm.metrics.motchallenge_metrics, generate_overall=True)
+    with mm.lap.set_default_solver(args.id_solver or args.solver):
+        summary = mh.compute_many(accs, names=names, metrics=metrics, generate_overall=True)
     print(mm.io.render_summary(summary, formatters=mh.formatters, namemap=mm.io.motchallenge_metric_names))
     logging.info('Completed')
