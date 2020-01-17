@@ -48,7 +48,7 @@ string.""", formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('--loglevel', type=str, help='Log level', default='info')
     parser.add_argument('--fmt', type=str, help='Data format', default='mot15-2D')
     parser.add_argument('--solver', type=str, help='LAP solver to use')
-    parser.add_argument('--id_solver', type=str, help='LAP solver to use')
+    parser.add_argument('--id_solver', type=str, help='LAP solver to use for ID metrics. Defaults to solver.')
     parser.add_argument('--exclude_id', type=str, help='Disable ID metrics')
     return parser.parse_args()
 
@@ -97,7 +97,8 @@ if __name__ == '__main__':
     
     logging.info('Running metrics')
     
-    with mm.lap.set_default_solver(args.id_solver or args.solver):
-        summary = mh.compute_many(accs, names=names, metrics=metrics, generate_overall=True)
+    if args.id_solver:
+        mm.lap.default_solver = args.id_solver
+    summary = mh.compute_many(accs, names=names, metrics=metrics, generate_overall=True)
     print(mm.io.render_summary(summary, formatters=mh.formatters, namemap=mm.io.motchallenge_metric_names))
     logging.info('Completed')
