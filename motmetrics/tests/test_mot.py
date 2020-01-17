@@ -61,15 +61,15 @@ def test_events():
 
 def test_max_switch_time():
     acc = mm.MOTAccumulator(max_switch_time=1)
-    acc.update([1, 2], [1, 2], [[1, 0.5], [0.3, 1]], frameid=1) # 1->a, 2->b
-    frameid = acc.update([1, 2], [1, 2], [[0.5, np.nan], [np.nan, 0.5]], frameid=2) # 1->b, 2->a
+    acc.update([1, 2], [1, 2], [[1, 0.5], [0.3, 1]], frameid=1)  # 1->a, 2->b
+    frameid = acc.update([1, 2], [1, 2], [[0.5, np.nan], [np.nan, 0.5]], frameid=2)  # 1->b, 2->a
 
     df = acc.events.loc[frameid]
     assert ((df.Type == 'SWITCH') | (df.Type == 'RAW') | (df.Type == 'TRANSFER')).all()
 
     acc = mm.MOTAccumulator(max_switch_time=1)
-    acc.update([1, 2], [1, 2], [[1, 0.5], [0.3, 1]], frameid=1) # 1->a, 2->b
-    frameid = acc.update([1, 2], [1, 2], [[0.5, np.nan], [np.nan, 0.5]], frameid=5) # Later frame 1->b, 2->a
+    acc.update([1, 2], [1, 2], [[1, 0.5], [0.3, 1]], frameid=1)  # 1->a, 2->b
+    frameid = acc.update([1, 2], [1, 2], [[0.5, np.nan], [np.nan, 0.5]], frameid=5)  # Later frame 1->b, 2->a
 
     df = acc.events.loc[frameid]
     assert ((df.Type == 'MATCH') | (df.Type == 'RAW') | (df.Type == 'TRANSFER')).all()

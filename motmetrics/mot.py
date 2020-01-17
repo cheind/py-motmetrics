@@ -95,11 +95,11 @@ class MOTAccumulator(object):
 
         self._events = {field: [] for field in _EVENT_FIELDS}
         self._indices = {field: [] for field in _INDEX_FIELDS}
-        #self.events = MOTAccumulator.new_event_dataframe()
-        self.m = {} # Pairings up to current timestamp
-        self.res_m = {} # Result pairings up to now
-        self.last_occurrence = {} # Tracks most recent occurance of object
-        self.last_match = {} # Tracks most recent match of object
+        # self.events = MOTAccumulator.new_event_dataframe()
+        self.m = {}  # Pairings up to current timestamp
+        self.res_m = {}  # Result pairings up to now
+        self.last_occurrence = {}  # Tracks most recent occurance of object
+        self.last_match = {}  # Tracks most recent match of object
         self.hypHistory = {}
         self.dirty_events = True
         self.cached_events_df = None
@@ -244,8 +244,8 @@ class MOTAccumulator(object):
                         self._append_to_indices(frameid, next(eid))
                         self._append_to_events(subcat, oids[i], hids[j], dists[i, j])
                 is_transfer = h in self.res_m and \
-                              self.res_m[h] != o #and \
-                              # abs(frameid - self.last_occurrence[o]) <= self.max_switch_time # ignore this condition temporarily
+                              self.res_m[h] != o  # and \
+                              # abs(frameid - self.last_occurrence[o]) <= self.max_switch_time  # ignore this condition temporarily
                 cat2 = 'TRANSFER' if is_transfer else 'MATCH'
                 if cat2 == 'TRANSFER':
                     if o not in self.last_match:

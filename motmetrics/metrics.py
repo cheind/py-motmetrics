@@ -68,10 +68,10 @@ class MetricsHost:
                 k = - len(inspect.getfullargspec(fnc).defaults)
             else:
                 k = len(inspect.getfullargspec(fnc).args)
-            deps = inspect.getfullargspec(fnc).args[1:k] # assumes dataframe as first argument
+            deps = inspect.getfullargspec(fnc).args[1:k]  # assumes dataframe as first argument
 
         if name is None:
-            name = fnc.__name__ # Relies on meaningful function names, i.e don't use for lambdas
+            name = fnc.__name__  # Relies on meaningful function names, i.e don't use for lambdas
 
         if helpstr is None:
             helpstr = inspect.getdoc(fnc) if inspect.getdoc(fnc) else 'No description.'
@@ -86,10 +86,10 @@ class MetricsHost:
                     k = - len(inspect.getfullargspec(fnc_m).defaults)
                 else:
                     k = len(inspect.getfullargspec(fnc_m).args)
-                deps_m = inspect.getfullargspec(fnc_m).args[1:k] # assumes dataframe as first argument
+                deps_m = inspect.getfullargspec(fnc_m).args[1:k]  # assumes dataframe as first argument
         else:
             deps_m = None
-            #print(name, 'merge function is None')
+            # print(name, 'merge function is None')
 
         self.metrics[name] = {
             'name': name,
@@ -168,10 +168,10 @@ class MetricsHost:
         cache = {}
         options = {'ana': ana}
         for mname in metrics:
-            #st__ = time.time()
-            #print(mname, ' start')
+            # st__ = time.time()
+            # print(mname, ' start')
             cache[mname] = self._compute(df_map, mname, cache, options, parent='summarize')
-            #print('caling %s take '%mname, time.time()-st__)
+            # print('caling %s take '%mname, time.time()-st__)
 
         if name is None:
             name = 0
@@ -274,8 +274,8 @@ class MetricsHost:
                     for acc, analysis, name in zip(dfs, anas, names)]
         logging.info('partials: %.3f seconds.' % (time.time() - st))
         details = partials
-        #for detail in details:
-        #    print(detail)
+        # for detail in details:
+        #     print(detail)
         partials = [pd.DataFrame(OrderedDict([(k, i[k]) for k in metrics]), index=[name]) for i, name in zip(partials, names)]
         if generate_overall:
             names = 'OVERALL'
@@ -298,10 +298,10 @@ class MetricsHost:
         for depname in minfo['deps']:
             v = cache.get(depname, None)
             if v is None:
-                #st_ = time.time()
-                #print(name, 'start calc dep ', depname)
+                # st_ = time.time()
+                # print(name, 'start calc dep ', depname)
                 v = cache[depname] = self._compute(df_map, depname, cache, options, parent=name)
-                #print(name, 'depends', depname, 'calculating %s take '%depname, time.time()-st_)
+                # print(name, 'depends', depname, 'calculating %s take '%depname, time.time()-st_)
             vals.append(v)
         if inspect.getfullargspec(minfo['fnc']).defaults is None:
             return minfo['fnc'](df_map, *vals)
@@ -310,7 +310,7 @@ class MetricsHost:
 
     def _compute_overall(self, partials, name, cache, parent=None):
         assert name in self.metrics, 'Cannot find metric {} required by {}.'.format(name, parent)
-        #print('start computing %s'%name)
+        # print('start computing %s'%name)
         already = cache.get(name, None)
         if already is not None:
             return already
@@ -319,10 +319,10 @@ class MetricsHost:
         for depname in minfo['deps_m']:
             v = cache.get(depname, None)
             if v is None:
-                #st_ = time.time()
-                #print(name, ' depends ', depname)
+                # st_ = time.time()
+                # print(name, ' depends ', depname)
                 v = cache[depname] = self._compute_overall(partials, depname, cache, parent=name)
-                #print(name, 'depends', depname, 'calculating %s take '%depname, time.time()-st_)
+                # print(name, 'depends', depname, 'calculating %s take '%depname, time.time()-st_)
             vals.append(v)
         assert minfo['fnc_m'] is not None, 'merge function for metric %s is None' % name
         return minfo['fnc_m'](partials, *vals)

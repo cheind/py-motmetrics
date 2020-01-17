@@ -111,12 +111,12 @@ def CLEAR_MOT_M(gt, dt, inifile, dist='iou', distfields=['X', 'Y', 'Width', 'Hei
     compute_dist = compute_iou if dist.upper() == 'IOU' else compute_euc
 
     acc = MOTAccumulator()
-    #import time
-    #print('preprocess start.')
-    #pst = time.time()
+    # import time
+    # print('preprocess start.')
+    # pst = time.time()
     dt = preprocessResult(dt, gt, inifile)
-    #pen = time.time()
-    #print('preprocess take ', pen - pst)
+    # pen = time.time()
+    # print('preprocess take ', pen - pst)
     if include_all:
         gt = gt[gt['Confidence'] >= 0.99]
     else:
@@ -127,7 +127,7 @@ def CLEAR_MOT_M(gt, dt, inifile, dist='iou', distfields=['X', 'Y', 'Width', 'Hei
     allframeids = gt.index.union(dt.index).levels[0]
     analysis = {'hyp': {}, 'obj': {}}
     for fid in allframeids:
-        #st = time.time()
+        # st = time.time()
         oids = np.empty(0)
         hids = np.empty(0)
         dists = np.empty((0, 0))
@@ -154,7 +154,7 @@ def CLEAR_MOT_M(gt, dt, inifile, dist='iou', distfields=['X', 'Y', 'Width', 'Hei
             dists = compute_dist(fgt[distfields].values, fdt[distfields].values)
 
         acc.update(oids, hids, dists, frameid=fid, vf=vflag)
-        #en = time.time()
-        #print(fid, ' time ', en - st)
+        # en = time.time()
+        # print(fid, ' time ', en - st)
 
     return acc, analysis
