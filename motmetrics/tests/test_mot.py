@@ -154,4 +154,3 @@ def test_merge_dataframes():
 
     from pandas.util.testing import assert_frame_equal
     assert_frame_equal(r, expect)
-

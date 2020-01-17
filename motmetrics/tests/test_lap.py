@@ -36,4 +36,3 @@ def test_change_solver():
     assert mysolver.called == 1
     rids, cids = lap.linear_sum_assignment(costs)
     assert mysolver.called == 1
-

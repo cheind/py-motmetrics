@@ -69,4 +69,3 @@ def test_iou_matrix():
         [[0, 0.5, np.nan, np.nan, 0.5]],
         atol=1e-4
     )
-

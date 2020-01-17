@@ -42,7 +42,7 @@ class Format(Enum):
 
 
 def load_motchallenge(fname, **kwargs):
-    """Load MOT challenge data.
+    r"""Load MOT challenge data.
 
     Params
     ------
@@ -67,7 +67,7 @@ def load_motchallenge(fname, **kwargs):
         The dataframe is indexed by ('FrameId', 'Id')
     """
 
-    sep = kwargs.pop('sep', '\s+|\t+|,')
+    sep = kwargs.pop('sep', r'\s+|\t+|,')
     min_confidence = kwargs.pop('min_confidence', -1)
     df = pd.read_csv(
         fname,

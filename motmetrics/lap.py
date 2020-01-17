@@ -207,5 +207,3 @@ def set_default_solver(newsolver):
         yield
     finally:
         default_solver = oldsolver
-
-
