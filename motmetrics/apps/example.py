@@ -20,7 +20,7 @@ if __name__ == '__main__':
         ['a', 'b'],                 # Ground truth objects in this frame
         [1, 2, 3],                  # Detector hypotheses in this frame
         [[0.1, np.nan, 0.3],        # Distances from object 'a' to hypotheses 1, 2, 3
-         [0.5,  0.2,   0.3]]        # Distances from object 'b' to hypotheses 1, 2, 
+         [0.5,  0.2,   0.3]]        # Distances from object 'b' to hypotheses 1, 2,
     )
     print(acc.events)
 
@@ -40,7 +40,7 @@ if __name__ == '__main__':
          [0.1, 0.6]]
     )
     print(df)
-    
+
     # Compute metrics
 
     mh = mm.metrics.create()
@@ -48,27 +48,27 @@ if __name__ == '__main__':
     print(summary)
 
     summary = mh.compute_many(
-        [acc, acc.events.loc[0:1]], 
-        metrics=['num_frames', 'mota', 'motp'], 
-        names=['full', 'part'])    
+        [acc, acc.events.loc[0:1]],
+        metrics=['num_frames', 'mota', 'motp'],
+        names=['full', 'part'])
     print(summary)
 
 
     strsummary = mm.io.render_summary(
-        summary, 
-        formatters={'mota' : '{:.2%}'.format}, 
+        summary,
+        formatters={'mota' : '{:.2%}'.format},
         namemap={'mota': 'MOTA', 'motp' : 'MOTP'}
     )
     print(strsummary)
 
 
     summary = mh.compute_many(
-        [acc, acc.events.loc[0:1]], 
-        metrics=mm.metrics.motchallenge_metrics, 
+        [acc, acc.events.loc[0:1]],
+        metrics=mm.metrics.motchallenge_metrics,
         names=['full', 'part'])
     strsummary = mm.io.render_summary(
-        summary, 
-        formatters=mh.formatters, 
+        summary,
+        formatters=mh.formatters,
         namemap=mm.io.motchallenge_metric_names
     )
     print(strsummary)

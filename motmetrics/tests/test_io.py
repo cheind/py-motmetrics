@@ -41,7 +41,7 @@ def test_load_detrac_mat():
     ])
 
     assert (df.reset_index().values == expected.values).all()
-    
+
 def test_load_detrac_xml():
     df = mm.io.loadtxt(os.path.join(DATA_DIR, 'iotest/detrac.xml'), fmt=mm.io.Format.DETRAC_XML)
 

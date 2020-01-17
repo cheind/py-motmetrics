@@ -23,7 +23,7 @@ def test_lap_solvers():
     np.testing.assert_allclose(costs, costs_copy)
 
 def test_change_solver():
-    
+
     def mysolver(x):
         mysolver.called += 1
         return np.array([]), np.array([])

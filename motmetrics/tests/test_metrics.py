@@ -36,7 +36,7 @@ def test_metricscontainer_autoname():
     def constant_a(df):
         """Constant a help."""
         return 1.
-    
+
     def constant_b(df):
         return 2.
 
@@ -226,7 +226,7 @@ def test_mota_motp():
     acc.update([1, 2], [1, 2], [[5, 1], [1, 5]], frameid=4)
     # No data
     acc.update([], [], [], frameid=5)
-    
+
     mh = mm.metrics.create()
     metr = mh.compute(acc, metrics=['motp', 'mota', 'num_predictions'], return_dataframe=False, return_cached=True)
 
@@ -239,7 +239,7 @@ def test_mota_motp():
     assert metr['num_predictions'] == 8
     assert metr['mota'] == approx(1. - (2 + 2 + 2) / 8)
     assert metr['motp'] == approx(11.1 / 6)
-    
+
 def test_ids():
     acc = mm.MOTAccumulator()
 
@@ -298,7 +298,7 @@ def test_motchallenge_files():
         'TUD-Campus',
         'TUD-Stadtmitte',
     ]
-    
+
     def compute_motchallenge(dname):
         df_gt = mm.io.loadtxt(os.path.join(dname,'gt.txt'))
         df_test = mm.io.loadtxt(os.path.join(dname,'test.txt'))

@@ -12,7 +12,7 @@ def test_norm2squared():
 
     b = np.array([
         [0., 0],
-        [1., 1],      
+        [1., 1],
     ])
 
     C = mm.distances.norm2squared_matrix(a, b)
@@ -33,7 +33,7 @@ def test_norm2squared():
             [np.nan, 2],
             [np.nan, 5]
         ]
-    )    
+    )
 
 def test_norm2squared_empty():
     a = []

@@ -41,12 +41,12 @@ class MetricsHost:
             is passed as argument to `fnc` as described above. If None is specified, the
             function does not have any dependencies. If a list of strings is given, dependencies
             for these metric strings are registered. If 'auto' is passed, the dependencies
-            are deduced from argument inspection of the method. For this to work the argument 
+            are deduced from argument inspection of the method. For this to work the argument
             names have to be equal to the intended dependencies.
         name : string or None, optional
             Name identifier of this metric. If None is passed the name is deduced from
             function inspection.
-        helpstr : string or None, optional 
+        helpstr : string or None, optional
             A description of what the metric computes. If no help message is given it
             is deduced from the docstring of the function.
         formatter: Format object, optional
@@ -56,7 +56,7 @@ class MetricsHost:
             Function that merges metric results. The number of arguments
             is 1 + N, where N is the number of dependencies of the metric to be registered.
             The order of the argument passed is `df, result_dep1, result_dep2, ...`.
-        """        
+        """
 
         assert not fnc is None, 'No function given for metric {}'.format(name)
 
@@ -152,7 +152,7 @@ class MetricsHost:
         name : string, optional
             When returning a pandas.DataFrame this is the index of the row containing
             the computed metric values.
-        """ 
+        """
 
         if isinstance(df, MOTAccumulator):
             df = df.events
@@ -173,7 +173,7 @@ class MetricsHost:
             #print('caling %s take '%mname, time.time()-st__)
 
         if name is None:
-            name = 0 
+            name = 0
 
         if return_cached:
             data = cache
@@ -288,7 +288,7 @@ class MetricsHost:
 
     def _compute(self, df_map, name, cache, options, parent=None):
         """Compute metric and resolve dependencies."""
-        assert name in self.metrics, 'Cannot find metric {} required by {}.'.format(name, parent)        
+        assert name in self.metrics, 'Cannot find metric {} required by {}.'.format(name, parent)
         already = cache.get(name, None)
         if already is not None:
             return already
@@ -402,7 +402,7 @@ def num_predictions(df):
 simple_add_func.append(num_predictions)
 
 def track_ratios(df, obj_frequencies):
-    """Ratio of assigned to total appearance count per unique object id."""   
+    """Ratio of assigned to total appearance count per unique object id."""
     tracked = df.noraw[df.noraw.Type != 'MISS']['OId'].value_counts()
     return tracked.div(obj_frequencies).fillna(0.)
 
@@ -515,7 +515,7 @@ def id_global_assignment(df, ana = None):
     fpmatrix = np.full((no+nh, no+nh), 0.)
     fnmatrix = np.full((no+nh, no+nh), 0.)
     fpmatrix[no:, :nh] = np.nan
-    fnmatrix[:no, nh:] = np.nan 
+    fnmatrix[:no, nh:] = np.nan
 
     for oid, oc in ocs.items():
         r = oids_idx[oid]
@@ -533,7 +533,7 @@ def id_global_assignment(df, ana = None):
         fpmatrix[r,c] -= ex
         fnmatrix[r,c] -= ex
 
-    costs = fpmatrix + fnmatrix    
+    costs = fpmatrix + fnmatrix
     rids, cids = linear_sum_assignment(costs)
 
     return {
@@ -631,7 +631,7 @@ def create():
     m = MetricsHost()
 
     m.register(num_frames, formatter='{:d}'.format)
-    m.register(obj_frequencies, formatter='{:d}'.format)    
+    m.register(obj_frequencies, formatter='{:d}'.format)
     m.register(pred_frequencies, formatter='{:d}'.format)
     m.register(num_matches, formatter='{:d}'.format)
     m.register(num_switches, formatter='{:d}'.format)
@@ -672,13 +672,13 @@ motchallenge_metrics = [
     'idf1',
     'idp',
     'idr',
-    'recall', 
-    'precision', 
-    'num_unique_objects', 
-    'mostly_tracked', 
-    'partially_tracked', 
-    'mostly_lost', 
-    'num_false_positives', 
+    'recall',
+    'precision',
+    'num_unique_objects',
+    'mostly_tracked',
+    'partially_tracked',
+    'mostly_lost',
+    'num_false_positives',
     'num_misses',
     'num_switches',
     'num_fragmentations',

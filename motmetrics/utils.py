@@ -19,7 +19,7 @@ def compare_to_groundtruth(gt, dt, dist='iou', distfields=['X', 'Y', 'Width', 'H
     This method assumes both results are given in terms of DataFrames with at least the following fields
      - `FrameId` First level index used for matching ground-truth and test frames.
      - `Id` Secondary level index marking available object / hypothesis ids
-    
+
     Depending on the distance to be used relevant distfields need to be specified.
 
     Params
@@ -28,7 +28,7 @@ def compare_to_groundtruth(gt, dt, dist='iou', distfields=['X', 'Y', 'Width', 'H
         Dataframe for ground-truth
     test : pd.DataFrame
         Dataframe for detector results
-    
+
     Kwargs
     ------
     dist : str, optional
@@ -50,17 +50,17 @@ def compare_to_groundtruth(gt, dt, dist='iou', distfields=['X', 'Y', 'Width', 'H
     acc = MOTAccumulator()
 
     # We need to account for all frames reported either by ground truth or
-    # detector. In case a frame is missing in GT this will lead to FPs, in 
+    # detector. In case a frame is missing in GT this will lead to FPs, in
     # case a frame is missing in detector results this will lead to FNs.
     allframeids = gt.index.union(dt.index).levels[0]
-    
+
     for fid in allframeids:
         oids = np.empty(0)
         hids = np.empty(0)
         dists = np.empty((0,0))
 
         if fid in gt.index:
-            fgt = gt.loc[fid] 
+            fgt = gt.loc[fid]
             oids = fgt.index.values
 
         if fid in dt.index:
@@ -69,9 +69,9 @@ def compare_to_groundtruth(gt, dt, dist='iou', distfields=['X', 'Y', 'Width', 'H
 
         if oids.shape[0] > 0 and hids.shape[0] > 0:
             dists = compute_dist(fgt[distfields].values, fdt[distfields].values)
-        
+
         acc.update(oids, hids, dists, frameid=fid)
-    
+
     return acc
 
 def CLEAR_MOT_M(gt, dt, inifile, dist='iou', distfields=['X', 'Y', 'Width', 'Height'], distth=0.5, include_all = False, vflag = ''):
@@ -80,7 +80,7 @@ def CLEAR_MOT_M(gt, dt, inifile, dist='iou', distfields=['X', 'Y', 'Width', 'Hei
     This method assumes both results are given in terms of DataFrames with at least the following fields
      - `FrameId` First level index used for matching ground-truth and test frames.
      - `Id` Secondary level index marking available object / hypothesis ids
-    
+
     Depending on the distance to be used relevant distfields need to be specified.
 
     Params
@@ -89,7 +89,7 @@ def CLEAR_MOT_M(gt, dt, inifile, dist='iou', distfields=['X', 'Y', 'Width', 'Hei
         Dataframe for ground-truth
     test : pd.DataFrame
         Dataframe for detector results
-    
+
     Kwargs
     ------
     dist : str, optional
@@ -120,7 +120,7 @@ def CLEAR_MOT_M(gt, dt, inifile, dist='iou', distfields=['X', 'Y', 'Width', 'Hei
     else:
         gt = gt[ (gt['Confidence'] >= 0.99) & (gt['ClassId'] == 1) ]
     # We need to account for all frames reported either by ground truth or
-    # detector. In case a frame is missing in GT this will lead to FPs, in 
+    # detector. In case a frame is missing in GT this will lead to FPs, in
     # case a frame is missing in detector results this will lead to FNs.
     allframeids = gt.index.union(dt.index).levels[0]
     analysis = {'hyp':{}, 'obj':{}}
@@ -131,7 +131,7 @@ def CLEAR_MOT_M(gt, dt, inifile, dist='iou', distfields=['X', 'Y', 'Width', 'Hei
         dists = np.empty((0,0))
 
         if fid in gt.index:
-            fgt = gt.loc[fid] 
+            fgt = gt.loc[fid]
             oids = fgt.index.values
             for oid in oids:
                 oid = int(oid)
@@ -150,9 +150,9 @@ def CLEAR_MOT_M(gt, dt, inifile, dist='iou', distfields=['X', 'Y', 'Width', 'Hei
 
         if oids.shape[0] > 0 and hids.shape[0] > 0:
             dists = compute_dist(fgt[distfields].values, fdt[distfields].values)
-        
+
         acc.update(oids, hids, dists, frameid=fid, vf = vflag)
         #en = time.time()
         #print(fid, ' time ', en - st)
-    
+
     return acc, analysis

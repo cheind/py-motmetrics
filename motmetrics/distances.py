@@ -10,7 +10,7 @@ import numpy as np
 
 def norm2squared_matrix(objs, hyps, max_d2=float('inf')):
     """Computes the squared Euclidean distance matrix between object and hypothesis points.
-    
+
     Params
     ------
     objs : NxM array
@@ -38,9 +38,9 @@ def norm2squared_matrix(objs, hyps, max_d2=float('inf')):
         return np.empty((0,0))
 
     assert hyps.shape[1] == objs.shape[1], "Dimension mismatch"
-    
+
     C = np.empty((objs.shape[0], hyps.shape[0]))
-        
+
     for o in range(objs.shape[0]):
         for h in range(hyps.shape[0]):
             e = objs[o] - hyps[h]

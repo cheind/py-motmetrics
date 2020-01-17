@@ -15,20 +15,20 @@ import logging
 
 def preprocessResult(res, gt, inifile):
     st = time.time()
-    labels = ['ped',           # 1 
-    'person_on_vhcl',    # 2 
-    'car',               # 3 
-    'bicycle',           # 4 
-    'mbike',             # 5 
-    'non_mot_vhcl',      # 6 
-    'static_person',     # 7 
-    'distractor',        # 8 
-    'occluder',          # 9 
-    'occluder_on_grnd',      #10 
+    labels = ['ped',           # 1
+    'person_on_vhcl',    # 2
+    'car',               # 3
+    'bicycle',           # 4
+    'mbike',             # 5
+    'non_mot_vhcl',      # 6
+    'static_person',     # 7
+    'distractor',        # 8
+    'occluder',          # 9
+    'occluder_on_grnd',      #10
     'occluder_full',         # 11
     'reflection',        # 12
     'crowd'          # 13
-    ] 
+    ]
     distractors_ = ['person_on_vhcl','static_person','distractor','reflection']
     distractors = {i+1 : x in distractors_ for i,x in enumerate(labels)}
     for i in distractors_:

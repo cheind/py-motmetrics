@@ -23,10 +23,10 @@ Compute metrics for trackers using MOTChallenge ground-truth data with data prep
 Files
 -----
 All file content, ground truth and test files, have to comply with the
-format described in 
+format described in
 
-Milan, Anton, et al. 
-"Mot16: A benchmark for multi-object tracking." 
+Milan, Anton, et al.
+"Mot16: A benchmark for multi-object tracking."
 arXiv preprint arXiv:1603.00831 (2016).
 https://motchallenge.net/
 
@@ -52,7 +52,7 @@ Seqmap for test data
 Sequences of ground truth and test will be matched according to the `<SEQUENCE_X>`
 string in the seqmap.""", formatter_class=argparse.RawTextHelpFormatter)
 
-    parser.add_argument('groundtruths', type=str, help='Directory containing ground truth files.')   
+    parser.add_argument('groundtruths', type=str, help='Directory containing ground truth files.')
     parser.add_argument('tests', type=str, help='Directory containing tracker result files')
     parser.add_argument('seqmap', type=str, help='Text file containing all sequences name')
     parser.add_argument('--log', type=str, help='a place to record result and outputfile of mistakes', default='')
@@ -68,7 +68,7 @@ def compare_dataframes(gts, ts, vsflag = '', iou = 0.5):
     anas = []
     names = []
     for k, tsacc in ts.items():
-        if k in gts:            
+        if k in gts:
             logging.info('Evaluating {}...'.format(k))
             if vsflag!='':
                 fd = open(vsflag+'/'+k+'.log','w')
@@ -119,7 +119,7 @@ if __name__ == '__main__':
 
     loglevel = getattr(logging, args.loglevel.upper(), None)
     if not isinstance(loglevel, int):
-        raise ValueError('Invalid log level: {} '.format(args.loglevel))        
+        raise ValueError('Invalid log level: {} '.format(args.loglevel))
     logging.basicConfig(level=loglevel, format='%(asctime)s %(levelname)s - %(message)s', datefmt='%I:%M:%S')
 
     if args.solver:
@@ -148,17 +148,17 @@ if __name__ == '__main__':
     if args.skip>0 and 'mot' in args.fmt:
         for i, gtfile in enumerate(gtfiles):
             gtfiles[i] = generateSkippedGT(gtfile, args.skip, fmt=args.fmt)
-    
+
     gt = OrderedDict([(seqs[i], (mm.io.loadtxt(f, fmt=args.fmt), os.path.join(args.groundtruths, seqs[i], 'seqinfo.ini')) ) for i, f in enumerate(gtfiles)])
-    ts = OrderedDict([(seqs[i], mm.io.loadtxt(f, fmt=args.fmt)) for i, f in enumerate(tsfiles)])    
+    ts = OrderedDict([(seqs[i], mm.io.loadtxt(f, fmt=args.fmt)) for i, f in enumerate(tsfiles)])
 
     mh = mm.metrics.create()
     st = time.time()
     accs, analysis, names = compare_dataframes(gt, ts, args.log, 1.-args.iou)
     logging.info('adding frames: %.3f seconds.'%(time.time()-st))
-    
+
     logging.info('Running metrics')
-    
+
     summary = mh.compute_many(accs, anas = analysis, names=names, metrics=mm.metrics.motchallenge_metrics, generate_overall=True)
     print(mm.io.render_summary(summary, formatters=mh.formatters, namemap=mm.io.motchallenge_metric_names))
     logging.info('Completed')
