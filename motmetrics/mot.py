@@ -306,7 +306,7 @@ class MOTAccumulator(object):
     @staticmethod
     def new_event_dataframe():
         """Create a new DataFrame for event tracking."""
-        idx = pd.MultiIndex(levels=[[], []], labels=[[], []], names=['FrameId', 'Event'])
+        idx = pd.MultiIndex(levels=[[], []], codes=[[], []], names=['FrameId', 'Event'])
         cats = pd.Categorical([], categories=['RAW', 'FP', 'MISS', 'SWITCH', 'MATCH', 'TRANSFER', 'ASCEND', 'MIGRATE'])
         df = pd.DataFrame(
             OrderedDict([

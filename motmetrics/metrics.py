@@ -7,7 +7,8 @@ Toka make it faster
 """
 
 from __future__ import division
-from collections import OrderedDict, Iterable
+from collections import OrderedDict
+from collections.abc import Iterable
 from motmetrics.mot import MOTAccumulator
 from motmetrics.lap import linear_sum_assignment
 import pandas as pd
