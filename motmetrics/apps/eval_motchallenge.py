@@ -47,9 +47,10 @@ string.""", formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('tests', type=str, help='Directory containing tracker result files')
     parser.add_argument('--loglevel', type=str, help='Log level', default='info')
     parser.add_argument('--fmt', type=str, help='Data format', default='mot15-2D')
-    parser.add_argument('--solver', type=str, help='LAP solver to use')
-    parser.add_argument('--id_solver', type=str, help='LAP solver to use for ID metrics. Defaults to solver.')
-    parser.add_argument('--exclude_id', type=str, help='Disable ID metrics')
+    parser.add_argument('--solver', type=str, help='LAP solver to use for matching between frames.')
+    parser.add_argument('--id_solver', type=str, help='LAP solver to use for ID metrics. Defaults to --solver.')
+    parser.add_argument('--exclude_id', dest='exclude_id', default=False, action='store_true',
+                        help='Disable ID metrics')
     return parser.parse_args()
 
 def compare_dataframes(gts, ts):
