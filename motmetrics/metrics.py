@@ -59,7 +59,7 @@ class MetricsHost:
             The order of the argument passed is `df, result_dep1, result_dep2, ...`.
         """
 
-        assert not fnc is None, 'No function given for metric {}'.format(name)
+        assert fnc is not None, 'No function given for metric {}'.format(name)
 
         if deps is None:
             deps = []
@@ -264,14 +264,14 @@ class MetricsHost:
         if anas is None:
             anas = [None] * len(dfs)
         partials = [
-                    self.compute(acc,
-                                 ana=analysis,
-                                 metrics=metrics,
-                                 name=name,
-                                 return_cached=True,
-                                 return_dataframe=False
-                                )
-                    for acc, analysis, name in zip(dfs, anas, names)]
+            self.compute(acc,
+                         ana=analysis,
+                         metrics=metrics,
+                         name=name,
+                         return_cached=True,
+                         return_dataframe=False
+                         )
+            for acc, analysis, name in zip(dfs, anas, names)]
         logging.info('partials: %.3f seconds.' % (time.time() - st))
         details = partials
         # for detail in details:

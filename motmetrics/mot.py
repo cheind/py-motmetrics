@@ -234,18 +234,21 @@ class MOTAccumulator(object):
 
                 o = oids[i]
                 h = hids[j]
-                is_switch = o in self.m and \
-                            self.m[o] != h and \
-                            abs(frameid - self.last_occurrence[o]) <= self.max_switch_time
+                is_switch = (o in self.m and
+                             self.m[o] != h and
+                             abs(frameid - self.last_occurrence[o]) <= self.max_switch_time)
                 cat1 = 'SWITCH' if is_switch else 'MATCH'
                 if cat1 == 'SWITCH':
                     if h not in self.hypHistory:
                         subcat = 'ASCEND'
                         self._append_to_indices(frameid, next(eid))
                         self._append_to_events(subcat, oids[i], hids[j], dists[i, j])
-                is_transfer = h in self.res_m and \
-                              self.res_m[h] != o  # and \
-                              # abs(frameid - self.last_occurrence[o]) <= self.max_switch_time  # ignore this condition temporarily
+                # ignore the last condition temporarily
+                is_transfer = (h in self.res_m and
+                               self.res_m[h] != o)
+                # is_transfer = (h in self.res_m and
+                #                self.res_m[h] != o and
+                #                abs(frameid - self.last_occurrence[o]) <= self.max_switch_time)
                 cat2 = 'TRANSFER' if is_transfer else 'MATCH'
                 if cat2 == 'TRANSFER':
                     if o not in self.last_match:

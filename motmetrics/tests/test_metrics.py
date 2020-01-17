@@ -171,10 +171,10 @@ def test_extract_counts():
     assert ocs == {1: 4, 2: 4}
     assert hcs == {1: 4, 2: 4}
     expected_tps = {
-            (1, 1): 3,
-            (1, 2): 2,
-            (2, 1): 2,
-            (2, 2): 3,
+        (1, 1): 3,
+        (1, 2): 2,
+        (2, 1): 2,
+        (2, 2): 3,
     }
     assert tps == expected_tps
 
@@ -207,8 +207,8 @@ def test_extract_pandas_series_issue():
 def test_benchmark_extract_counts_from_df_map(benchmark):
     rand = np.random.RandomState(0)
     acc = accum_random_uniform(
-            rand, seq_len=100, num_objs=50, num_hyps=5000,
-            objs_per_frame=20, hyps_per_frame=40)
+        rand, seq_len=100, num_objs=50, num_hyps=5000,
+        objs_per_frame=20, hyps_per_frame=40)
     benchmark(extract_counts, acc)
 
 

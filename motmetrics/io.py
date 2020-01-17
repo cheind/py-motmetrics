@@ -339,9 +339,9 @@ def render_summary(summary, formatters=None, namemap=None, buf=None):
         Formatted string
     """
 
-    if not namemap is None:
+    if namemap is not None:
         summary = summary.rename(columns=namemap)
-        if not formatters is None:
+        if formatters is not None:
             formatters = dict([(namemap[c], f) if c in namemap else (c, f) for c, f in formatters.items()])
 
     output = summary.to_string(
