@@ -3,6 +3,7 @@ import numpy as np
 
 import motmetrics as mm
 
+
 def test_norm2squared():
     a = np.array([
         [1., 2],
@@ -12,7 +13,7 @@ def test_norm2squared():
 
     b = np.array([
         [0., 0],
-        [1., 1],      
+        [1., 1],
     ])
 
     C = mm.distances.norm2squared_matrix(a, b)
@@ -33,15 +34,17 @@ def test_norm2squared():
             [np.nan, 2],
             [np.nan, 5]
         ]
-    )    
+    )
+
 
 def test_norm2squared_empty():
     a = []
-    b = np.array([[0., 0],[1., 1]])
+    b = np.array([[0., 0], [1., 1]])
     C = mm.distances.norm2squared_matrix(a, b)
     assert C.size == 0
     C = mm.distances.norm2squared_matrix(b, a)
     assert C.size == 0
+
 
 def test_iou_matrix():
     a = np.array([
@@ -66,4 +69,3 @@ def test_iou_matrix():
         [[0, 0.5, np.nan, np.nan, 0.5]],
         atol=1e-4
     )
-

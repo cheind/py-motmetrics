@@ -22,11 +22,11 @@ In particular **py-motmetrics** supports `CLEAR-MOT`[[1,2]](#References) metrics
 Provides MOTA, MOTP, track quality measures, global ID measures and more. The results are [comparable](#MOTChallengeCompatibility) with the popular [MOTChallenge][MOTChallenge] benchmarks.
 - *Distance agnostic* <br/>
 Supports Euclidean, Intersection over Union and other distances measures.
-- *Complete event history* <br/> 
+- *Complete event history* <br/>
 Tracks all relevant per-frame events suchs as correspondences, misses, false alarms and switches.
-- *Flexible solver backend* <br/> 
+- *Flexible solver backend* <br/>
 Support for switching minimum assignment cost solvers. Supports `scipy`, `ortools`, `munkres` out of the box. Auto-tunes solver selection based on [availability and problem size](#SolverBackends).
-- *Easy to extend* <br/> 
+- *Easy to extend* <br/>
 Events and summaries are utilizing [pandas][pandas] for data structures and analysis. New metrics can reuse already computed values from depending metrics.
 
 <a name="Metrics"></a>
@@ -79,11 +79,11 @@ idf1|ID measures: global min-cost F1 score.
 ```
 
 TUD-Campus
- IDF1  IDP  IDR| Rcll  Prcn   FAR| GT  MT  PT  ML|   FP    FN  IDs   FM| MOTA  MOTP MOTAL 
+ IDF1  IDP  IDR| Rcll  Prcn   FAR| GT  MT  PT  ML|   FP    FN  IDs   FM| MOTA  MOTP MOTAL
  55.8 73.0 45.1| 58.2  94.1  0.18|  8   1   6   1|   13   150    7    7| 52.6  72.3  54.3
 
 TUD-Stadtmitte
- IDF1  IDP  IDR| Rcll  Prcn   FAR| GT  MT  PT  ML|   FP    FN  IDs   FM| MOTA  MOTP MOTAL 
+ IDF1  IDP  IDR| Rcll  Prcn   FAR| GT  MT  PT  ML|   FP    FN  IDs   FM| MOTA  MOTP MOTAL
  64.5 82.0 53.1| 60.9  94.0  0.25| 10   5   4   1|   45   452    7    6| 56.4  65.4  56.9
 
 ```
@@ -217,7 +217,7 @@ frameid = acc.update(
     ['a', 'b'],
     [1],
     [
-        [0.2], 
+        [0.2],
         [0.4]
     ]
 )
@@ -252,7 +252,7 @@ Event
 """
 ```
 
-`b` is now tracked by hypothesis `3` leading to a track switch. Note, although a pairing `(a, 3)` with cost less than 0.6 is possible, the algorithm prefers prefers to continue track assignments from past frames which is a property of MOT metrics. 
+`b` is now tracked by hypothesis `3` leading to a track switch. Note, although a pairing `(a, 3)` with cost less than 0.6 is possible, the algorithm prefers prefers to continue track assignments from past frames which is a property of MOT metrics.
 
 #### Computing metrics
 Once the accumulator has been populated you can compute and display metrics. Continuing the example from above
@@ -272,9 +272,9 @@ Computing metrics for multiple accumulators or accumulator views is also possibl
 
 ```python
 summary = mh.compute_many(
-    [acc, acc.events.loc[0:1]], 
-    metrics=['num_frames', 'mota', 'motp'], 
-    names=['full', 'part'])    
+    [acc, acc.events.loc[0:1]],
+    metrics=['num_frames', 'mota', 'motp'],
+    names=['full', 'part'])
 print(summary)
 
 """
@@ -284,12 +284,12 @@ part           2   0.5  0.166667
 """
 ```
 
-Finally, you may want to reformat column names and how column values are displayed. 
+Finally, you may want to reformat column names and how column values are displayed.
 
 ```python
 strsummary = mm.io.render_summary(
-    summary, 
-    formatters={'mota' : '{:.2%}'.format}, 
+    summary,
+    formatters={'mota' : '{:.2%}'.format},
     namemap={'mota': 'MOTA', 'motp' : 'MOTP'}
 )
 print(strsummary)
@@ -297,7 +297,7 @@ print(strsummary)
 """
       num_frames   MOTA      MOTP
 full           3 50.00%  0.340000
-part           2 50.00%  0.166667 
+part           2 50.00%  0.166667
 """
 ```
 
@@ -305,13 +305,13 @@ For MOTChallenge **py-motmetrics** provides predefined metric selectors, formatt
 
 ```python
 summary = mh.compute_many(
-    [acc, acc.events.loc[0:1]], 
-    metrics=mm.metrics.motchallenge_metrics, 
+    [acc, acc.events.loc[0:1]],
+    metrics=mm.metrics.motchallenge_metrics,
     names=['full', 'part'])
 
 strsummary = mm.io.render_summary(
-    summary, 
-    formatters=mh.formatters, 
+    summary,
+    formatters=mh.formatters,
     namemap=mm.io.motchallenge_metric_names
 )
 print(strsummary)
@@ -327,15 +327,15 @@ In order to generate an overall summary that computes the metrics jointly over a
 
 ```python
 summary = mh.compute_many(
-    [acc, acc.events.loc[0:1]], 
-    metrics=mm.metrics.motchallenge_metrics, 
+    [acc, acc.events.loc[0:1]],
+    metrics=mm.metrics.motchallenge_metrics,
     names=['full', 'part'],
     generate_overall=True
     )
 
 strsummary = mm.io.render_summary(
-    summary, 
-    formatters=mh.formatters, 
+    summary,
+    formatters=mh.formatters,
     namemap=mm.io.motchallenge_metric_names
 )
 print(strsummary)
@@ -364,7 +364,7 @@ o = np.array([
 # Hypothesis related points
 h = np.array([
     [0., 0],
-    [1., 1],      
+    [1., 1],
 ])
 
 C = mm.distances.norm2squared_matrix(o, h, max_d2=5.)
@@ -401,13 +401,13 @@ mm.distances.iou_matrix(a, b, max_iou=0.5)
 For large datasets solving the minimum cost assignment becomes the dominant runtime part. **py-motmetrics** therefore supports these solvers out of the box
   - `lapsolver` - https://github.com/cheind/py-lapsolver
   - `lapjv` - https://github.com/gatagat/lap
-  - `scipy` - https://github.com/scipy/scipy/tree/master/scipy  
+  - `scipy` - https://github.com/scipy/scipy/tree/master/scipy
   - `ortools` - https://github.com/google/or-tools
   - `munkres` - http://software.clapper.org/munkres/
 
 A comparison for different sized matrices is shown below (taken from [here](https://github.com/cheind/py-lapsolver#benchmarks))
 
-Please note that the x-axis is scaled logarithmically. Missing bars indicate excessive runtime or errors in returned result. 
+Please note that the x-axis is scaled logarithmically. Missing bars indicate excessive runtime or errors in returned result.
 ![](https://github.com/cheind/py-lapsolver/raw/master/lapsolver/etc/benchmark-dtype-numpy.float32.png)
 
 By default **py-motmetrics** will try to find a LAP solver in the order of the list above. In order to temporarly replace the default solver use
@@ -416,7 +416,7 @@ By default **py-motmetrics** will try to find a LAP solver in the order of the l
 costs = ...
 mysolver = lambda x: ... # solver code that returns pairings
 
-with lap.set_default_solver(mysolver): 
+with lap.set_default_solver(mysolver):
     ...
 ```
 
@@ -425,20 +425,20 @@ with lap.set_default_solver(mysolver):
 
 <a name="References"></a>
 ### References
-1. Bernardin, Keni, and Rainer Stiefelhagen. "Evaluating multiple object tracking performance: the CLEAR MOT metrics." 
+1. Bernardin, Keni, and Rainer Stiefelhagen. "Evaluating multiple object tracking performance: the CLEAR MOT metrics."
 EURASIP Journal on Image and Video Processing 2008.1 (2008): 1-10.
 2. Milan, Anton, et al. "Mot16: A benchmark for multi-object tracking." arXiv preprint arXiv:1603.00831 (2016).
-3. Li, Yuan, Chang Huang, and Ram Nevatia. "Learning to associate: Hybridboosted multi-target tracker for crowded scene." 
+3. Li, Yuan, Chang Huang, and Ram Nevatia. "Learning to associate: Hybridboosted multi-target tracker for crowded scene."
 Computer Vision and Pattern Recognition, 2009. CVPR 2009. IEEE Conference on. IEEE, 2009.
 4. Performance Measures and a Data Set for Multi-Target, Multi-Camera Tracking. E. Ristani, F. Solera, R. S. Zou, R. Cucchiara and C. Tomasi. ECCV 2016 Workshop on Benchmarking Multi-Target Tracking.
 
-### Docker 
+### Docker
 
 #### Update ground truth and test data:
-/data/train directory should contain MOT 2D 2015 Ground Truth files. 
+/data/train directory should contain MOT 2D 2015 Ground Truth files.
 /data/test directory should contain your results.
 
-You can check usage and directory listing at 
+You can check usage and directory listing at
 https://github.com/cheind/py-motmetrics/blob/master/motmetrics/apps/eval_motchallenge.py
 
 #### Build Image

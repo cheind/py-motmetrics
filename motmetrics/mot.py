@@ -95,11 +95,11 @@ class MOTAccumulator(object):
 
         self._events = {field: [] for field in _EVENT_FIELDS}
         self._indices = {field: [] for field in _INDEX_FIELDS}
-        #self.events = MOTAccumulator.new_event_dataframe()
-        self.m = {} # Pairings up to current timestamp
-        self.res_m = {} # Result pairings up to now
-        self.last_occurrence = {} # Tracks most recent occurance of object
-        self.last_match = {} # Tracks most recent match of object
+        # self.events = MOTAccumulator.new_event_dataframe()
+        self.m = {}  # Pairings up to current timestamp
+        self.res_m = {}  # Result pairings up to now
+        self.last_occurrence = {}  # Tracks most recent occurance of object
+        self.last_match = {}  # Tracks most recent match of object
         self.hypHistory = {}
         self.dirty_events = True
         self.cached_events_df = None
@@ -210,7 +210,7 @@ class MOTAccumulator(object):
                     continue
                 j = j[0]
 
-                if np.isfinite(dists[i,j]):
+                if np.isfinite(dists[i, j]):
                     o = oids[i]
                     h = hids[j]
                     oids_masked[i] = True
@@ -229,36 +229,39 @@ class MOTAccumulator(object):
             rids, cids = linear_sum_assignment(dists)
 
             for i, j in zip(rids, cids):
-                if not np.isfinite(dists[i,j]):
+                if not np.isfinite(dists[i, j]):
                     continue
 
                 o = oids[i]
                 h = hids[j]
-                is_switch = o in self.m and \
-                            self.m[o] != h and \
-                            abs(frameid - self.last_occurrence[o]) <= self.max_switch_time
+                is_switch = (o in self.m and
+                             self.m[o] != h and
+                             abs(frameid - self.last_occurrence[o]) <= self.max_switch_time)
                 cat1 = 'SWITCH' if is_switch else 'MATCH'
-                if cat1=='SWITCH':
+                if cat1 == 'SWITCH':
                     if h not in self.hypHistory:
                         subcat = 'ASCEND'
                         self._append_to_indices(frameid, next(eid))
                         self._append_to_events(subcat, oids[i], hids[j], dists[i, j])
-                is_transfer = h in self.res_m and \
-                              self.res_m[h] != o #and \
-                              # abs(frameid - self.last_occurrence[o]) <= self.max_switch_time # ignore this condition temporarily
+                # ignore the last condition temporarily
+                is_transfer = (h in self.res_m and
+                               self.res_m[h] != o)
+                # is_transfer = (h in self.res_m and
+                #                self.res_m[h] != o and
+                #                abs(frameid - self.last_occurrence[o]) <= self.max_switch_time)
                 cat2 = 'TRANSFER' if is_transfer else 'MATCH'
-                if cat2=='TRANSFER':
+                if cat2 == 'TRANSFER':
                     if o not in self.last_match:
                         subcat = 'MIGRATE'
                         self._append_to_indices(frameid, next(eid))
                         self._append_to_events(subcat, oids[i], hids[j], dists[i, j])
                     self._append_to_indices(frameid, next(eid))
                     self._append_to_events(cat2, oids[i], hids[j], dists[i, j])
-                if vf!='' and (cat1!='MATCH' or cat2!='MATCH'):
-                    if cat1=='SWITCH':
-                        vf.write('%s %d %d %d %d %d\n'%(subcat[:2], o, self.last_match[o], self.m[o], frameid, h))
-                    if cat2=='TRANSFER':
-                        vf.write('%s %d %d %d %d %d\n'%(subcat[:2], h, self.hypHistory[h], self.res_m[h], frameid, o))
+                if vf != '' and (cat1 != 'MATCH' or cat2 != 'MATCH'):
+                    if cat1 == 'SWITCH':
+                        vf.write('%s %d %d %d %d %d\n' % (subcat[:2], o, self.last_match[o], self.m[o], frameid, h))
+                    if cat2 == 'TRANSFER':
+                        vf.write('%s %d %d %d %d %d\n' % (subcat[:2], h, self.hypHistory[h], self.res_m[h], frameid, o))
                 self.hypHistory[h] = frameid
                 self.last_match[o] = frameid
                 self._append_to_indices(frameid, next(eid))
@@ -272,15 +275,15 @@ class MOTAccumulator(object):
         for o in oids[~oids_masked]:
             self._append_to_indices(frameid, next(eid))
             self._append_to_events('MISS', o, np.nan, np.nan)
-            if vf!='':
-                vf.write('FN %d %d\n'%(frameid, o))
+            if vf != '':
+                vf.write('FN %d %d\n' % (frameid, o))
 
         # 4. All remaining hypotheses are false alarms
         for h in hids[~hids_masked]:
             self._append_to_indices(frameid, next(eid))
             self._append_to_events('FP', np.nan, h, np.nan)
-            if vf!='':
-                vf.write('FP %d %d\n'%(frameid, h))
+            if vf != '':
+                vf.write('FP %d %d\n' % (frameid, h))
 
         # 5. Update occurance state
         for o in oids:
@@ -303,7 +306,7 @@ class MOTAccumulator(object):
     @staticmethod
     def new_event_dataframe():
         """Create a new DataFrame for event tracking."""
-        idx = pd.MultiIndex(levels=[[],[]], labels=[[],[]], names=['FrameId','Event'])
+        idx = pd.MultiIndex(levels=[[], []], codes=[[], []], names=['FrameId', 'Event'])
         cats = pd.Categorical([], categories=['RAW', 'FP', 'MISS', 'SWITCH', 'MATCH', 'TRANSFER', 'ASCEND', 'MIGRATE'])
         df = pd.DataFrame(
             OrderedDict([
@@ -351,10 +354,11 @@ class MOTAccumulator(object):
 
     @staticmethod
     def merge_analysis(anas, infomap):
-        res = {'hyp':{}, 'obj':{}}
-        mapp = {'hyp': 'hid_map', 'obj':'oid_map'}
+        res = {'hyp': {}, 'obj': {}}
+        mapp = {'hyp': 'hid_map', 'obj': 'oid_map'}
         for ana, infom in zip(anas, infomap):
-            if ana is None: return None
+            if ana is None:
+                return None
             for t in ana.keys():
                 which = mapp[t]
                 if np.nan in infom[which]:
@@ -362,7 +366,8 @@ class MOTAccumulator(object):
                 if 'nan' in infom[which]:
                     res[t][int(infom[which]['nan'])] = 0
                 for _id, cnt in ana[t].items():
-                    if _id not in infom[which]: _id = str(_id)
+                    if _id not in infom[which]:
+                        _id = str(_id)
                     res[t][int(infom[which][_id])] = cnt
         return res
 
@@ -407,10 +412,10 @@ class MOTAccumulator(object):
 
             # Update index
             if update_frame_indices:
-                next_frame_id = max(r.index.get_level_values(0).max()+1, r.index.get_level_values(0).unique().shape[0])
+                next_frame_id = max(r.index.get_level_values(0).max() + 1, r.index.get_level_values(0).unique().shape[0])
                 if np.isnan(next_frame_id):
                     next_frame_id = 0
-                copy.index = copy.index.map(lambda x: (x[0]+next_frame_id, x[1]))
+                copy.index = copy.index.map(lambda x: (x[0] + next_frame_id, x[1]))
                 infos['frame_offset'] = next_frame_id
 
             # Update object / hypothesis ids

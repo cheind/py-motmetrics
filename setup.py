@@ -16,7 +16,7 @@ with open('requirements.txt') as f:
 setup(
     name='motmetrics',
     version=open('motmetrics/__init__.py').readlines()[-1].split()[-1].strip('\''),
-    description='Metrics for multiple object tracker benchmarking.',    
+    description='Metrics for multiple object tracker benchmarking.',
     author='Christoph Heindl',
     url='https://github.com/cheind/py-motmetrics',
     license='MIT',
