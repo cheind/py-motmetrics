@@ -7,17 +7,20 @@ Toka make it faster
 """
 
 from __future__ import division
-from collections import OrderedDict
-from collections.abc import Iterable
-from motmetrics.mot import MOTAccumulator
-from motmetrics.lap import linear_sum_assignment
-import pandas as pd
-import numpy as np
+
 import inspect
-import itertools
-import time
 import logging
+import time
 import warnings
+from collections import OrderedDict
+from functools import partial
+from multiprocessing import Pool, cpu_count
+
+import numpy as np
+import pandas as pd
+
+from motmetrics.lap import linear_sum_assignment
+from motmetrics.mot import MOTAccumulator
 
 
 class MetricsHost:
@@ -166,20 +169,8 @@ class MetricsHost:
 
         df_map = events_to_df_map(df)
 
-        # sort the metrics according number of dependencies
-        metrics_deps = sorted([(m, len(self.metrics[m]['deps'])) for m in metrics], key=lambda e: e[1])
-        metrics = [m[0] for m in metrics_deps]
-
-        cache = {}
         options = {'ana': ana}
-        for mname in metrics:
-            if mname in cache:
-                # skip already computed metric based on dependencies
-                continue
-            # st__ = time.time()
-            # print(mname, ' start')
-            cache[mname] = self._compute(df_map, mname, cache, options, parent='summarize')
-            # print('caling %s take '%mname, time.time()-st__)
+        cache = self._compute_parallel(df_map, metrics, options, nb_jobs=-1)
 
         if name is None:
             name = 0
@@ -234,6 +225,23 @@ class MetricsHost:
         else:
             data = OrderedDict([(k, cache[k]) for k in metrics])
         return pd.DataFrame(data, index=[name]) if return_dataframe else data
+
+    def _compute_parallel(self, df_map, metrics, options, nb_jobs=-1):
+        nb_jobs = cpu_count() if nb_jobs < 0 else int(max(1, nb_jobs))
+        pool = Pool(processes=nb_jobs)
+        _wrap_compute = partial(self._compute,
+                                df_map=df_map,
+                                cache={},
+                                options=options,
+                                parent='summarize')
+
+        cache = {}
+        logging.debug('Compute metrics in parallel...')
+        for mname, vals in pool.imap(_wrap_compute, metrics):
+            cache[mname] = vals
+        pool.close()
+        pool.join()
+        return cache
 
     def compute_many(self, dfs, anas=None, metrics=None, names=None, generate_overall=False):
         """Compute metrics on multiple dataframe / accumulators.
@@ -295,7 +303,7 @@ class MetricsHost:
         logging.info('mergeOverall: %.3f seconds.' % (time.time() - st))
         return pd.concat(partials)
 
-    def _compute(self, df_map, name, cache, options, parent=None):
+    def _compute(self, name, df_map, cache, options, parent=None):
         """Compute metric and resolve dependencies."""
         assert name in self.metrics, 'Cannot find metric {} required by {}.'.format(name, parent)
         already = cache.get(name, None)
@@ -308,13 +316,14 @@ class MetricsHost:
             if v is None:
                 # st_ = time.time()
                 # print(name, 'start calc dep ', depname)
-                v = cache[depname] = self._compute(df_map, depname, cache, options, parent=name)
+                _, v = self._compute(depname, df_map, cache, options, parent=name)
                 # print(name, 'depends', depname, 'calculating %s take '%depname, time.time()-st_)
+                cache[depname] = v
             vals.append(v)
         if inspect.getfullargspec(minfo['fnc']).defaults is None:
-            return minfo['fnc'](df_map, *vals)
+            return name, minfo['fnc'](df_map, *vals)
         else:
-            return minfo['fnc'](df_map, *vals, **options)
+            return name, minfo['fnc'](df_map, *vals, **options)
 
     def _compute_overall(self, partials, name, cache, parent=None):
         assert name in self.metrics, 'Cannot find metric {} required by {}.'.format(name, parent)
@@ -336,15 +345,9 @@ class MetricsHost:
         return minfo['fnc_m'](partials, *vals)
 
 
-simple_add_func = []
-
-
 def num_frames(df):
     """Total number of frames."""
     return df.full.index.get_level_values(0).unique().shape[0]
-
-
-simple_add_func.append(num_frames)
 
 
 def obj_frequencies(df):
@@ -362,15 +365,9 @@ def num_unique_objects(df, obj_frequencies):
     return len(obj_frequencies)
 
 
-simple_add_func.append(num_unique_objects)
-
-
 def num_matches(df):
     """Total number matches."""
     return df.noraw.Type.isin(['MATCH']).sum()
-
-
-simple_add_func.append(num_matches)
 
 
 def num_switches(df):
@@ -378,15 +375,9 @@ def num_switches(df):
     return df.noraw.Type.isin(['SWITCH']).sum()
 
 
-simple_add_func.append(num_switches)
-
-
 def num_transfer(df):
     """Total number of track transfer."""
     return df.extra.Type.isin(['TRANSFER']).sum()
-
-
-simple_add_func.append(num_transfer)
 
 
 def num_ascend(df):
@@ -394,15 +385,9 @@ def num_ascend(df):
     return df.extra.Type.isin(['ASCEND']).sum()
 
 
-simple_add_func.append(num_ascend)
-
-
 def num_migrate(df):
     """Total number of track migrate."""
     return df.extra.Type.isin(['MIGRATE']).sum()
-
-
-simple_add_func.append(num_migrate)
 
 
 def num_false_positives(df):
@@ -410,15 +395,9 @@ def num_false_positives(df):
     return df.noraw.Type.isin(['FP']).sum()
 
 
-simple_add_func.append(num_false_positives)
-
-
 def num_misses(df):
     """Total number of misses."""
     return df.noraw.Type.isin(['MISS']).sum()
-
-
-simple_add_func.append(num_misses)
 
 
 def num_detections(df, num_matches, num_switches):
@@ -426,15 +405,9 @@ def num_detections(df, num_matches, num_switches):
     return num_matches + num_switches
 
 
-simple_add_func.append(num_detections)
-
-
 def num_objects(df, obj_frequencies):
     """Total number of unique object appearances over all frames."""
     return obj_frequencies.sum()
-
-
-simple_add_func.append(num_objects)
 
 
 def num_predictions(df, pred_frequencies):
@@ -442,15 +415,9 @@ def num_predictions(df, pred_frequencies):
     return pred_frequencies.sum()
 
 
-simple_add_func.append(num_predictions)
-
-
 def num_predictions(df):
     """Total number of unique prediction appearances over all frames."""
     return df.noraw.HId.count()
-
-
-simple_add_func.append(num_predictions)
 
 
 def track_ratios(df, obj_frequencies):
@@ -464,23 +431,14 @@ def mostly_tracked(df, track_ratios):
     return track_ratios[track_ratios >= 0.8].count()
 
 
-simple_add_func.append(mostly_tracked)
-
-
 def partially_tracked(df, track_ratios):
     """Number of objects tracked between 20 and 80 percent of lifespan."""
     return track_ratios[(track_ratios >= 0.2) & (track_ratios < 0.8)].count()
 
 
-simple_add_func.append(partially_tracked)
-
-
 def mostly_lost(df, track_ratios):
     """Number of objects tracked less than 20 percent of lifespan."""
     return track_ratios[track_ratios < 0.2].count()
-
-
-simple_add_func.append(mostly_lost)
 
 
 def num_fragmentations(df, obj_frequencies):
@@ -498,9 +456,6 @@ def num_fragmentations(df, obj_frequencies):
         diffs = dfo.loc[first:last].Type.apply(lambda x: 1 if x == 'MISS' else 0).diff()
         fra += diffs[diffs == 1].count()
     return fra
-
-
-simple_add_func.append(num_fragmentations)
 
 
 def motp(df, num_detections):
@@ -542,9 +497,12 @@ def recall_m(partials, num_detections, num_objects):
     return _qdiv(num_detections, num_objects)
 
 
+# This is taking out is needed for pickle in parallel
+class DfMap:
+    pass
+
+
 def events_to_df_map(df):
-    class DfMap:
-        pass
     df_map = DfMap()
     df_map.full = df
     df_map.raw = df[df.Type == 'RAW']
@@ -628,24 +586,15 @@ def idfp(df, id_global_assignment):
     return id_global_assignment['fpmatrix'][rids, cids].sum()
 
 
-simple_add_func.append(idfp)
-
-
 def idfn(df, id_global_assignment):
     """ID measures: Number of false negatives matches after global min-cost matching."""
     rids, cids = id_global_assignment['rids'], id_global_assignment['cids']
     return id_global_assignment['fnmatrix'][rids, cids].sum()
 
 
-simple_add_func.append(idfn)
-
-
 def idtp(df, id_global_assignment, num_objects, idfn):
     """ID measures: Number of true positives matches after global min-cost matching."""
     return num_objects - idfn
-
-
-simple_add_func.append(idtp)
 
 
 def idp(df, idtp, idfp):
@@ -685,13 +634,9 @@ def _qdiv(a, b):
 #     """Extra measures: sum IoU of all matches"""
 #     return (1 - df.noraw[(df.noraw.Type=='MATCH')|(df.noraw.Type=='SWITCH')].D).sum()
 
-# simple_add_func.append(iou_sum)
-
 # def siou_sum(df):
 #     """Extra measures: sum IoU of all matches"""
 #     return (1 - df.noraw[(df.noraw.Type=='SWITCH')].D).sum()
-
-# simple_add_func.append(siou_sum)
 
 # def avg_iou(df, iou_sum, num_matches, num_switches):
 #     """Extra measures: average IoU of all pairs"""
@@ -708,17 +653,39 @@ def _qdiv(a, b):
 #     return siou_sum / (num_switches)
 
 
+simple_add_func = [
+    num_frames,
+    num_unique_objects,
+    num_matches,
+    num_switches,
+    num_transfer,
+    num_ascend,
+    num_migrate,
+    num_false_positives,
+    num_misses,
+    num_detections,
+    num_objects,
+    num_predictions,
+    num_predictions,
+    mostly_tracked,
+    partially_tracked,
+    mostly_lost,
+    num_fragmentations,
+    idfp, idfn, idtp,
+]
+
 for one in simple_add_func:
     name = one.__name__
 
-    def getSimpleAdd(nm):
+    def _getSimpleAdd(nm):
         def simpleAddHolder(partials):
             res = 0
             for v in partials:
                 res += v[nm]
             return res
         return simpleAddHolder
-    locals()[name + '_m'] = getSimpleAdd(name)
+
+    locals()[name + '_m'] = _getSimpleAdd(name)
 
 
 def create():
@@ -764,6 +731,7 @@ def create():
     return m
 
 
+# A list of all metrics from MOTChallenge.
 motchallenge_metrics = [
     'idf1',
     'idp',
@@ -786,4 +754,3 @@ motchallenge_metrics = [
     # 'avg_iou',
     # 'switch_iou',
 ]
-"""A list of all metrics from MOTChallenge."""
