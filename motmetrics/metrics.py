@@ -135,7 +135,8 @@ class MetricsHost:
         df_formatted = pd.concat([df_fmt, df])
         return df_formatted.to_csv(sep="|", index=False)
 
-    def compute(self, df, ana=None, metrics=None, return_dataframe=True, return_cached=False, name=None):
+    def compute(self, df, ana=None, metrics=None, return_dataframe=True, return_cached=False,
+                name=None, nb_jobs=-1):
         """Compute metrics on the dataframe / accumulator.
 
         Params
@@ -158,6 +159,8 @@ class MetricsHost:
         name : string, optional
             When returning a pandas.DataFrame this is the index of the row containing
             the computed metric values.
+        nb_jobs : int, optional
+            Compute several metrics in parallel. The number defines used CPUs or `-1` stands for all.
         """
 
         if isinstance(df, MOTAccumulator):
@@ -171,7 +174,12 @@ class MetricsHost:
         df_map = events_to_df_map(df)
 
         options = {'ana': ana}
-        cache = self._compute_parallel(df_map, metrics, options, nb_jobs=-1)
+        if 0 <= nb_jobs <= 1:
+            cache = {}
+            for mname in metrics:
+                cache.update(self._compute(mname, df_map, cache, options, parent='summarize'))
+        else:
+            cache = self._compute_parallel(df_map, metrics, options, nb_jobs=nb_jobs, parent='summarize')
 
         name = name if name else 0
         data = cache if return_cached else OrderedDict([(k, cache[k]) for k in metrics])
@@ -221,14 +229,14 @@ class MetricsHost:
 
         return pd.DataFrame(data, index=[name]) if return_dataframe else data
 
-    def _compute_parallel(self, df_map, metrics, options, nb_jobs=-1):
+    def _compute_parallel(self, df_map, metrics, options, parent='summarize', nb_jobs=-1):
         nb_jobs = cpu_count() if nb_jobs < 0 else int(max(1, nb_jobs))
         pool = ProcessPool(processes=nb_jobs)
         _wrap_compute = partial(self._compute,
                                 df_map=df_map,
                                 cache={},
                                 options=options,
-                                parent='summarize')
+                                parent=parent)
 
         cache = {}
         logging.debug('Compute metrics in parallel...')
