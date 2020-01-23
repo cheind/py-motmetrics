@@ -1,9 +1,10 @@
-from pytest import approx
+import os
+
 import numpy as np
 import pandas as pd
+from pytest import approx
+
 import motmetrics as mm
-import pytest
-import os
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), '../data')
 

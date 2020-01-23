@@ -5,13 +5,14 @@ Origin: https://github.com/cheind/py-motmetrics
 Extended: <reposity>
 """
 
-import numpy as np
-import pandas as pd
-from configparser import ConfigParser
-from motmetrics.lap import linear_sum_assignment
-import motmetrics.distances as mmd
-import time
 import logging
+import time
+from configparser import ConfigParser
+
+import numpy as np
+
+import motmetrics.distances as mmd
+from motmetrics.lap import linear_sum_assignment
 
 
 def preprocessResult(res, gt, inifile):

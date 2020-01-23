@@ -7,17 +7,18 @@ Toka make it faster
 """
 
 from __future__ import division
-from collections import OrderedDict
-from collections.abc import Iterable
-from motmetrics.mot import MOTAccumulator
-from motmetrics.lap import linear_sum_assignment
-import pandas as pd
-import numpy as np
+
 import inspect
-import itertools
-import time
 import logging
+import time
 import warnings
+from collections import OrderedDict
+
+import numpy as np
+import pandas as pd
+
+from motmetrics.lap import linear_sum_assignment
+from motmetrics.mot import MOTAccumulator
 
 
 class MetricsHost:

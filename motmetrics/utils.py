@@ -6,11 +6,10 @@ https://github.com/cheind/py-motmetrics
 TOKA EXTENDED THIS FILE.
 """
 
-import pandas as pd
 import numpy as np
 
-from .mot import MOTAccumulator
 from .distances import iou_matrix, norm2squared_matrix
+from .mot import MOTAccumulator
 from .preprocess import preprocessResult
 
 

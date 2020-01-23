@@ -4,8 +4,9 @@ Christoph Heindl, 2017
 https://github.com/cheind/py-motmetrics
 """
 
-import motmetrics as mm
 import numpy as np
+
+import motmetrics as mm
 
 if __name__ == '__main__':
 

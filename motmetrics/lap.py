@@ -1,6 +1,6 @@
 from contextlib import contextmanager
+
 import numpy as np
-from collections import OrderedDict
 
 
 def linear_sum_assignment(costs, solver=None):

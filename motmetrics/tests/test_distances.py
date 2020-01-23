@@ -1,4 +1,3 @@
-from pytest import approx
 import numpy as np
 
 import motmetrics as mm
