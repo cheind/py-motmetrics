@@ -166,9 +166,16 @@ class MetricsHost:
 
         df_map = events_to_df_map(df)
 
+        # sort the metrics according number of dependencies
+        metrics_deps = sorted([(m, len(self.metrics[m]['deps'])) for m in metrics], key=lambda e: e[1])
+        metrics = [m[0] for m in metrics_deps]
+
         cache = {}
         options = {'ana': ana}
         for mname in metrics:
+            if mname in cache:
+                # skip already computed metric based on dependencies
+                continue
             # st__ = time.time()
             # print(mname, ' start')
             cache[mname] = self._compute(df_map, mname, cache, options, parent='summarize')
