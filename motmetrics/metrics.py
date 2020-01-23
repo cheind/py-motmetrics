@@ -14,7 +14,8 @@ import time
 import warnings
 from collections import OrderedDict
 from functools import partial
-from multiprocessing import Pool, cpu_count
+from multiprocessing import cpu_count
+from pathos.multiprocessing import ProcessPool
 
 import numpy as np
 import pandas as pd
@@ -172,13 +173,8 @@ class MetricsHost:
         options = {'ana': ana}
         cache = self._compute_parallel(df_map, metrics, options, nb_jobs=-1)
 
-        if name is None:
-            name = 0
-
-        if return_cached:
-            data = cache
-        else:
-            data = OrderedDict([(k, cache[k]) for k in metrics])
+        name = name if name else 0
+        data = cache if return_cached else OrderedDict([(k, cache[k]) for k in metrics])
 
         ret = pd.DataFrame(data, index=[name]) if return_dataframe else data
         return ret
@@ -220,15 +216,14 @@ class MetricsHost:
 
         if name is None:
             name = 0
-        if return_cached:
-            data = cache
-        else:
-            data = OrderedDict([(k, cache[k]) for k in metrics])
+
+        data = cache if return_cached else OrderedDict([(k, cache[k]) for k in metrics])
+
         return pd.DataFrame(data, index=[name]) if return_dataframe else data
 
     def _compute_parallel(self, df_map, metrics, options, nb_jobs=-1):
         nb_jobs = cpu_count() if nb_jobs < 0 else int(max(1, nb_jobs))
-        pool = Pool(processes=nb_jobs)
+        pool = ProcessPool(processes=nb_jobs)
         _wrap_compute = partial(self._compute,
                                 df_map=df_map,
                                 cache={},
@@ -237,10 +232,11 @@ class MetricsHost:
 
         cache = {}
         logging.debug('Compute metrics in parallel...')
-        for mname, vals in pool.imap(_wrap_compute, metrics):
-            cache[mname] = vals
+        for cache_ in pool.imap(_wrap_compute, metrics):
+            cache.update(cache_)
         pool.close()
         pool.join()
+        pool.clear()
         return cache
 
     def compute_many(self, dfs, anas=None, metrics=None, names=None, generate_overall=False):
@@ -279,14 +275,12 @@ class MetricsHost:
             names = range(len(dfs))
         if anas is None:
             anas = [None] * len(dfs)
-        partials = [
-            self.compute(acc,
-                         ana=analysis,
-                         metrics=metrics,
-                         name=name,
-                         return_cached=True,
-                         return_dataframe=False
-                         )
+        partials = [self.compute(acc,
+                    ana=analysis,
+                    metrics=metrics,
+                    name=name,
+                    return_cached=True,
+                    return_dataframe=False)
             for acc, analysis, name in zip(dfs, anas, names)]
         logging.info('partials: %.3f seconds.' % (time.time() - st))
         details = partials
@@ -306,9 +300,8 @@ class MetricsHost:
     def _compute(self, name, df_map, cache, options, parent=None):
         """Compute metric and resolve dependencies."""
         assert name in self.metrics, 'Cannot find metric {} required by {}.'.format(name, parent)
-        already = cache.get(name, None)
-        if already is not None:
-            return already
+        if name in cache:
+            return cache[name]
         minfo = self.metrics[name]
         vals = []
         for depname in minfo['deps']:
@@ -316,14 +309,15 @@ class MetricsHost:
             if v is None:
                 # st_ = time.time()
                 # print(name, 'start calc dep ', depname)
-                _, v = self._compute(depname, df_map, cache, options, parent=name)
+                cache = self._compute(depname, df_map, cache, options, parent=name)
                 # print(name, 'depends', depname, 'calculating %s take '%depname, time.time()-st_)
-                cache[depname] = v
+                v = cache[depname]
             vals.append(v)
         if inspect.getfullargspec(minfo['fnc']).defaults is None:
-            return name, minfo['fnc'](df_map, *vals)
+            cache[name] = minfo['fnc'](df_map, *vals)
         else:
-            return name, minfo['fnc'](df_map, *vals, **options)
+            cache[name] = minfo['fnc'](df_map, *vals, **options)
+        return cache
 
     def _compute_overall(self, partials, name, cache, parent=None):
         assert name in self.metrics, 'Cannot find metric {} required by {}.'.format(name, parent)
@@ -674,18 +668,17 @@ simple_add_func = [
     idfp, idfn, idtp,
 ]
 
-for one in simple_add_func:
-    name = one.__name__
+for fn in simple_add_func:
 
-    def _getSimpleAdd(nm):
+    def _getSimpleAdd(name):
         def simpleAddHolder(partials):
             res = 0
-            for v in partials:
-                res += v[nm]
+            for part in partials:
+                res += part[name]
             return res
         return simpleAddHolder
 
-    locals()[name + '_m'] = _getSimpleAdd(name)
+    locals()[fn.__name__ + '_m'] = _getSimpleAdd(fn.__name__)
 
 
 def create():

@@ -75,7 +75,8 @@ def test_metrics_with_no_events():
         acc,
         metrics=['motp', 'mota', 'num_predictions'],
         return_dataframe=False,
-        return_cached=True)
+        return_cached=True
+    )
     assert np.isnan(metr['mota'])
     assert np.isnan(metr['motp'])
     assert metr['num_predictions'] == 0
