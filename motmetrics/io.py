@@ -126,7 +126,7 @@ def load_vatictxt(fname, **kwargs):
 
     sep = kwargs.pop('sep', ' ')
 
-    with open(fname) as f:
+    with io.open(fname) as f:
         # First time going over file, we collect the set of all variable activities
         activities = set()
         for line in f:
@@ -264,7 +264,7 @@ def load_detrac_xml(fname, **kwargs):
         The dataframe is indexed by ('FrameId', 'Id')
     """
 
-    with open(fname) as fd:
+    with io.open(fname) as fd:
         doc = xmltodict.parse(fd.read())
     frameList = doc['sequence']['frame']
 

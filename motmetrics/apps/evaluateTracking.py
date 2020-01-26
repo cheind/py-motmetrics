@@ -8,6 +8,7 @@ EXTENDED: <reposity>
 from __future__ import absolute_import
 
 import argparse
+import io
 import logging
 import os
 import time
@@ -73,7 +74,7 @@ def compare_dataframes(gts, ts, vsflag='', iou=0.5):
         if k in gts:
             logging.info('Evaluating {}...'.format(k))
             if vsflag != '':
-                fd = open(vsflag + '/' + k + '.log', 'w')
+                fd = io.open(vsflag + '/' + k + '.log', 'w')
             else:
                 fd = ''
             acc, ana = mm.utils.CLEAR_MOT_M(gts[k][0], tsacc, gts[k][1], 'iou', distth=iou, vflag=fd)
@@ -90,7 +91,7 @@ def compare_dataframes(gts, ts, vsflag='', iou=0.5):
 
 def parseSequences(seqmap):
     assert os.path.isfile(seqmap), 'Seqmap %s not found.' % seqmap
-    fd = open(seqmap)
+    fd = io.open(seqmap)
     res = []
     for row in fd.readlines():
         row = row.strip()
@@ -103,7 +104,7 @@ def parseSequences(seqmap):
 
 def generateSkippedGT(gtfile, skip, fmt):
     tf = NamedTemporaryFile(delete=False, mode='w')
-    with open(gtfile) as fd:
+    with io.open(gtfile) as fd:
         lines = fd.readlines()
         for line in lines:
             arr = line.strip().split(',')
