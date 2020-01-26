@@ -4,6 +4,8 @@ Christoph Heindl, 2017
 https://github.com/cheind/py-motmetrics
 """
 
+from __future__ import absolute_import
+
 import numpy as np
 
 import motmetrics as mm

@@ -6,6 +6,7 @@ Origin: https://github.com/cheind/py-motmetrics
 Toka make it faster
 """
 
+from __future__ import absolute_import
 from __future__ import division
 
 import inspect
@@ -262,7 +263,7 @@ class MetricsHost:
         assert names is None or len(names) == len(dfs)
         st = time.time()
         if names is None:
-            names = range(len(dfs))
+            names = list(range(len(dfs)))
         if anas is None:
             anas = [None] * len(dfs)
         partials = [

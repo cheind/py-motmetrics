@@ -6,6 +6,8 @@ https://github.com/cheind/py-motmetrics
 Author: Urwa Muaz
 """
 
+from __future__ import absolute_import
+
 import argparse
 import glob
 import logging

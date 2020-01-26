@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+
 from contextlib import contextmanager
 
 import numpy as np
@@ -148,7 +150,7 @@ def lsa_solve_lapjv(costs):
         costs[inv] = INVDIST
 
     r = lapjv(costs, return_cost=False, extend_cost=True)
-    indices = np.array((range(costs.shape[0]), r[0]), dtype=np.int64).T
+    indices = np.array((np.arange(costs.shape[0]), r[0]), dtype=np.int64).T
     indices = indices[indices[:, 1] != -1]
     return indices[:, 0], indices[:, 1]
 

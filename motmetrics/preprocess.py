@@ -5,6 +5,8 @@ Origin: https://github.com/cheind/py-motmetrics
 Extended: <reposity>
 """
 
+from __future__ import absolute_import
+
 import logging
 import time
 from configparser import ConfigParser

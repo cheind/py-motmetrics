@@ -8,6 +8,9 @@ Modified by Toka, 2018
 https://github.com/Helicopt/fast-py-MOTMetrics.git
 """
 
+from __future__ import absolute_import
+from __future__ import division
+
 import io
 from enum import Enum
 
