@@ -5,6 +5,27 @@ from contextlib import contextmanager
 import numpy as np
 
 
+def _module_is_available_py2(name):
+    try:
+        imp.find_module(name)
+        return True
+    except ImportError:
+        return False
+
+
+def _module_is_available_py3(name):
+    return importlib.util.find_spec(name) is not None
+
+
+try:
+    import importlib.util
+except ImportError:
+    _module_is_available = _module_is_available_py2
+else:
+    import imp
+    _module_is_available = _module_is_available_py3
+
+
 def linear_sum_assignment(costs, solver=None):
     """Solve a linear sum assignment problem (LSA).
 
@@ -156,9 +177,6 @@ def lsa_solve_lapjv(costs):
 
 
 def init_standard_solvers():
-    import importlib
-    from importlib import util
-
     global available_solvers, default_solver, solver_map
 
     solvers = [
@@ -171,7 +189,7 @@ def init_standard_solvers():
 
     solver_map = dict(solvers)
 
-    available_solvers = [s[0] for s in solvers if importlib.util.find_spec(s[0]) is not None]
+    available_solvers = [s[0] for s in solvers if _module_is_available(s[0])]
     if len(available_solvers) == 0:
         import warnings
         default_solver = None
