@@ -1,10 +1,10 @@
 language: python
 
 env:
-  - PYTHON=2.7 PANDAS>=0.19.2
-  - PYTHON=3.5 PANDAS>=0.19.2
-  - PYTHON=3.6 PANDAS>=0.19.2
-  - PYTHON=3.7 PANDAS>=0.19.2
+  - PYTHON=2.7
+  - PYTHON=3.5
+  - PYTHON=3.6
+  - PYTHON=3.7
 
 install:
     # Install conda
@@ -19,10 +19,10 @@ install:
     - conda info -a
 
     # Install deps
-    - deps='pip numpy scipy cython'
-    - conda create -q -n pyenv python=$PYTHON pandas=$PANDAS $deps
+    - conda create -q -n pyenv python=$PYTHON pip
     - source activate pyenv
     - python -m pip install -U pip
+    - pip install -r requirements.txt
     - pip install pytest
     - pip install pytest-benchmark
     - pip install .
