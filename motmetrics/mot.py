@@ -6,11 +6,12 @@ Origin: https://github.com/cheind/py-motmetrics
 TOKA make it faster
 """
 
-import numpy as np
-import numpy.ma as ma
-import pandas as pd
-from collections import OrderedDict
 import itertools
+from collections import OrderedDict
+
+import numpy as np
+import pandas as pd
+
 from motmetrics.lap import linear_sum_assignment
 
 _INDEX_FIELDS = ['FrameId', 'Event']

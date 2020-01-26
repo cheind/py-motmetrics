@@ -8,10 +8,11 @@ Modified by Toka, 2018
 https://github.com/Helicopt/fast-py-MOTMetrics.git
 """
 
-from enum import Enum
-import pandas as pd
-import numpy as np
 import io
+from enum import Enum
+
+import numpy as np
+import pandas as pd
 import scipy.io
 import xmltodict
 

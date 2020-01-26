@@ -6,15 +6,13 @@ EXTENDED: <reposity>
 """
 
 import argparse
-import glob
-import os
 import logging
-import motmetrics as mm
-import pandas as pd
-from collections import OrderedDict
-from pathlib import Path
+import os
 import time
+from collections import OrderedDict
 from tempfile import NamedTemporaryFile
+
+import motmetrics as mm
 
 
 def parse_args():

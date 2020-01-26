@@ -1,9 +1,7 @@
-from pytest import approx
 import numpy as np
-import pandas as pd
-import motmetrics as mm
-import os
 import pytest
+
+import motmetrics as mm
 
 
 def test_events():
