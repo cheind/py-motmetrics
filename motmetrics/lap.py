@@ -20,9 +20,9 @@ def _module_is_available_py3(name):
 try:
     import importlib.util
 except ImportError:
+    import imp
     _module_is_available = _module_is_available_py2
 else:
-    import imp
     _module_is_available = _module_is_available_py3
 
 
