@@ -6,6 +6,10 @@ https://github.com/cheind/py-motmetrics
 TOKA EXTENDED THIS FILE.
 """
 
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 import numpy as np
 
 from .distances import iou_matrix, norm2squared_matrix

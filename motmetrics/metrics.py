@@ -6,7 +6,9 @@ Origin: https://github.com/cheind/py-motmetrics
 Toka make it faster
 """
 
+from __future__ import absolute_import
 from __future__ import division
+from __future__ import print_function
 
 import inspect
 import logging
@@ -19,6 +21,11 @@ import pandas as pd
 
 from motmetrics.lap import linear_sum_assignment
 from motmetrics.mot import MOTAccumulator
+
+try:
+    _getargspec = inspect.getfullargspec
+except AttributeError:
+    _getargspec = inspect.getargspec
 
 
 class MetricsHost:
@@ -66,11 +73,11 @@ class MetricsHost:
         if deps is None:
             deps = []
         elif deps is 'auto':
-            if inspect.getfullargspec(fnc).defaults is not None:
-                k = - len(inspect.getfullargspec(fnc).defaults)
+            if _getargspec(fnc).defaults is not None:
+                k = - len(_getargspec(fnc).defaults)
             else:
-                k = len(inspect.getfullargspec(fnc).args)
-            deps = inspect.getfullargspec(fnc).args[1:k]  # assumes dataframe as first argument
+                k = len(_getargspec(fnc).args)
+            deps = _getargspec(fnc).args[1:k]  # assumes dataframe as first argument
 
         if name is None:
             name = fnc.__name__  # Relies on meaningful function names, i.e don't use for lambdas
@@ -84,11 +91,11 @@ class MetricsHost:
             if deps_m is None:
                 deps_m = []
             elif deps_m == 'auto':
-                if inspect.getfullargspec(fnc_m).defaults is not None:
-                    k = - len(inspect.getfullargspec(fnc_m).defaults)
+                if _getargspec(fnc_m).defaults is not None:
+                    k = - len(_getargspec(fnc_m).defaults)
                 else:
-                    k = len(inspect.getfullargspec(fnc_m).args)
-                deps_m = inspect.getfullargspec(fnc_m).args[1:k]  # assumes dataframe as first argument
+                    k = len(_getargspec(fnc_m).args)
+                deps_m = _getargspec(fnc_m).args[1:k]  # assumes dataframe as first argument
         else:
             deps_m = None
             # print(name, 'merge function is None')
@@ -262,7 +269,7 @@ class MetricsHost:
         assert names is None or len(names) == len(dfs)
         st = time.time()
         if names is None:
-            names = range(len(dfs))
+            names = list(range(len(dfs)))
         if anas is None:
             anas = [None] * len(dfs)
         partials = [
@@ -305,7 +312,7 @@ class MetricsHost:
                 v = cache[depname] = self._compute(df_map, depname, cache, options, parent=name)
                 # print(name, 'depends', depname, 'calculating %s take '%depname, time.time()-st_)
             vals.append(v)
-        if inspect.getfullargspec(minfo['fnc']).defaults is None:
+        if _getargspec(minfo['fnc']).defaults is None:
             return minfo['fnc'](df_map, *vals)
         else:
             return minfo['fnc'](df_map, *vals, **options)

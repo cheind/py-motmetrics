@@ -6,6 +6,10 @@ Origin: https://github.com/cheind/py-motmetrics
 TOKA make it faster
 """
 
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 import itertools
 from collections import OrderedDict
 

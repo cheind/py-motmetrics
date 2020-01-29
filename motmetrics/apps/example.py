@@ -4,6 +4,10 @@ Christoph Heindl, 2017
 https://github.com/cheind/py-motmetrics
 """
 
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 import numpy as np
 
 import motmetrics as mm

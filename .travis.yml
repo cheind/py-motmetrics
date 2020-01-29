@@ -1,13 +1,14 @@
 language: python
 
 env:
-  - PYTHON=3.5 PANDAS>=0.19.2
-  - PYTHON=3.6 PANDAS>=0.19.2
-  - PYTHON=3.7 PANDAS>=0.19.2
+  - PYTHON=2.7
+  - PYTHON=3.5
+  - PYTHON=3.6
+  - PYTHON=3.7
 
 install:
     # Install conda
-    #- wget https://repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86_64.sh -O miniconda.sh  # Python 2.7
+    - wget https://repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86_64.sh -O miniconda.sh  # Python 2.7
     - wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
     - bash miniconda.sh -b -p $HOME/miniconda
     - export PATH="$HOME/miniconda/bin:$PATH"
@@ -18,10 +19,10 @@ install:
     - conda info -a
 
     # Install deps
-    - deps='pip numpy scipy cython'
-    - conda create -q -n pyenv python=$PYTHON pandas=$PANDAS $deps
+    - conda create -q -n pyenv python=$PYTHON pip
     - source activate pyenv
     - python -m pip install -U pip
+    - pip install -r requirements.txt
     - pip install pytest
     - pip install pytest-benchmark
     - pip install .
