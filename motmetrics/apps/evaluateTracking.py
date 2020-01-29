@@ -10,12 +10,12 @@ from __future__ import division
 from __future__ import print_function
 
 import argparse
+from collections import OrderedDict
 import io
 import logging
 import os
-import time
-from collections import OrderedDict
 from tempfile import NamedTemporaryFile
+import time
 
 import motmetrics as mm
 

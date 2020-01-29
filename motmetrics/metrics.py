@@ -10,11 +10,11 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+from collections import OrderedDict
 import inspect
 import logging
 import time
 import warnings
-from collections import OrderedDict
 
 import numpy as np
 import pandas as pd

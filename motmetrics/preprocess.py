@@ -9,9 +9,9 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+from configparser import ConfigParser
 import logging
 import time
-from configparser import ConfigParser
 
 import numpy as np
 

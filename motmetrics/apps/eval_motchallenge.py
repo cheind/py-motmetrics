@@ -9,10 +9,10 @@ from __future__ import division
 from __future__ import print_function
 
 import argparse
+from collections import OrderedDict
 import glob
 import logging
 import os
-from collections import OrderedDict
 from pathlib import Path
 
 import motmetrics as mm
