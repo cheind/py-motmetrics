@@ -22,4 +22,4 @@ def test_issue19():
     acc.update(g1, p1, d1, 1)
 
     mh = mm.metrics.create()
-    result = mh.compute(acc)
+    mh.compute(acc)

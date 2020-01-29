@@ -4,7 +4,6 @@ Christoph Heindl, 2017
 https://github.com/cheind/py-motmetrics
 """
 
-import os
 try:
     from setuptools import setup
 except ImportError:

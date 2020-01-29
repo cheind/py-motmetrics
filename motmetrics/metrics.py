@@ -72,7 +72,7 @@ class MetricsHost:
 
         if deps is None:
             deps = []
-        elif deps is 'auto':
+        elif deps == 'auto':
             if _getargspec(fnc).defaults is not None:
                 k = - len(_getargspec(fnc).defaults)
             else:

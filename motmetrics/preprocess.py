@@ -49,10 +49,10 @@ def preprocessResult(res, gt, inifile):
             continue
         # st = time.time()
         resInFrame = res.loc[t]
-        N = len(resInFrame)
+        # N = len(resInFrame)
 
         GTInFrame = gt.loc[t]
-        Ngt = len(GTInFrame)
+        # Ngt = len(GTInFrame)
         A = GTInFrame[['X', 'Y', 'Width', 'Height']].values
         B = resInFrame[['X', 'Y', 'Width', 'Height']].values
         disM = mmd.iou_matrix(A, B, max_iou=0.5)
