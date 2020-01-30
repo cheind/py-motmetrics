@@ -93,7 +93,6 @@ class MOTAccumulator(object):
 
         self.auto_id = auto_id
         self.max_switch_time = max_switch_time
-        self.reset()
 
         self._events = {field: [] for field in _EVENT_FIELDS}
         self._indices = {field: [] for field in _INDEX_FIELDS}
