@@ -7,6 +7,7 @@ from __future__ import division
 from __future__ import print_function
 
 from contextlib import contextmanager
+import warnings
 
 import numpy as np
 
@@ -204,7 +205,6 @@ def _init_standard_solvers():
 
     available_solvers = [s[0] for s in solvers if _module_is_available(s[0])]
     if len(available_solvers) == 0:
-        import warnings
         default_solver = None
         warnings.warn('No standard LAP solvers found. Consider `pip install lapsolver` or `pip install scipy`', category=RuntimeWarning)
     else:
