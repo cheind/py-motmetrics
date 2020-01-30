@@ -83,7 +83,6 @@ def compare_dataframes(gts, ts):
 
 def main():
     # pylint: disable=missing-function-docstring
-    # pylint: disable=too-many-locals
     args = parse_args()
 
     loglevel = getattr(logging, args.loglevel.upper(), None)

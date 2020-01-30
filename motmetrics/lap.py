@@ -181,7 +181,7 @@ def lsa_solve_lapjv(costs):
 
     r = lapjv(costs, return_cost=False, extend_cost=True)
     indices = np.array((np.arange(costs.shape[0]), r[0]), dtype=np.int64).T
-    indices = indices[indices[:, 1] != -1]  # pylint: disable=E1136
+    indices = indices[indices[:, 1] != -1]  # pylint: disable=unsubscriptable-object
     return indices[:, 0], indices[:, 1]
 
 
