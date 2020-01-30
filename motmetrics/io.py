@@ -1,5 +1,3 @@
-# -- coding: utf-8 --
-
 """py-motmetrics - metrics for multiple object tracker (MOT) benchmarking.
 
 Christoph Heindl, 2017
