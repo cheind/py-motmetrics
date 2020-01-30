@@ -12,9 +12,9 @@ from __future__ import print_function
 
 import numpy as np
 
-from .distances import iou_matrix, norm2squared_matrix
-from .mot import MOTAccumulator
-from .preprocess import preprocessResult
+from motmetrics.distances import iou_matrix, norm2squared_matrix
+from motmetrics.mot import MOTAccumulator
+from motmetrics.preprocess import preprocessResult
 
 
 def compare_to_groundtruth(gt, dt, dist='iou', distfields=None, distth=0.5):
