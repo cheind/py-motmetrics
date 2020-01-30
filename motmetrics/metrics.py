@@ -6,6 +6,8 @@ Origin: https://github.com/cheind/py-motmetrics
 Toka make it faster
 """
 
+# pylint: disable=redefined-outer-name
+
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -14,13 +16,13 @@ from collections import OrderedDict
 import inspect
 import logging
 import time
-import warnings
 
 import numpy as np
 import pandas as pd
 
 from motmetrics.lap import linear_sum_assignment
 from motmetrics.mot import MOTAccumulator
+from motmetrics import math_util
 
 try:
     _getargspec = inspect.getfullargspec
@@ -118,7 +120,10 @@ class MetricsHost:
     @property
     def formatters(self):
         """Returns the formatters for all metrics that have associated formatters."""
-        return dict([(k, v['formatter']) for k, v in self.metrics.items() if not v['formatter'] is None])
+        return {
+            k: v['formatter'] for k, v in self.metrics.items()
+            if v['formatter'] is not None
+        }
 
     def list_metrics(self, include_deps=False):
         """Returns a dataframe containing names, descriptions and optionally dependencies for each metric."""
@@ -281,7 +286,7 @@ class MetricsHost:
                          return_dataframe=False
                          )
             for acc, analysis, name in zip(dfs, anas, names)]
-        logging.info('partials: %.3f seconds.' % (time.time() - st))
+        logging.info('partials: %.3f seconds.', time.time() - st)
         details = partials
         # for detail in details:
         #     print(detail)
@@ -293,7 +298,7 @@ class MetricsHost:
             # anas = MOTAccumulator.merge_analysis(anas, infomap)
             # partials.append(self.compute(dfs, ana=anas, metrics=metrics, name=names)[0])
             partials.append(self.compute_overall(details, metrics=metrics, name=names))
-        logging.info('mergeOverall: %.3f seconds.' % (time.time() - st))
+        logging.info('mergeOverall: %.3f seconds.', time.time() - st)
         return pd.concat(partials)
 
     def _compute(self, df_map, name, cache, options, parent=None):
@@ -360,6 +365,7 @@ def pred_frequencies(df):
 
 def num_unique_objects(df, obj_frequencies):
     """Total number of unique object ids encountered."""
+    del df  # unused
     return len(obj_frequencies)
 
 
@@ -424,6 +430,7 @@ simple_add_func.append(num_misses)
 
 def num_detections(df, num_matches, num_switches):
     """Total number of detected objects including matches and switches."""
+    del df  # unused
     return num_matches + num_switches
 
 
@@ -432,6 +439,7 @@ simple_add_func.append(num_detections)
 
 def num_objects(df, obj_frequencies):
     """Total number of unique object appearances over all frames."""
+    del df  # unused
     return obj_frequencies.sum()
 
 
@@ -440,15 +448,8 @@ simple_add_func.append(num_objects)
 
 def num_predictions(df, pred_frequencies):
     """Total number of unique prediction appearances over all frames."""
+    del df  # unused
     return pred_frequencies.sum()
-
-
-simple_add_func.append(num_predictions)
-
-
-def num_predictions(df):
-    """Total number of unique prediction appearances over all frames."""
-    return df.noraw.HId.count()
 
 
 simple_add_func.append(num_predictions)
@@ -462,6 +463,7 @@ def track_ratios(df, obj_frequencies):
 
 def mostly_tracked(df, track_ratios):
     """Number of objects tracked for at least 80 percent of lifespan."""
+    del df  # unused
     return track_ratios[track_ratios >= 0.8].count()
 
 
@@ -470,6 +472,7 @@ simple_add_func.append(mostly_tracked)
 
 def partially_tracked(df, track_ratios):
     """Number of objects tracked between 20 and 80 percent of lifespan."""
+    del df  # unused
     return track_ratios[(track_ratios >= 0.2) & (track_ratios < 0.8)].count()
 
 
@@ -478,6 +481,7 @@ simple_add_func.append(partially_tracked)
 
 def mostly_lost(df, track_ratios):
     """Number of objects tracked less than 20 percent of lifespan."""
+    del df  # unused
     return track_ratios[track_ratios < 0.2].count()
 
 
@@ -506,51 +510,74 @@ simple_add_func.append(num_fragmentations)
 
 def motp(df, num_detections):
     """Multiple object tracker precision."""
-    return _qdiv(df.noraw['D'].sum(), num_detections)
+    return math_util.quiet_divide(df.noraw['D'].sum(), num_detections)
 
 
 def motp_m(partials, num_detections):
     res = 0
     for v in partials:
         res += v['motp'] * v['num_detections']
-    return _qdiv(res, num_detections)
+    return math_util.quiet_divide(res, num_detections)
 
 
 def mota(df, num_misses, num_switches, num_false_positives, num_objects):
     """Multiple object tracker accuracy."""
-    return 1. - _qdiv(num_misses + num_switches + num_false_positives, num_objects)
+    del df  # unused
+    return 1. - math_util.quiet_divide(
+        num_misses + num_switches + num_false_positives,
+        num_objects)
 
 
 def mota_m(partials, num_misses, num_switches, num_false_positives, num_objects):
-    return 1. - _qdiv(num_misses + num_switches + num_false_positives, num_objects)
+    del partials  # unused
+    return 1. - math_util.quiet_divide(
+        num_misses + num_switches + num_false_positives,
+        num_objects)
 
 
 def precision(df, num_detections, num_false_positives):
     """Number of detected objects over sum of detected and false positives."""
-    return _qdiv(num_detections, num_false_positives + num_detections)
+    del df  # unused
+    return math_util.quiet_divide(
+        num_detections,
+        num_false_positives + num_detections)
 
 
 def precision_m(partials, num_detections, num_false_positives):
-    return _qdiv(num_detections, num_false_positives + num_detections)
+    del partials  # unused
+    return math_util.quiet_divide(
+        num_detections,
+        num_false_positives + num_detections)
 
 
 def recall(df, num_detections, num_objects):
     """Number of detections over number of objects."""
-    return _qdiv(num_detections, num_objects)
+    del df  # unused
+    return math_util.quiet_divide(num_detections, num_objects)
 
 
 def recall_m(partials, num_detections, num_objects):
-    return _qdiv(num_detections, num_objects)
+    del partials  # unused
+    return math_util.quiet_divide(num_detections, num_objects)
+
+
+class DataFrameMap:  # pylint: disable=too-few-public-methods
+
+    def __init__(self, full, raw, noraw, extra):
+        self.full = full
+        self.raw = raw
+        self.noraw = noraw
+        self.extra = extra
 
 
 def events_to_df_map(df):
-    class DfMap:
-        pass
-    df_map = DfMap()
-    df_map.full = df
-    df_map.raw = df[df.Type == 'RAW']
-    df_map.noraw = df[(df.Type != 'RAW') & (df.Type != 'ASCEND') & (df.Type != 'TRANSFER') & (df.Type != 'MIGRATE')]
-    df_map.extra = df[df.Type != 'RAW']
+    raw = df[df.Type == 'RAW']
+    noraw = df[(df.Type != 'RAW')
+               & (df.Type != 'ASCEND')
+               & (df.Type != 'TRANSFER')
+               & (df.Type != 'MIGRATE')]
+    extra = df[df.Type != 'RAW']
+    df_map = DataFrameMap(full=df, raw=raw, noraw=noraw, extra=extra)
     return df_map
 
 
@@ -581,6 +608,8 @@ def extract_counts_from_df_map(df):
 
 def id_global_assignment(df, ana=None):
     """ID measures: Global min-cost assignment for ID measures."""
+    # pylint: disable=too-many-locals
+    del ana  # unused
     ocs, hcs, tps = extract_counts_from_df_map(df)
     oids = sorted(ocs.keys())
     hids = sorted(hcs.keys())
@@ -625,6 +654,7 @@ def id_global_assignment(df, ana=None):
 
 def idfp(df, id_global_assignment):
     """ID measures: Number of false positive matches after global min-cost matching."""
+    del df  # unused
     rids, cids = id_global_assignment['rids'], id_global_assignment['cids']
     return id_global_assignment['fpmatrix'][rids, cids].sum()
 
@@ -634,6 +664,7 @@ simple_add_func.append(idfp)
 
 def idfn(df, id_global_assignment):
     """ID measures: Number of false negatives matches after global min-cost matching."""
+    del df  # unused
     rids, cids = id_global_assignment['rids'], id_global_assignment['cids']
     return id_global_assignment['fnmatrix'][rids, cids].sum()
 
@@ -643,6 +674,7 @@ simple_add_func.append(idfn)
 
 def idtp(df, id_global_assignment, num_objects, idfn):
     """ID measures: Number of true positives matches after global min-cost matching."""
+    del df, id_global_assignment  # unused
     return num_objects - idfn
 
 
@@ -651,36 +683,36 @@ simple_add_func.append(idtp)
 
 def idp(df, idtp, idfp):
     """ID measures: global min-cost precision."""
-    return _qdiv(idtp, idtp + idfp)
+    del df  # unused
+    return math_util.quiet_divide(idtp, idtp + idfp)
 
 
 def idp_m(partials, idtp, idfp):
-    return _qdiv(idtp, idtp + idfp)
+    del partials  # unused
+    return math_util.quiet_divide(idtp, idtp + idfp)
 
 
 def idr(df, idtp, idfn):
     """ID measures: global min-cost recall."""
-    return _qdiv(idtp, idtp + idfn)
+    del df  # unused
+    return math_util.quiet_divide(idtp, idtp + idfn)
 
 
 def idr_m(partials, idtp, idfn):
-    return _qdiv(idtp, idtp + idfn)
+    del partials  # unused
+    return math_util.quiet_divide(idtp, idtp + idfn)
 
 
 def idf1(df, idtp, num_objects, num_predictions):
     """ID measures: global min-cost F1 score."""
-    return _qdiv(2 * idtp, num_objects + num_predictions)
+    del df  # unused
+    return math_util.quiet_divide(2 * idtp, num_objects + num_predictions)
 
 
 def idf1_m(partials, idtp, num_objects, num_predictions):
-    return _qdiv(2 * idtp, num_objects + num_predictions)
+    del partials  # unused
+    return math_util.quiet_divide(2 * idtp, num_objects + num_predictions)
 
-
-def _qdiv(a, b):
-    """Quiet divide function that does not warn about (0 / 0)."""
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore', RuntimeWarning)
-        return np.true_divide(a, b)
 
 # def iou_sum(df):
 #     """Extra measures: sum IoU of all matches"""

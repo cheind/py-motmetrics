@@ -1,3 +1,5 @@
+"""Tests distance computation."""
+
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -8,6 +10,7 @@ import motmetrics as mm
 
 
 def test_norm2squared():
+    """Tests norm2squared_matrix."""
     a = np.array([
         [1., 2],
         [2., 2],
@@ -41,6 +44,7 @@ def test_norm2squared():
 
 
 def test_norm2squared_empty():
+    """Tests norm2squared_matrix with an empty input."""
     a = []
     b = np.array([[0., 0], [1., 1]])
     C = mm.distances.norm2squared_matrix(a, b)
@@ -50,6 +54,7 @@ def test_norm2squared_empty():
 
 
 def test_iou_matrix():
+    """Tests iou_matrix."""
     a = np.array([
         [0, 0, 1, 2],
     ])

@@ -14,6 +14,7 @@ from collections import OrderedDict
 import io
 import logging
 import os
+import sys
 from tempfile import NamedTemporaryFile
 import time
 
@@ -21,6 +22,7 @@ import motmetrics as mm
 
 
 def parse_args():
+    """Defines and parses command-line arguments."""
     parser = argparse.ArgumentParser(description="""
 Compute metrics for trackers using MOTChallenge ground-truth data with data preprocess.
 
@@ -69,12 +71,13 @@ string in the seqmap.""", formatter_class=argparse.RawTextHelpFormatter)
 
 
 def compare_dataframes(gts, ts, vsflag='', iou=0.5):
+    """Builds accumulator for each sequence."""
     accs = []
     anas = []
     names = []
     for k, tsacc in ts.items():
         if k in gts:
-            logging.info('Evaluating {}...'.format(k))
+            logging.info('Evaluating %s...', k)
             if vsflag != '':
                 fd = io.open(vsflag + '/' + k + '.log', 'w')
             else:
@@ -86,12 +89,13 @@ def compare_dataframes(gts, ts, vsflag='', iou=0.5):
             anas.append(ana)
             names.append(k)
         else:
-            logging.warning('No ground truth for {}, skipping.'.format(k))
+            logging.warning('No ground truth for %s, skipping.', k)
 
     return accs, anas, names
 
 
 def parseSequences(seqmap):
+    """Loads list of sequences from file."""
     assert os.path.isfile(seqmap), 'Seqmap %s not found.' % seqmap
     fd = io.open(seqmap)
     res = []
@@ -105,6 +109,8 @@ def parseSequences(seqmap):
 
 
 def generateSkippedGT(gtfile, skip, fmt):
+    """Generates temporary ground-truth file with some frames skipped."""
+    del fmt  # unused
     tf = NamedTemporaryFile(delete=False, mode='w')
     with io.open(gtfile) as fd:
         lines = fd.readlines()
@@ -121,8 +127,9 @@ def generateSkippedGT(gtfile, skip, fmt):
     return tempfile
 
 
-if __name__ == '__main__':
-
+def main():
+    # pylint: disable=missing-function-docstring
+    # pylint: disable=too-many-locals
     args = parse_args()
 
     loglevel = getattr(logging, args.loglevel.upper(), None)
@@ -139,18 +146,18 @@ if __name__ == '__main__':
 
     for gtfile in gtfiles:
         if not os.path.isfile(gtfile):
-            logging.error('gt File %s not found.' % gtfile)
-            exit(1)
+            logging.error('gt File %s not found.', gtfile)
+            sys.exit(1)
     for tsfile in tsfiles:
         if not os.path.isfile(tsfile):
-            logging.error('res File %s not found.' % tsfile)
-            exit(1)
+            logging.error('res File %s not found.', tsfile)
+            sys.exit(1)
 
-    logging.info('Found {} groundtruths and {} test files.'.format(len(gtfiles), len(tsfiles)))
+    logging.info('Found %d groundtruths and %d test files.', len(gtfiles), len(tsfiles))
     for seq in seqs:
-        logging.info('\t%s' % seq)
-    logging.info('Available LAP solvers {}'.format(mm.lap.available_solvers))
-    logging.info('Default LAP solver \'{}\''.format(mm.lap.default_solver))
+        logging.info('\t%s', seq)
+    logging.info('Available LAP solvers %s', str(mm.lap.available_solvers))
+    logging.info('Default LAP solver \'%s\'', mm.lap.default_solver)
     logging.info('Loading files.')
 
     if args.skip > 0 and 'mot' in args.fmt:
@@ -163,10 +170,14 @@ if __name__ == '__main__':
     mh = mm.metrics.create()
     st = time.time()
     accs, analysis, names = compare_dataframes(gt, ts, args.log, 1. - args.iou)
-    logging.info('adding frames: %.3f seconds.' % (time.time() - st))
+    logging.info('adding frames: %.3f seconds.', time.time() - st)
 
     logging.info('Running metrics')
 
     summary = mh.compute_many(accs, anas=analysis, names=names, metrics=mm.metrics.motchallenge_metrics, generate_overall=True)
     print(mm.io.render_summary(summary, formatters=mh.formatters, namemap=mm.io.motchallenge_metric_names))
     logging.info('Completed')
+
+
+if __name__ == '__main__':
+    main()

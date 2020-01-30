@@ -21,6 +21,7 @@ import motmetrics as mm
 
 
 def parse_args():
+    """Defines and parses command-line arguments."""
     parser = argparse.ArgumentParser(description="""
 Compute metrics for trackers using DETRAC challenge ground-truth data.
 
@@ -66,21 +67,23 @@ string.""", formatter_class=argparse.RawTextHelpFormatter)
 
 
 def compare_dataframes(gts, ts):
+    """Builds accumulator for each sequence."""
     accs = []
     names = []
     for k, tsacc in ts.items():
         if k in gts:
-            logging.info('Comparing {}...'.format(k))
+            logging.info('Comparing %s...', k)
             accs.append(mm.utils.compare_to_groundtruth(gts[k], tsacc, 'iou', distth=0.5))
             names.append(k)
         else:
-            logging.warning('No ground truth for {}, skipping.'.format(k))
+            logging.warning('No ground truth for %s, skipping.', k)
 
     return accs, names
 
 
-if __name__ == '__main__':
-
+def main():
+    # pylint: disable=missing-function-docstring
+    # pylint: disable=too-many-locals
     args = parse_args()
 
     loglevel = getattr(logging, args.loglevel.upper(), None)
@@ -94,9 +97,9 @@ if __name__ == '__main__':
     gtfiles = glob.glob(os.path.join(args.groundtruths, '*'))
     tsfiles = glob.glob(os.path.join(args.tests, '*'))
 
-    logging.info('Found {} groundtruths and {} test files.'.format(len(gtfiles), len(tsfiles)))
-    logging.info('Available LAP solvers {}'.format(mm.lap.available_solvers))
-    logging.info('Default LAP solver \'{}\''.format(mm.lap.default_solver))
+    logging.info('Found %d groundtruths and %d test files.', len(gtfiles), len(tsfiles))
+    logging.info('Available LAP solvers %s', str(mm.lap.available_solvers))
+    logging.info('Default LAP solver \'%s\'', mm.lap.default_solver)
     logging.info('Loading files.')
 
     gt = OrderedDict([(os.path.splitext(Path(f).parts[-1])[0], mm.io.loadtxt(f, fmt=args.gtfmt)) for f in gtfiles])
@@ -110,3 +113,7 @@ if __name__ == '__main__':
     summary = mh.compute_many(accs, names=names, metrics=mm.metrics.motchallenge_metrics, generate_overall=True)
     print(mm.io.render_summary(summary, formatters=mh.formatters, namemap=mm.io.motchallenge_metric_names))
     logging.info('Completed')
+
+
+if __name__ == '__main__':
+    main()

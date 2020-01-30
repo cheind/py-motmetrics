@@ -1,3 +1,8 @@
+"""Tests issue 19.
+
+https://github.com/cheind/py-motmetrics/issues/19
+"""
+
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -8,6 +13,7 @@ import motmetrics as mm
 
 
 def test_issue19():
+    """Tests issue 19."""
     acc = mm.MOTAccumulator()
 
     g0 = [0, 1]

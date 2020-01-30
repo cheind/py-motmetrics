@@ -124,6 +124,7 @@ def load_vatictxt(fname, **kwargs):
         where <Attr1> is placeholder for the actual attribute name capitalized (first letter). The order of attribute
         columns is sorted in attribute name. The dataframe is indexed by ('FrameId', 'Id')
     """
+    # pylint: disable=too-many-locals
 
     sep = kwargs.pop('sep', ' ')
 
@@ -131,7 +132,8 @@ def load_vatictxt(fname, **kwargs):
         # First time going over file, we collect the set of all variable activities
         activities = set()
         for line in f:
-            [activities.add(c) for c in line.rstrip().split(sep)[10:]]
+            for c in line.rstrip().split(sep)[10:]:
+                activities.add(c)
         activitylist = sorted(list(activities))
 
         # Second time we construct artificial binary columns for each activity
@@ -182,7 +184,7 @@ def load_vatictxt(fname, **kwargs):
         return df
 
 
-def load_detrac_mat(fname, **kwargs):
+def load_detrac_mat(fname):
     """Loads UA-DETRAC annotations data from mat files
        Competition Site: http://detrac-db.rit.albany.edu/download
 
@@ -244,7 +246,7 @@ def load_detrac_mat(fname, **kwargs):
     return df
 
 
-def load_detrac_xml(fname, **kwargs):
+def load_detrac_xml(fname):
     """Loads UA-DETRAC annotations data from xml files
        Competition Site: http://detrac-db.rit.albany.edu/download
 
@@ -273,7 +275,7 @@ def load_detrac_xml(fname, **kwargs):
     for f in frameList:
         fid = int(f['@num'])
         targetList = f['target_list']['target']
-        if type(targetList) != list:
+        if not isinstance(targetList, list):
             targetList = [targetList]
 
         for t in targetList:
@@ -347,7 +349,7 @@ def render_summary(summary, formatters=None, namemap=None, buf=None):
     if namemap is not None:
         summary = summary.rename(columns=namemap)
         if formatters is not None:
-            formatters = dict([(namemap[c], f) if c in namemap else (c, f) for c, f in formatters.items()])
+            formatters = {namemap.get(c, c): f for c, f in formatters.items()}
 
     output = summary.to_string(
         buf=buf,

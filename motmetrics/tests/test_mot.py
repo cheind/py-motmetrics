@@ -1,14 +1,18 @@
+"""Tests behavior of MOTAccumulator."""
+
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
 import numpy as np
+import pandas as pd
 import pytest
 
 import motmetrics as mm
 
 
 def test_events():
+    """Tests that expected events are created by MOTAccumulator.update()."""
     acc = mm.MOTAccumulator()
 
     # All FP
@@ -57,11 +61,11 @@ def test_events():
     expect.loc[(4, 5), :] = ['MATCH', 2, 2, 5.]
     # frame 5 generates no events
 
-    from pandas.util.testing import assert_frame_equal
-    assert_frame_equal(acc.events, expect)
+    pd.util.testing.assert_frame_equal(acc.events, expect)
 
 
 def test_max_switch_time():
+    """Tests max_switch_time option."""
     acc = mm.MOTAccumulator(max_switch_time=1)
     acc.update([1, 2], [1, 2], [[1, 0.5], [0.3, 1]], frameid=1)  # 1->a, 2->b
     frameid = acc.update([1, 2], [1, 2], [[0.5, np.nan], [np.nan, 0.5]], frameid=2)  # 1->b, 2->a
@@ -78,6 +82,7 @@ def test_max_switch_time():
 
 
 def test_auto_id():
+    """Tests auto_id option."""
     acc = mm.MOTAccumulator(auto_id=True)
     acc.update([1, 2, 3, 4], [], [])
     acc.update([1, 2, 3, 4], [], [])
@@ -94,6 +99,7 @@ def test_auto_id():
 
 
 def test_merge_dataframes():
+    """Tests merge_event_dataframes()."""
     acc = mm.MOTAccumulator()
 
     acc.update([], [1, 2], [], frameid=0)
@@ -154,5 +160,4 @@ def test_merge_dataframes():
     expect.loc[(7, 4), :] = ['TRANSFER', mappings[1]['oid_map'][2], mappings[1]['hid_map'][2], 0.1]
     expect.loc[(7, 5), :] = ['SWITCH', mappings[1]['oid_map'][2], mappings[1]['hid_map'][2], 0.1]
 
-    from pandas.util.testing import assert_frame_equal
-    assert_frame_equal(r, expect)
+    pd.util.testing.assert_frame_equal(r, expect)

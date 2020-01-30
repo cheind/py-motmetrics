@@ -1,3 +1,8 @@
+"""py-motmetrics - metrics for multiple object tracker (MOT) benchmarking.
+
+Christoph Heindl, 2017
+"""
+
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function

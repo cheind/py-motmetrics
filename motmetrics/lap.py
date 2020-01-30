@@ -1,3 +1,7 @@
+"""Tools for solving linear assignment problems."""
+
+# pylint: disable=import-outside-toplevel
+
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -163,6 +167,8 @@ def lsa_solve_ortools(costs):
 
 
 def lsa_solve_lapjv(costs):
+    """Solves the LSA problem using lap.lapjv()."""
+
     from lap import lapjv
 
     inv = ~np.isfinite(costs)
@@ -174,12 +180,17 @@ def lsa_solve_lapjv(costs):
 
     r = lapjv(costs, return_cost=False, extend_cost=True)
     indices = np.array((np.arange(costs.shape[0]), r[0]), dtype=np.int64).T
-    indices = indices[indices[:, 1] != -1]
+    indices = indices[indices[:, 1] != -1]  # pylint: disable=E1136
     return indices[:, 0], indices[:, 1]
 
 
-def init_standard_solvers():
-    global available_solvers, default_solver, solver_map
+available_solvers = None
+default_solver = None
+solver_map = None
+
+
+def _init_standard_solvers():
+    global available_solvers, default_solver, solver_map  # pylint: disable=global-statement
 
     solvers = [
         ('lapsolver', lsa_solve_lapsolver),
@@ -200,12 +211,12 @@ def init_standard_solvers():
         default_solver = available_solvers[0]
 
 
-init_standard_solvers()
+_init_standard_solvers()
 
 
 @contextmanager
 def set_default_solver(newsolver):
-    '''Change the default solver within context.
+    """Change the default solver within context.
 
     Intended usage
 
@@ -219,9 +230,9 @@ def set_default_solver(newsolver):
     ------
     newsolver : callable or str
         new solver function
-    '''
+    """
 
-    global default_solver
+    global default_solver  # pylint: disable=global-statement
 
     oldsolver = default_solver
     try:
