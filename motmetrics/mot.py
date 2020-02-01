@@ -91,18 +91,22 @@ class MOTAccumulator(object):
             in units of count.
         """
 
+        # Parameters of the accumulator.
         self.auto_id = auto_id
         self.max_switch_time = max_switch_time
 
-        self._events = {field: [] for field in _EVENT_FIELDS}
-        self._indices = {field: [] for field in _INDEX_FIELDS}
-        self.m = {}  # Pairings up to current timestamp
-        self.res_m = {}  # Result pairings up to now
-        self.last_occurrence = {}  # Tracks most recent occurance of object
-        self.last_match = {}  # Tracks most recent match of object
-        self.hypHistory = {}
-        self.dirty_events = True
+        # Accumulator state.
+        self._events = None
+        self._indices = None
+        self.m = None
+        self.res_m = None
+        self.last_occurrence = None
+        self.last_match = None
+        self.hypHistory = None
+        self.dirty_events = None
         self.cached_events_df = None
+
+        self.reset()
 
     def reset(self):
         """Reset the accumulator to empty state."""
