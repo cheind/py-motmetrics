@@ -16,7 +16,7 @@ import itertools
 import numpy as np
 import pandas as pd
 
-from motmetrics.lap import linear_sum_assignment
+from motmetrics import lap
 
 _INDEX_FIELDS = ['FrameId', 'Event']
 _EVENT_FIELDS = ['Type', 'OId', 'HId', 'D']
@@ -244,7 +244,11 @@ class MOTAccumulator(object):
             dists[oids_masked, :] = np.nan
             dists[:, hids_masked] = np.nan
 
-            rids, cids = linear_sum_assignment(dists)
+            # Replace missing edges with expensive edges to ensure feasibility.
+            # Note that add_expensive_edges() may also be called within the solver.
+            # However, its computational cost is small compared to the solver itself.
+            rids, cids = lap.linear_sum_assignment(
+                lap.add_expensive_edges(dists))
 
             for i, j in zip(rids, cids):
                 if not np.isfinite(dists[i, j]):

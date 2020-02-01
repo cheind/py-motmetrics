@@ -59,18 +59,11 @@ def test_assign_empty(solver):
     np.testing.assert_equal(costs, costs_copy)
 
 
-# @pytest.mark.parametrize('solver', SOLVERS)
-# def test_assign_infeasible_raises(solver):
-#     costs = np.asfarray([[np.nan, np.nan, 1], [np.nan, np.nan, 2], [8, 7, 4]])
-#     with pytest.raises(AssertionError):
-#         lap.linear_sum_assignment(costs, solver=solver)
-
-
-# @pytest.mark.parametrize('solver', SOLVERS)
-# def test_assign_unbalanced_raises(solver):
-#     costs = np.zeros((3, 4))
-#     with pytest.raises(AssertionError):
-#         lap.linear_sum_assignment(costs, solver=solver)
+@pytest.mark.parametrize('solver', SOLVERS)
+def test_assign_infeasible_raises(solver):
+    costs = np.asfarray([[np.nan, np.nan, 1], [np.nan, np.nan, 2], [8, 7, 4]])
+    with pytest.raises(AssertionError):
+        lap.linear_sum_assignment(costs, solver=solver)
 
 
 @pytest.mark.parametrize('solver', SOLVERS)
@@ -168,14 +161,14 @@ def test_unbalanced_disallowed_tall(solver):
     np.testing.assert_equal(costs, costs_copy)
 
 
-# @pytest.mark.parametrize('solver', SOLVERS)
-# def test_unbalanced_infeasible_raises(solver):
-#     costs = np.asfarray([[np.nan, np.nan, 1],
-#                          [np.nan, np.nan, 2],
-#                          [np.nan, np.nan, 3],
-#                          [8, 7, 4]])
-#     with pytest.raises(AssertionError):
-#         lap.linear_sum_assignment(costs, solver=solver)
+@pytest.mark.parametrize('solver', SOLVERS)
+def test_unbalanced_infeasible_raises(solver):
+    costs = np.asfarray([[np.nan, np.nan, 1],
+                         [np.nan, np.nan, 2],
+                         [np.nan, np.nan, 3],
+                         [8, 7, 4]])
+    with pytest.raises(AssertionError):
+        lap.linear_sum_assignment(costs, solver=solver)
 
 
 def test_change_solver():

@@ -69,46 +69,99 @@ def linear_sum_assignment(costs, solver=None):
     return rids, cids
 
 
+def add_expensive_edges(costs):
+    """Replaces non-edge costs (nan, inf) with large number.
+
+    If the optimal solution includes one of these edges,
+    then the original problem was infeasible.
+
+    Kwargs
+    ------
+    costs : np.ndarray
+    """
+    # The graph is probably already dense if we are doing this.
+    assert isinstance(costs, np.ndarray)
+    # The linear_sum_assignment function in scipy does not support missing edges.
+    # Replace nan with a large constant that ensures it is not chosen.
+    # If it is chosen, that means the problem was infeasible.
+    valid = np.isfinite(costs)
+    if valid.all():
+        return costs.copy()
+    if not valid.any():
+        return np.zeros_like(costs)
+    r = min(costs.shape)
+    # Assume all edges costs are within [-c, c], c >= 0.
+    # The cost of an invalid edge must be such that...
+    # choosing this edge once and the best-possible edge (r - 1) times
+    # is worse than choosing the worst-possible edge r times.
+    # l + (r - 1) (-c) > r c
+    # l > r c + (r - 1) c
+    # l > (2 r - 1) c
+    # Choose l = 2 r c + 1 > (2 r - 1) c.
+    c = np.abs(costs[valid]).max() + 1  # Doesn't hurt to add 1 here.
+    large_constant = 2 * r * c + 1
+    return np.where(valid, costs, large_constant)
+
+
+def _assert_solution_is_feasible(costs, rids, cids):
+    ijs = list(zip(rids, cids))
+    if len(ijs) != min(costs.shape):
+        raise AssertionError('infeasible solution: not enough edges')
+    elems = [costs[i, j] for i, j in ijs]
+    if not np.all(np.isfinite(elems)):
+        raise AssertionError('infeasible solution: includes non-finite edges')
+
+
 def lsa_solve_scipy(costs):
     """Solves the LSA problem using the scipy library."""
 
     from scipy.optimize import linear_sum_assignment as scipy_solve
 
-    # Note there is an issue in scipy.optimize.linear_sum_assignment where
-    # it runs forever if an entire row/column is infinite or nan. We therefore
-    # make a copy of the distance matrix and compute a safe value that indicates
-    # 'cannot assign'. Also note + 1 is necessary in below inv-dist computation
-    # to make invdist bigger than max dist in case max dist is zero.
-
-    inv = ~np.isfinite(costs)
-    if inv.any():
-        costs = costs.copy()
-        valid = costs[~inv]
-        INVDIST = 2 * valid.max() + 1 if valid.shape[0] > 0 else 1.
-        costs[inv] = INVDIST
-
-    return scipy_solve(costs)
+    finite_costs = add_expensive_edges(costs)
+    rids, cids = scipy_solve(finite_costs)
+    _assert_solution_is_feasible(costs, rids, cids)
+    return rids, cids
 
 
 def lsa_solve_lapsolver(costs):
     """Solves the LSA problem using the lapsolver library."""
     from lapsolver import solve_dense
-    return solve_dense(costs)
+
+    # Note that lapsolver will add expensive finite edges internally.
+    # However, older versions did not add a large enough edge.
+    finite_costs = add_expensive_edges(costs)
+    rids, cids = solve_dense(finite_costs)
+    _assert_solution_is_feasible(costs, rids, cids)
+    return rids, cids
 
 
 def lsa_solve_munkres(costs):
     """Solves the LSA problem using the Munkres library."""
-    from munkres import Munkres, DISALLOWED
+    from munkres import Munkres
+
+    num_rows, num_cols = costs.shape
     m = Munkres()
+    # The munkres package may hang if the problem is not feasible.
+    # Therefore, add expensive edges instead of using munkres.DISALLOWED.
+    finite_costs = add_expensive_edges(costs)
+    # Ensure that matrix is square.
+    finite_costs = _zero_pad_to_square(finite_costs)
+    indices = np.array(m.compute(finite_costs), dtype=np.int)
+    indices = indices[(indices[:, 0] < num_rows)
+                      & (indices[:, 1] < num_cols)]
+    rids, cids = indices[:, 0], indices[:, 1]
+    _assert_solution_is_feasible(costs, rids, cids)
+    return rids, cids
 
-    costs = costs.copy()
-    inv = ~np.isfinite(costs)
-    if inv.any():
-        costs = costs.astype(object)
-        costs[inv] = DISALLOWED
 
-    indices = np.array(m.compute(costs), dtype=np.int64)
-    return indices[:, 0], indices[:, 1]
+def _zero_pad_to_square(costs):
+    num_rows, num_cols = costs.shape
+    if num_rows == num_cols:
+        return costs
+    n = max(num_rows, num_cols)
+    padded = np.zeros((n, n), dtype=costs.dtype)
+    padded[:num_rows, :num_cols] = costs
+    return padded
 
 
 def lsa_solve_ortools(costs):
@@ -175,17 +228,18 @@ def lsa_solve_lapjv(costs):
 
     from lap import lapjv
 
-    inv = ~np.isfinite(costs)
-    if inv.any():
-        costs = costs.copy()
-        valid = costs[~inv]
-        INVDIST = 2 * valid.max() + 1 if valid.shape[0] > 0 else 1.
-        costs[inv] = INVDIST
-
-    r = lapjv(costs, return_cost=False, extend_cost=True)
-    indices = np.array((np.arange(costs.shape[0]), r[0]), dtype=np.int64).T
+    # The lap.lapjv function supports +inf edges but there are some issues.
+    # https://github.com/gatagat/lap/issues/20
+    # Therefore, replace nans with large finite cost.
+    finite_costs = add_expensive_edges(costs)
+    row_to_col, _ = lapjv(finite_costs, return_cost=False, extend_cost=True)
+    indices = np.array([np.arange(costs.shape[0]), row_to_col], dtype=np.int).T
+    # Exclude unmatched rows (in case of unbalanced problem).
     indices = indices[indices[:, 1] != -1]  # pylint: disable=unsubscriptable-object
-    return indices[:, 0], indices[:, 1]
+    rids, cids = indices[:, 0], indices[:, 1]
+    # Ensure that no missing edges were chosen.
+    _assert_solution_is_feasible(costs, rids, cids)
+    return rids, cids
 
 
 available_solvers = None
