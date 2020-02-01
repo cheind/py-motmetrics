@@ -20,9 +20,9 @@ import time
 import numpy as np
 import pandas as pd
 
+from motmetrics import math_util
 from motmetrics.lap import linear_sum_assignment
 from motmetrics.mot import MOTAccumulator
-from motmetrics import math_util
 
 try:
     _getargspec = inspect.getfullargspec
