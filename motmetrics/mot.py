@@ -91,8 +91,21 @@ class MOTAccumulator(object):
             in units of count.
         """
 
+        # Parameters of the accumulator.
         self.auto_id = auto_id
         self.max_switch_time = max_switch_time
+
+        # Accumulator state.
+        self._events = None
+        self._indices = None
+        self.m = None
+        self.res_m = None
+        self.last_occurrence = None
+        self.last_match = None
+        self.hypHistory = None
+        self.dirty_events = None
+        self.cached_events_df = None
+
         self.reset()
 
     def reset(self):
@@ -100,7 +113,6 @@ class MOTAccumulator(object):
 
         self._events = {field: [] for field in _EVENT_FIELDS}
         self._indices = {field: [] for field in _INDEX_FIELDS}
-        # self.events = MOTAccumulator.new_event_dataframe()
         self.m = {}  # Pairings up to current timestamp
         self.res_m = {}  # Result pairings up to now
         self.last_occurrence = {}  # Tracks most recent occurance of object
@@ -158,6 +170,7 @@ class MOTAccumulator(object):
         1. Bernardin, Keni, and Rainer Stiefelhagen. "Evaluating multiple object tracking performance: the CLEAR MOT metrics."
         EURASIP Journal on Image and Video Processing 2008.1 (2008): 1-10.
         """
+        # pylint: disable=too-many-locals, too-many-statements
 
         self.dirty_events = True
         oids = np.asarray(oids)
@@ -359,6 +372,7 @@ class MOTAccumulator(object):
 
     @staticmethod
     def merge_analysis(anas, infomap):
+        # pylint: disable=missing-function-docstring
         res = {'hyp': {}, 'obj': {}}
         mapp = {'hyp': 'hid_map', 'obj': 'oid_map'}
         for ana, infom in zip(anas, infomap):
@@ -417,6 +431,7 @@ class MOTAccumulator(object):
 
             # Update index
             if update_frame_indices:
+                # pylint: disable=cell-var-from-loop
                 next_frame_id = max(r.index.get_level_values(0).max() + 1, r.index.get_level_values(0).unique().shape[0])
                 if np.isnan(next_frame_id):
                     next_frame_id = 0
@@ -425,11 +440,13 @@ class MOTAccumulator(object):
 
             # Update object / hypothesis ids
             if update_oids:
+                # pylint: disable=cell-var-from-loop
                 oid_map = dict([oid, str(next(new_oid))] for oid in copy['OId'].dropna().unique())
                 copy['OId'] = copy['OId'].map(lambda x: oid_map[x], na_action='ignore')
                 infos['oid_map'] = oid_map
 
             if update_hids:
+                # pylint: disable=cell-var-from-loop
                 hid_map = dict([hid, str(next(new_hid))] for hid in copy['HId'].dropna().unique())
                 copy['HId'] = copy['HId'].map(lambda x: hid_map[x], na_action='ignore')
                 infos['hid_map'] = hid_map

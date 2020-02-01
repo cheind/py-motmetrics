@@ -12,6 +12,8 @@ from __future__ import print_function
 
 import numpy as np
 
+from motmetrics import math_util
+
 
 def norm2squared_matrix(objs, hyps, max_d2=float('inf')):
     """Computes the squared Euclidean distance matrix between object and hypothesis points.
@@ -63,6 +65,7 @@ def rect_min_max(r):
 
 
 def boxiou(a, b):
+    """Computes IOU of two rectangles."""
     a_min, a_max = rect_min_max(a)
     b_min, b_max = rect_min_max(b)
     # Compute intersection.
@@ -76,9 +79,8 @@ def boxiou(a, b):
     a_vol = np.prod(a_size, axis=-1)
     b_vol = np.prod(b_size, axis=-1)
     u_vol = a_vol + b_vol - i_vol
-    # return np.where(i_vol == 0, np.zeros_like(i_vol), i_vol / u_vol)
-    # TODO: Use quiet divide here to avoid warning?
-    return i_vol / u_vol
+    return np.where(i_vol == 0, np.zeros_like(i_vol, dtype=np.float),
+                    math_util.quiet_divide(i_vol, u_vol))
 
 
 def iou_matrix(objs, hyps, max_iou=1.):

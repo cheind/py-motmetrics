@@ -1,3 +1,5 @@
+"""Tests IO functions."""
+
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -12,6 +14,7 @@ DATA_DIR = os.path.join(os.path.dirname(__file__), '../data')
 
 
 def test_load_vatic():
+    """Tests VATIC_TXT format."""
     df = mm.io.loadtxt(os.path.join(DATA_DIR, 'iotest/vatic.txt'), fmt=mm.io.Format.VATIC_TXT)
 
     expected = pd.DataFrame([
@@ -26,6 +29,7 @@ def test_load_vatic():
 
 
 def test_load_motchallenge():
+    """Tests MOT15_2D format."""
     df = mm.io.loadtxt(os.path.join(DATA_DIR, 'iotest/motchallenge.txt'), fmt=mm.io.Format.MOT15_2D)
 
     expected = pd.DataFrame([
@@ -40,6 +44,7 @@ def test_load_motchallenge():
 
 
 def test_load_detrac_mat():
+    """Tests DETRAC_MAT format."""
     df = mm.io.loadtxt(os.path.join(DATA_DIR, 'iotest/detrac.mat'), fmt=mm.io.Format.DETRAC_MAT)
 
     expected = pd.DataFrame([
@@ -53,6 +58,7 @@ def test_load_detrac_mat():
 
 
 def test_load_detrac_xml():
+    """Tests DETRAC_XML format."""
     df = mm.io.loadtxt(os.path.join(DATA_DIR, 'iotest/detrac.xml'), fmt=mm.io.Format.DETRAC_XML)
 
     expected = pd.DataFrame([

@@ -12,12 +12,12 @@ from __future__ import print_function
 
 import numpy as np
 
-from .distances import iou_matrix, norm2squared_matrix
-from .mot import MOTAccumulator
-from .preprocess import preprocessResult
+from motmetrics.distances import iou_matrix, norm2squared_matrix
+from motmetrics.mot import MOTAccumulator
+from motmetrics.preprocess import preprocessResult
 
 
-def compare_to_groundtruth(gt, dt, dist='iou', distfields=['X', 'Y', 'Width', 'Height'], distth=0.5):
+def compare_to_groundtruth(gt, dt, dist='iou', distfields=None, distth=0.5):
     """Compare groundtruth and detector results.
 
     This method assumes both results are given in terms of DataFrames with at least the following fields
@@ -42,6 +42,9 @@ def compare_to_groundtruth(gt, dt, dist='iou', distfields=['X', 'Y', 'Width', 'H
     distth: float, optional
         Maximum tolerable distance. Pairs exceeding this threshold are marked 'do-not-pair'.
     """
+    # pylint: disable=too-many-locals
+    if distfields is None:
+        distfields = ['X', 'Y', 'Width', 'Height']
 
     def compute_iou(a, b):
         return iou_matrix(a, b, max_iou=distth)
@@ -79,7 +82,7 @@ def compare_to_groundtruth(gt, dt, dist='iou', distfields=['X', 'Y', 'Width', 'H
     return acc
 
 
-def CLEAR_MOT_M(gt, dt, inifile, dist='iou', distfields=['X', 'Y', 'Width', 'Height'], distth=0.5, include_all=False, vflag=''):
+def CLEAR_MOT_M(gt, dt, inifile, dist='iou', distfields=None, distth=0.5, include_all=False, vflag=''):
     """Compare groundtruth and detector results.
 
     This method assumes both results are given in terms of DataFrames with at least the following fields
@@ -104,6 +107,9 @@ def CLEAR_MOT_M(gt, dt, inifile, dist='iou', distfields=['X', 'Y', 'Width', 'Hei
     distth: float, optional
         Maximum tolerable distance. Pairs exceeding this threshold are marked 'do-not-pair'.
     """
+    # pylint: disable=too-many-locals
+    if distfields is None:
+        distfields = ['X', 'Y', 'Width', 'Height']
 
     def compute_iou(a, b):
         return iou_matrix(a, b, max_iou=distth)

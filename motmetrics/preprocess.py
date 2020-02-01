@@ -20,6 +20,11 @@ from motmetrics.lap import linear_sum_assignment
 
 
 def preprocessResult(res, gt, inifile):
+    """Preprocesses data for utils.CLEAR_MOT_M.
+
+    Returns a subset of the predictions.
+    """
+    # pylint: disable=too-many-locals
     st = time.time()
     labels = [
         'ped',               # 1
@@ -36,10 +41,10 @@ def preprocessResult(res, gt, inifile):
         'reflection',        # 12
         'crowd',             # 13
     ]
-    distractors_ = ['person_on_vhcl', 'static_person', 'distractor', 'reflection']
-    distractors = {i + 1: x in distractors_ for i, x in enumerate(labels)}
-    for i in distractors_:
-        distractors[i] = 1
+    distractors = ['person_on_vhcl', 'static_person', 'distractor', 'reflection']
+    is_distractor = {i + 1: x in distractors for i, x in enumerate(labels)}
+    for i in distractors:
+        is_distractor[i] = 1
     seqIni = ConfigParser()
     seqIni.read(inifile, encoding='utf8')
     F = int(seqIni['Sequence']['seqLength'])
@@ -59,7 +64,10 @@ def preprocessResult(res, gt, inifile):
         # en = time.time()
         # print('----', 'disM', en - st)
         le, ri = linear_sum_assignment(disM)
-        flags = [1 if distractors[it['ClassId']] or it['Visibility'] < 0. else 0 for i, (k, it) in enumerate(GTInFrame.iterrows())]
+        flags = [
+            1 if is_distractor[it['ClassId']] or it['Visibility'] < 0. else 0
+            for i, (k, it) in enumerate(GTInFrame.iterrows())
+        ]
         hid = [k for k, it in resInFrame.iterrows()]
         for i, j in zip(le, ri):
             if not np.isfinite(disM[i, j]):
@@ -69,5 +77,6 @@ def preprocessResult(res, gt, inifile):
         # en = time.time()
         # print('Frame %d: '%t, en - st)
     ret = res.drop(labels=todrop)
-    logging.info('Preprocess take %.3f seconds and remove %d boxes.' % (time.time() - st, len(todrop)))
+    logging.info('Preprocess take %.3f seconds and remove %d boxes.',
+                 time.time() - st, len(todrop))
     return ret

@@ -1,3 +1,5 @@
+"""Tests computation of metrics from accumulator."""
+
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -14,6 +16,7 @@ DATA_DIR = os.path.join(os.path.dirname(__file__), '../data')
 
 
 def test_metricscontainer_1():
+    """Tests registration of events with dependencies."""
     m = mm.metrics.MetricsHost()
     m.register(lambda df: 1., name='a')
     m.register(lambda df: 2., name='b')
@@ -27,6 +30,7 @@ def test_metricscontainer_1():
 
 
 def test_metricscontainer_autodep():
+    """Tests automatic dependencies from argument names."""
     m = mm.metrics.MetricsHost()
     m.register(lambda df: 1., name='a')
     m.register(lambda df: 2., name='b')
@@ -40,21 +44,22 @@ def test_metricscontainer_autodep():
 
 
 def test_metricscontainer_autoname():
+    """Tests automatic names (and dependencies) from inspection."""
 
-    def constant_a(df):
+    def constant_a(_):
         """Constant a help."""
         return 1.
 
-    def constant_b(df):
+    def constant_b(_):
         return 2.
 
-    def add(df, constant_a, constant_b):
+    def add(_, constant_a, constant_b):
         return constant_a + constant_b
 
-    def sub(df, constant_a, constant_b):
+    def sub(_, constant_a, constant_b):
         return constant_a - constant_b
 
-    def mul(df, add, sub):
+    def mul(_, add, sub):
         return add * sub
 
     m = mm.metrics.MetricsHost()
@@ -73,6 +78,7 @@ def test_metricscontainer_autoname():
 
 
 def test_metrics_with_no_events():
+    """Tests metrics when accumulator is empty."""
     acc = mm.MOTAccumulator()
 
     mh = mm.metrics.create()
@@ -89,6 +95,7 @@ def test_metrics_with_no_events():
 
 
 def test_assignment_metrics_with_empty_groundtruth():
+    """Tests metrics when there are no ground-truth objects."""
     acc = mm.MOTAccumulator(auto_id=True)
     # Empty groundtruth.
     acc.update([], [1, 2, 3, 4], [])
@@ -110,6 +117,7 @@ def test_assignment_metrics_with_empty_groundtruth():
 
 
 def test_assignment_metrics_with_empty_predictions():
+    """Tests metrics when there are no predictions."""
     acc = mm.MOTAccumulator(auto_id=True)
     # Empty predictions.
     acc.update([1, 2, 3, 4], [], [])
@@ -131,6 +139,7 @@ def test_assignment_metrics_with_empty_predictions():
 
 
 def test_assignment_metrics_with_both_empty():
+    """Tests metrics when there are no ground-truth objects or predictions."""
     acc = mm.MOTAccumulator(auto_id=True)
     # Empty groundtruth and empty predictions.
     acc.update([], [], [])
@@ -151,12 +160,13 @@ def test_assignment_metrics_with_both_empty():
     assert metr['idfn'] == 0
 
 
-def extract_counts(acc):
+def _extract_counts(acc):
     df_map = mm.metrics.events_to_df_map(acc.events)
     return mm.metrics.extract_counts_from_df_map(df_map)
 
 
 def test_extract_counts():
+    """Tests events_to_df_map() and extract_counts_from_df_map()."""
     acc = mm.MOTAccumulator()
     # All FP
     acc.update([], [1, 2], [], frameid=0)
@@ -171,7 +181,7 @@ def test_extract_counts():
     # No data
     acc.update([], [], [], frameid=5)
 
-    ocs, hcs, tps = extract_counts(acc)
+    ocs, hcs, tps = _extract_counts(acc)
 
     assert ocs == {1: 4, 2: 4}
     assert hcs == {1: 4, 2: 4}
@@ -203,23 +213,24 @@ def test_extract_pandas_series_issue():
     acc = mm.MOTAccumulator(auto_id=True)
     acc.update([0], [1], [[0.1]])
     acc.update([0], [1], [[0.1]])
-    ocs, hcs, tps = extract_counts(acc)
+    ocs, hcs, tps = _extract_counts(acc)
     assert ocs == {0: 2}
     assert hcs == {1: 2}
     assert tps == {(0, 1): 2}
 
 
-def test_benchmark_extract_counts_from_df_map(benchmark):
+def test_benchmark_extract_counts(benchmark):
+    """Benchmarks events_to_df_map() and extract_counts_from_df_map()."""
     rand = np.random.RandomState(0)
-    acc = accum_random_uniform(
+    acc = _accum_random_uniform(
         rand, seq_len=100, num_objs=50, num_hyps=5000,
         objs_per_frame=20, hyps_per_frame=40)
-    benchmark(extract_counts, acc)
+    benchmark(_extract_counts, acc)
 
 
-def accum_random_uniform(rand, seq_len, num_objs, num_hyps, objs_per_frame, hyps_per_frame):
+def _accum_random_uniform(rand, seq_len, num_objs, num_hyps, objs_per_frame, hyps_per_frame):
     acc = mm.MOTAccumulator(auto_id=True)
-    for t in range(seq_len):
+    for _ in range(seq_len):
         # Choose subset of objects present in this frame.
         objs = rand.choice(num_objs, objs_per_frame, replace=False)
         # Choose subset of hypotheses present in this frame.
@@ -230,6 +241,7 @@ def accum_random_uniform(rand, seq_len, num_objs, num_hyps, objs_per_frame, hyps
 
 
 def test_mota_motp():
+    """Tests values of MOTA and MOTP."""
     acc = mm.MOTAccumulator()
 
     # All FP
@@ -260,6 +272,7 @@ def test_mota_motp():
 
 
 def test_ids():
+    """Test metrics with frame IDs specified manually."""
     acc = mm.MOTAccumulator()
 
     # No data
@@ -294,7 +307,7 @@ def test_ids():
 
 
 def test_correct_average():
-    # Tests what is being depicted in figure 3 of 'Evaluating MOT Performance'
+    """Tests what is depicted in figure 3 of 'Evaluating MOT Performance'."""
     acc = mm.MOTAccumulator(auto_id=True)
 
     # No track
@@ -315,6 +328,7 @@ def test_correct_average():
 
 
 def test_motchallenge_files():
+    """Tests metrics for sequences TUD-Campus and TUD-Stadtmitte."""
     dnames = [
         'TUD-Campus',
         'TUD-Stadtmitte',
