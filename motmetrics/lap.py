@@ -52,6 +52,9 @@ def linear_sum_assignment(costs, solver=None):
         When callable: function to invoke
         When None: uses first available solver
     """
+    costs = np.asarray(costs)
+    if not costs.size:
+        return np.empty([0], dtype=int), np.empty([0], dtype=int)
 
     solver = solver or default_solver
 
