@@ -244,11 +244,7 @@ class MOTAccumulator(object):
             dists[oids_masked, :] = np.nan
             dists[:, hids_masked] = np.nan
 
-            # Replace missing edges with expensive edges to ensure feasibility.
-            # Note that add_expensive_edges() may also be called within the solver.
-            # However, its computational cost is small compared to the solver itself.
-            rids, cids = lap.linear_sum_assignment(
-                lap.add_expensive_edges(dists))
+            rids, cids = lap.linear_sum_assignment(dists)
 
             for i, j in zip(rids, cids):
                 if not np.isfinite(dists[i, j]):

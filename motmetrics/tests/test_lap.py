@@ -60,10 +60,17 @@ def test_assign_empty(solver):
 
 
 @pytest.mark.parametrize('solver', SOLVERS)
-def test_assign_infeasible_raises(solver):
-    costs = np.asfarray([[np.nan, np.nan, 1], [np.nan, np.nan, 2], [8, 7, 4]])
-    with pytest.raises(AssertionError):
-        lap.linear_sum_assignment(costs, solver=solver)
+def test_assign_infeasible(solver):
+    costs = np.asfarray([[np.nan, np.nan, 2],
+                         [np.nan, np.nan, 1],
+                         [8, 7, 4]])
+    costs_copy = costs.copy()
+    result = lap.linear_sum_assignment(costs, solver=solver)
+
+    # Optimal matching is (1, 2), (2, 1).
+    expected = np.array([[1, 2], [2, 1]])
+    np.testing.assert_equal(result, expected)
+    np.testing.assert_equal(costs, costs_copy)
 
 
 @pytest.mark.parametrize('solver', SOLVERS)
@@ -162,13 +169,18 @@ def test_unbalanced_disallowed_tall(solver):
 
 
 @pytest.mark.parametrize('solver', SOLVERS)
-def test_unbalanced_infeasible_raises(solver):
-    costs = np.asfarray([[np.nan, np.nan, 1],
-                         [np.nan, np.nan, 2],
+def test_unbalanced_infeasible(solver):
+    costs = np.asfarray([[np.nan, np.nan, 2],
+                         [np.nan, np.nan, 1],
                          [np.nan, np.nan, 3],
                          [8, 7, 4]])
-    with pytest.raises(AssertionError):
-        lap.linear_sum_assignment(costs, solver=solver)
+    costs_copy = costs.copy()
+    result = lap.linear_sum_assignment(costs, solver=solver)
+
+    # Optimal matching is (1, 2), (3, 1).
+    expected = np.array([[1, 3], [2, 1]])
+    np.testing.assert_equal(result, expected)
+    np.testing.assert_equal(costs, costs_copy)
 
 
 def test_change_solver():

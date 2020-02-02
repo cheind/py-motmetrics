@@ -103,13 +103,12 @@ def add_expensive_edges(costs):
     return np.where(valid, costs, large_constant)
 
 
-def _assert_solution_is_feasible(costs, rids, cids):
-    ijs = list(zip(rids, cids))
-    if len(ijs) != min(costs.shape):
-        raise AssertionError('infeasible solution: not enough edges')
-    elems = [costs[i, j] for i, j in ijs]
-    if not np.all(np.isfinite(elems)):
-        raise AssertionError('infeasible solution: includes non-finite edges')
+def _exclude_missing_edges(costs, rids, cids):
+    subset = [
+        index for index, (i, j) in enumerate(zip(rids, cids))
+        if np.isfinite(costs[i, j])
+    ]
+    return rids[subset], cids[subset]
 
 
 def lsa_solve_scipy(costs):
@@ -120,7 +119,7 @@ def lsa_solve_scipy(costs):
     # scipy (1.3.3) does not support nan or inf values
     finite_costs = add_expensive_edges(costs)
     rids, cids = scipy_solve(finite_costs)
-    _assert_solution_is_feasible(costs, rids, cids)
+    rids, cids = _exclude_missing_edges(costs, rids, cids)
     return rids, cids
 
 
@@ -132,7 +131,7 @@ def lsa_solve_lapsolver(costs):
     # However, older versions did not add a large enough edge.
     finite_costs = add_expensive_edges(costs)
     rids, cids = solve_dense(finite_costs)
-    _assert_solution_is_feasible(costs, rids, cids)
+    rids, cids = _exclude_missing_edges(costs, rids, cids)
     return rids, cids
 
 
@@ -152,7 +151,7 @@ def lsa_solve_munkres(costs):
     indices = indices[(indices[:, 0] < num_rows)
                       & (indices[:, 1] < num_cols)]
     rids, cids = indices[:, 0], indices[:, 1]
-    _assert_solution_is_feasible(costs, rids, cids)
+    rids, cids = _exclude_missing_edges(costs, rids, cids)
     return rids, cids
 
 
@@ -193,7 +192,13 @@ def lsa_solve_ortools(costs):
         assignment.AddArcWithCost(r, c, int_cost)
 
     status = assignment.Solve()
-    _ortools_assert_is_optimal(pywrapgraph, status)
+    try:
+        _ortools_assert_is_optimal(pywrapgraph, status)
+    except AssertionError:
+        # Default to scipy solver rather than add finite edges.
+        # (This maintains the same behaviour as previous versions.)
+        return linear_sum_assignment(costs, solver='scipy')
+
     return _ortools_extract_solution(assignment)
 
 
@@ -286,7 +291,7 @@ def lsa_solve_lapjv(costs):
     indices = indices[indices[:, 1] != -1]  # pylint: disable=unsubscriptable-object
     rids, cids = indices[:, 0], indices[:, 1]
     # Ensure that no missing edges were chosen.
-    _assert_solution_is_feasible(costs, rids, cids)
+    rids, cids = _exclude_missing_edges(costs, rids, cids)
     return rids, cids
 
 
