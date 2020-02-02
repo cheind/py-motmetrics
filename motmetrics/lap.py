@@ -145,7 +145,7 @@ def lsa_solve_munkres(costs):
     finite_costs = add_expensive_edges(costs)
     # Ensure that matrix is square.
     finite_costs = _zero_pad_to_square(finite_costs)
-    indices = np.array(m.compute(finite_costs), dtype=np.int)
+    indices = np.array(m.compute(finite_costs), dtype=int)
     # Exclude extra matches from extension to square matrix.
     indices = indices[(indices[:, 0] < costs.shape[0])
                       & (indices[:, 1] < costs.shape[1])]
@@ -265,13 +265,13 @@ def _ortools_assert_is_optimal(pywrapgraph, status):
 
 def _ortools_extract_solution(assignment):
     if assignment.NumNodes() == 0:
-        return np.array([], dtype=np.int), np.array([], dtype=np.int)
+        return np.array([], dtype=int), np.array([], dtype=int)
 
     pairings = []
     for i in range(assignment.NumNodes()):
         pairings.append([i, assignment.RightMate(i)])
 
-    indices = np.array(pairings, dtype=np.int)
+    indices = np.array(pairings, dtype=int)
     return indices[:, 0], indices[:, 1]
 
 
@@ -285,7 +285,7 @@ def lsa_solve_lapjv(costs):
     # Therefore, replace nans with large finite cost.
     finite_costs = add_expensive_edges(costs)
     row_to_col, _ = lapjv(finite_costs, return_cost=False, extend_cost=True)
-    indices = np.array([np.arange(costs.shape[0]), row_to_col], dtype=np.int).T
+    indices = np.array([np.arange(costs.shape[0]), row_to_col], dtype=int).T
     # Exclude unmatched rows (in case of unbalanced problem).
     indices = indices[indices[:, 1] != -1]  # pylint: disable=unsubscriptable-object
     rids, cids = indices[:, 0], indices[:, 1]
