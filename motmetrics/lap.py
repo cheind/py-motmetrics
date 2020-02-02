@@ -54,7 +54,7 @@ def linear_sum_assignment(costs, solver=None):
     """
     costs = np.asarray(costs)
     if not costs.size:
-        return np.empty([0], dtype=int), np.empty([0], dtype=int)
+        return np.array([], dtype=int), np.array([], dtype=int)
 
     solver = solver or default_solver
 
@@ -75,8 +75,8 @@ def add_expensive_edges(costs):
     If the optimal solution includes one of these edges,
     then the original problem was infeasible.
 
-    Kwargs
-    ------
+    Parameters
+    ----------
     costs : np.ndarray
     """
     # The graph is probably already dense if we are doing this.
@@ -117,6 +117,7 @@ def lsa_solve_scipy(costs):
 
     from scipy.optimize import linear_sum_assignment as scipy_solve
 
+    # scipy (1.3.3) does not support nan or inf values
     finite_costs = add_expensive_edges(costs)
     rids, cids = scipy_solve(finite_costs)
     _assert_solution_is_feasible(costs, rids, cids)
@@ -147,6 +148,7 @@ def lsa_solve_munkres(costs):
     # Ensure that matrix is square.
     finite_costs = _zero_pad_to_square(finite_costs)
     indices = np.array(m.compute(finite_costs), dtype=np.int)
+    # Exclude extra matches from extension to square matrix.
     indices = indices[(indices[:, 0] < num_rows)
                       & (indices[:, 1] < num_cols)]
     rids, cids = indices[:, 0], indices[:, 1]
@@ -165,61 +167,107 @@ def _zero_pad_to_square(costs):
 
 
 def lsa_solve_ortools(costs):
-    """Solves the LSA problem using Google's optimization tools."""
+    """Solves the LSA problem using Google's optimization tools. """
     from ortools.graph import pywrapgraph
 
-    # Google OR tools only support integer costs. Here's our attempt
-    # to convert from floating point to integer:
-    #
-    # We search for the minimum difference between any two costs and
-    # compute the first non-zero digit after the decimal place. Then
-    # we compute a factor,f, that scales all costs so that the difference
-    # is integer representable in the first digit.
-    #
-    # Example: min-diff is 0.001, then first non-zero digit place -3, so
-    # we scale by 1e3.
-    #
-    # For small min-diffs and large costs in general there is a change of
-    # overflowing.
-
-    valid = np.isfinite(costs)
-
-    min_e = -8
-    unique = np.unique(costs[valid])
-
-    if unique.shape[0] == 1:
-        min_diff = unique[0]
-    elif unique.shape[0] > 1:
-        min_diff = np.diff(unique).min()
-    else:
-        min_diff = 1
-
-    min_diff_e = 0
-    if min_diff != 0.0:
-        min_diff_e = int(np.log10(np.abs(min_diff)))
-        if min_diff_e < 0:
-            min_diff_e -= 1
-
-    e = min(max(min_e, min_diff_e), 0)
-    f = 10**abs(e)
-
-    assignment = pywrapgraph.LinearSumAssignment()
-    for r in range(costs.shape[0]):
-        for c in range(costs.shape[1]):
-            if valid[r, c]:
-                assignment.AddArcWithCost(r, c, int(costs[r, c] * f))
-
-    if assignment.Solve() != assignment.OPTIMAL:
+    if costs.shape[0] != costs.shape[1]:
+        # ortools assumes that the problem is square.
+        # Non-square problem will be infeasible.
+        # Default to scipy solver rather than add extra zeros.
+        # (This maintains the same behaviour as previous versions.)
         return linear_sum_assignment(costs, solver='scipy')
 
+    rs, cs = np.isfinite(costs).nonzero()  # pylint: disable=unbalanced-tuple-unpacking
+    finite_costs = costs[rs, cs]
+    scale = find_scale_for_integer_approximation(finite_costs)
+    if scale != 1:
+        warnings.warn('costs are not integers; using approximation')
+    int_costs = np.round(scale * finite_costs).astype(int)
+
+    assignment = pywrapgraph.LinearSumAssignment()
+    # OR-Tools does not like to receive indices of type np.int64.
+    rs = rs.tolist()  # pylint: disable=no-member
+    cs = cs.tolist()
+    int_costs = int_costs.tolist()
+    for r, c, int_cost in zip(rs, cs, int_costs):
+        assignment.AddArcWithCost(r, c, int_cost)
+
+    status = assignment.Solve()
+    _ortools_assert_is_optimal(pywrapgraph, status)
+    return _ortools_extract_solution(assignment)
+
+
+def find_scale_for_integer_approximation(costs, base=10, log_max_scale=8, log_safety=2):
+    """Returns a multiplicative factor to use before rounding to integers.
+
+    Tries to find scale = base ** j (for j integer) such that:
+        abs(diff(unique(costs))) <= 1 / (scale * safety)
+    where safety = base ** log_safety.
+
+    Logs a warning if the desired resolution could not be achieved.
+    """
+    costs = np.asarray(costs)
+    costs = costs[np.isfinite(costs)]  # Exclude non-edges (nan, inf) and -inf.
+    if np.size(costs) == 0:
+        # No edges with numeric value. Scale does not matter.
+        return 1
+    unique = np.unique(costs)
+    if np.size(unique) == 1:
+        # All costs have equal values. Scale does not matter.
+        return 1
+    try:
+        _assert_integer(costs)
+    except AssertionError:
+        pass
+    else:
+        # The costs are already integers.
+        return 1
+
+    # Find scale = base ** e such that:
+    # 1 / scale <= tol, or
+    # e = log(scale) >= -log(tol)
+    # where tol = min(diff(unique(costs)))
+    min_diff = np.diff(unique).min()
+    e = np.ceil(np.log(min_diff) / np.log(base)).astype(int).item()
+    # Add optional non-negative safety factor to reduce quantization noise.
+    e += max(log_safety, 0)
+    # Ensure that we do not reduce the magnitude of the costs.
+    e = max(e, 0)
+    # Ensure that the scale is not too large.
+    if e > log_max_scale:
+        warnings.warn('could not achieve desired resolution for approximation: '
+                      'want exponent %d but max is %d', e, log_max_scale)
+        e = log_max_scale
+    scale = base ** e
+    return scale
+
+
+def _assert_integer(costs):
+    # Check that costs are not changed by rounding.
+    # Note: Elements of cost matrix may be nan, inf, -inf.
+    np.testing.assert_equal(np.round(costs), costs)
+
+
+def _ortools_assert_is_optimal(pywrapgraph, status):
+    if status == pywrapgraph.LinearSumAssignment.OPTIMAL:
+        pass
+    elif status == pywrapgraph.LinearSumAssignment.INFEASIBLE:
+        raise AssertionError('ortools: infeasible assignment problem')
+    elif status == pywrapgraph.LinearSumAssignment.POSSIBLE_OVERFLOW:
+        raise AssertionError('ortools: possible overflow in assignment problem')
+    else:
+        raise AssertionError('ortools: unknown status')
+
+
+def _ortools_extract_solution(assignment):
     if assignment.NumNodes() == 0:
-        return np.array([], dtype=np.int64), np.array([], dtype=np.int64)
+        return np.array([], dtype=np.int), np.array([], dtype=np.int)
 
     pairings = []
     for i in range(assignment.NumNodes()):
         pairings.append([i, assignment.RightMate(i)])
 
-    indices = np.array(pairings, dtype=np.int64)
+    indices = np.array(pairings, dtype=np.int)
     return indices[:, 0], indices[:, 1]
 
 
