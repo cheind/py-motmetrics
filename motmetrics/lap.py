@@ -139,7 +139,6 @@ def lsa_solve_munkres(costs):
     """Solves the LSA problem using the Munkres library."""
     from munkres import Munkres
 
-    num_rows, num_cols = costs.shape
     m = Munkres()
     # The munkres package may hang if the problem is not feasible.
     # Therefore, add expensive edges instead of using munkres.DISALLOWED.
@@ -148,8 +147,8 @@ def lsa_solve_munkres(costs):
     finite_costs = _zero_pad_to_square(finite_costs)
     indices = np.array(m.compute(finite_costs), dtype=np.int)
     # Exclude extra matches from extension to square matrix.
-    indices = indices[(indices[:, 0] < num_rows)
-                      & (indices[:, 1] < num_cols)]
+    indices = indices[(indices[:, 0] < costs.shape[0])
+                      & (indices[:, 1] < costs.shape[1])]
     rids, cids = indices[:, 0], indices[:, 1]
     rids, cids = _exclude_missing_edges(costs, rids, cids)
     return rids, cids
