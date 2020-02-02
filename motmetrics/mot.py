@@ -16,7 +16,7 @@ import itertools
 import numpy as np
 import pandas as pd
 
-from motmetrics import lap
+from motmetrics.lap import linear_sum_assignment
 
 _INDEX_FIELDS = ['FrameId', 'Event']
 _EVENT_FIELDS = ['Type', 'OId', 'HId', 'D']
@@ -244,7 +244,7 @@ class MOTAccumulator(object):
             dists[oids_masked, :] = np.nan
             dists[:, hids_masked] = np.nan
 
-            rids, cids = lap.linear_sum_assignment(dists)
+            rids, cids = linear_sum_assignment(dists)
 
             for i, j in zip(rids, cids):
                 if not np.isfinite(dists[i, j]):
