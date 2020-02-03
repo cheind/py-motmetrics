@@ -27,8 +27,10 @@ install:
     - pip install pytest-benchmark
     - pip install .
     # Install solvers for tests.
-    - pip install lap munkres ortools
+    - pip install lap scipy ortools
     # lapsolver does not provide a version for python 2
     - pip install "lapsolver; python_version >= '3'"
+    # munkres no longer supports python 2
+    - pip install "munkres; python_version >= '3'"
 
 script: pytest

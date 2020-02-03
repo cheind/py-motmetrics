@@ -11,9 +11,9 @@ import pytest
 
 from motmetrics import lap
 
-SOLVERS = ['scipy', 'munkres', 'ortools', 'lap', 'lapsolver']
-if sys.version_info < (3,):
-    SOLVERS = [x for x in SOLVERS if x not in ['lapsolver']]
+SOLVERS = ['lap', 'ortools', 'scipy']
+if sys.version_info >= (3,):
+    SOLVERS += ['lapsolver', 'munkres']
 
 
 @pytest.mark.parametrize('solver', SOLVERS)
