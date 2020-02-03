@@ -5,15 +5,21 @@ from __future__ import division
 from __future__ import print_function
 
 import sys
+import warnings
 
 import numpy as np
 import pytest
 
 from motmetrics import lap
 
-SOLVERS = ['lap', 'ortools', 'scipy']
-if sys.version_info >= (3,):
-    SOLVERS += ['lapsolver', 'munkres']
+DESIRED_SOLVERS = ['lap', 'lapsolver', 'munkres', 'ortools', 'scipy']
+SOLVERS = lap.available_solvers
+
+
+@pytest.mark.parametrize('solver', DESIRED_SOLVERS)
+def test_solver_is_available(solver):
+    if solver not in lap.available_solvers:
+        warnings.warn('solver not available: ' + solver)
 
 
 @pytest.mark.parametrize('solver', SOLVERS)
