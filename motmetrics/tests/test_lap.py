@@ -4,12 +4,16 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import sys
+
 import numpy as np
 import pytest
 
 from motmetrics import lap
 
 SOLVERS = ['scipy', 'munkres', 'ortools', 'lap', 'lapsolver']
+if sys.version_info >= (3,):
+    SOLVERS = [x for x in SOLVERS if x not in ['lapsolver']]
 
 
 @pytest.mark.parametrize('solver', SOLVERS)
