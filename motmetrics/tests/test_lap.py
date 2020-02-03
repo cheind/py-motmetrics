@@ -65,6 +65,7 @@ def test_assign_empty(solver):
 
 @pytest.mark.parametrize('solver', SOLVERS)
 def test_assign_infeasible(solver):
+    """Tests that minimum-cost solution with most edges is found."""
     costs = np.asfarray([[np.nan, np.nan, 2],
                          [np.nan, np.nan, 1],
                          [8, 7, 4]])
@@ -174,6 +175,7 @@ def test_unbalanced_disallowed_tall(solver):
 
 @pytest.mark.parametrize('solver', SOLVERS)
 def test_unbalanced_infeasible(solver):
+    """Tests that minimum-cost solution with most edges is found."""
     costs = np.asfarray([[np.nan, np.nan, 2],
                          [np.nan, np.nan, 1],
                          [np.nan, np.nan, 3],
