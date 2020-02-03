@@ -33,9 +33,9 @@ install:
   # OR-Tools does not support 32-bit.
   # https://developers.google.com/optimization/install/python/windows
   - ps: >-
-    if ($env:PYTHON_ARCH -eq "64") {
-      cmd /c 'pip install ortools 2>&1'
-    }
+      if ($env:PYTHON_ARCH -eq "64") {
+        cmd /c 'pip install ortools 2>&1'
+      }
 
 build_script:
   - python setup.py sdist
