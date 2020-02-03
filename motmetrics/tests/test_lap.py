@@ -12,7 +12,7 @@ import pytest
 from motmetrics import lap
 
 SOLVERS = ['scipy', 'munkres', 'ortools', 'lap', 'lapsolver']
-if sys.version_info >= (3,):
+if sys.version_info < (3,):
     SOLVERS = [x for x in SOLVERS if x not in ['lapsolver']]
 
 
