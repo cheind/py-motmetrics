@@ -82,16 +82,15 @@ def test_metrics_with_no_events():
     acc = mm.MOTAccumulator()
 
     mh = mm.metrics.create()
-    metr = mh.compute(
-        acc,
-        metrics=['motp', 'mota', 'num_predictions'],
-        return_dataframe=False,
-        return_cached=True)
+    metr = mh.compute(acc, return_dataframe=False, return_cached=True, metrics=[
+        'mota', 'motp', 'num_predictions', 'num_objects', 'num_detections', 'num_frames',
+    ])
     assert np.isnan(metr['mota'])
     assert np.isnan(metr['motp'])
     assert metr['num_predictions'] == 0
     assert metr['num_objects'] == 0
     assert metr['num_detections'] == 0
+    assert metr['num_frames'] == 0
 
 
 def test_assignment_metrics_with_empty_groundtruth():
@@ -106,7 +105,7 @@ def test_assignment_metrics_with_empty_groundtruth():
     mh = mm.metrics.create()
     metr = mh.compute(acc, return_dataframe=False, metrics=[
         'num_matches', 'num_false_positives', 'num_misses',
-        'idtp', 'idfp', 'idfn',
+        'idtp', 'idfp', 'idfn', 'num_frames',
     ])
     assert metr['num_matches'] == 0
     assert metr['num_false_positives'] == 16
@@ -114,6 +113,7 @@ def test_assignment_metrics_with_empty_groundtruth():
     assert metr['idtp'] == 0
     assert metr['idfp'] == 16
     assert metr['idfn'] == 0
+    assert metr['num_frames'] == 4
 
 
 def test_assignment_metrics_with_empty_predictions():
@@ -128,7 +128,7 @@ def test_assignment_metrics_with_empty_predictions():
     mh = mm.metrics.create()
     metr = mh.compute(acc, return_dataframe=False, metrics=[
         'num_matches', 'num_false_positives', 'num_misses',
-        'idtp', 'idfp', 'idfn',
+        'idtp', 'idfp', 'idfn', 'num_frames',
     ])
     assert metr['num_matches'] == 0
     assert metr['num_false_positives'] == 0
@@ -136,6 +136,7 @@ def test_assignment_metrics_with_empty_predictions():
     assert metr['idtp'] == 0
     assert metr['idfp'] == 0
     assert metr['idfn'] == 16
+    assert metr['num_frames'] == 4
 
 
 def test_assignment_metrics_with_both_empty():
@@ -150,7 +151,7 @@ def test_assignment_metrics_with_both_empty():
     mh = mm.metrics.create()
     metr = mh.compute(acc, return_dataframe=False, metrics=[
         'num_matches', 'num_false_positives', 'num_misses',
-        'idtp', 'idfp', 'idfn',
+        'idtp', 'idfp', 'idfn', 'num_frames',
     ])
     assert metr['num_matches'] == 0
     assert metr['num_false_positives'] == 0
@@ -158,6 +159,7 @@ def test_assignment_metrics_with_both_empty():
     assert metr['idtp'] == 0
     assert metr['idfp'] == 0
     assert metr['idfn'] == 0
+    assert metr['num_frames'] == 4
 
 
 def _extract_counts(acc):
@@ -258,7 +260,10 @@ def test_mota_motp():
     acc.update([], [], [], frameid=5)
 
     mh = mm.metrics.create()
-    metr = mh.compute(acc, metrics=['motp', 'mota', 'num_predictions'], return_dataframe=False, return_cached=True)
+    metr = mh.compute(acc, return_dataframe=False, return_cached=True, metrics=[
+        'num_matches', 'num_false_positives', 'num_misses', 'num_switches', 'num_detections',
+        'num_objects', 'num_predictions', 'mota', 'motp', 'num_frames'
+    ])
 
     assert metr['num_matches'] == 4
     assert metr['num_false_positives'] == 2
@@ -269,6 +274,7 @@ def test_mota_motp():
     assert metr['num_predictions'] == 8
     assert metr['mota'] == approx(1. - (2 + 2 + 2) / 8)
     assert metr['motp'] == approx(11.1 / 6)
+    assert metr['num_frames'] == 6
 
 
 def test_ids():
@@ -291,7 +297,12 @@ def test_ids():
     acc.update([], [], [], frameid=6)
 
     mh = mm.metrics.create()
-    metr = mh.compute(acc, metrics=['motp', 'mota', 'num_predictions', 'num_transfer', 'num_ascend', 'num_migrate'], return_dataframe=False, return_cached=True)
+    metr = mh.compute(acc, return_dataframe=False, return_cached=True, metrics=[
+        'num_matches', 'num_false_positives', 'num_misses', 'num_switches',
+        'num_transfer', 'num_ascend', 'num_migrate',
+        'num_detections', 'num_objects', 'num_predictions',
+        'mota', 'motp', 'num_frames',
+    ])
     assert metr['num_matches'] == 7
     assert metr['num_false_positives'] == 0
     assert metr['num_misses'] == 0
@@ -304,6 +315,7 @@ def test_ids():
     assert metr['num_predictions'] == 10
     assert metr['mota'] == approx(1. - (0 + 0 + 3) / 10)
     assert metr['motp'] == approx(1.6 / 10)
+    assert metr['num_frames'] == 7
 
 
 def test_correct_average():
