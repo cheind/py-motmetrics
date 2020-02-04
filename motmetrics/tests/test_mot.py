@@ -106,6 +106,7 @@ def test_auto_id():
 
 def test_merge_dataframes():
     """Tests merge_event_dataframes()."""
+    # pylint: disable=too-many-statements
     acc = mm.MOTAccumulator()
 
     acc.update([], [1, 2], [], frameid=0)
