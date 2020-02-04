@@ -195,6 +195,10 @@ class MOTAccumulator(object):
         no = len(oids)
         nh = len(hids)
 
+        # Add a RAW event simply to ensure the frame is counted.
+        self._append_to_indices(frameid, next(eid))
+        self._append_to_events('RAW', np.nan, np.nan, np.nan)
+
         # There must be at least one RAW event per object and hypothesis.
         # Record all finite distances as RAW events.
         valid_i, valid_j = np.where(np.isfinite(dists))
