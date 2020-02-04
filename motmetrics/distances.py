@@ -46,12 +46,8 @@ def norm2squared_matrix(objs, hyps, max_d2=float('inf')):
 
     assert hyps.shape[1] == objs.shape[1], "Dimension mismatch"
 
-    C = np.empty((objs.shape[0], hyps.shape[0]))
-
-    for o in range(objs.shape[0]):
-        for h in range(hyps.shape[0]):
-            e = objs[o] - hyps[h]
-            C[o, h] = e.dot(e)
+    delta = objs[:, np.newaxis] - hyps[np.newaxis, :]
+    C = np.sum(delta ** 2, axis=-1)
 
     C[C > max_d2] = np.nan
     return C
