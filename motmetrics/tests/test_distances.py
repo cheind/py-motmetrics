@@ -11,15 +11,15 @@ import motmetrics as mm
 
 def test_norm2squared():
     """Tests norm2squared_matrix."""
-    a = np.array([
-        [1., 2],
-        [2., 2],
-        [3., 2],
+    a = np.asfarray([
+        [1, 2],
+        [2, 2],
+        [3, 2],
     ])
 
-    b = np.array([
-        [0., 0],
-        [1., 1],
+    b = np.asfarray([
+        [0, 0],
+        [1, 1],
     ])
 
     C = mm.distances.norm2squared_matrix(a, b)
@@ -46,7 +46,7 @@ def test_norm2squared():
 def test_norm2squared_empty():
     """Tests norm2squared_matrix with an empty input."""
     a = []
-    b = np.array([[0., 0], [1., 1]])
+    b = np.asfarray([[0, 0], [1, 1]])
     C = mm.distances.norm2squared_matrix(a, b)
     assert C.size == 0
     C = mm.distances.norm2squared_matrix(b, a)
