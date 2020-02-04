@@ -52,17 +52,12 @@ def preprocessResult(res, gt, inifile):
     for t in range(1, F + 1):
         if t not in res.index or t not in gt.index:
             continue
-        # st = time.time()
         resInFrame = res.loc[t]
-        # N = len(resInFrame)
 
         GTInFrame = gt.loc[t]
-        # Ngt = len(GTInFrame)
         A = GTInFrame[['X', 'Y', 'Width', 'Height']].values
         B = resInFrame[['X', 'Y', 'Width', 'Height']].values
         disM = mmd.iou_matrix(A, B, max_iou=0.5)
-        # en = time.time()
-        # print('----', 'disM', en - st)
         le, ri = linear_sum_assignment(disM)
         flags = [
             1 if is_distractor[it['ClassId']] or it['Visibility'] < 0. else 0
@@ -74,8 +69,6 @@ def preprocessResult(res, gt, inifile):
                 continue
             if flags[i]:
                 todrop.append((t, hid[j]))
-        # en = time.time()
-        # print('Frame %d: '%t, en - st)
     ret = res.drop(labels=todrop)
     logging.info('Preprocess take %.3f seconds and remove %d boxes.',
                  time.time() - st, len(todrop))
