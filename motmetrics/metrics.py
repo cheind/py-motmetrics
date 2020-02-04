@@ -701,33 +701,6 @@ def idf1_m(partials, idtp, num_objects, num_predictions):
     return math_util.quiet_divide(2 * idtp, num_objects + num_predictions)
 
 
-# def iou_sum(df):
-#     """Extra measures: sum IoU of all matches"""
-#     return (1 - df.noraw[(df.noraw.Type=='MATCH')|(df.noraw.Type=='SWITCH')].D).sum()
-
-# simple_add_func.append(iou_sum)
-
-# def siou_sum(df):
-#     """Extra measures: sum IoU of all matches"""
-#     return (1 - df.noraw[(df.noraw.Type=='SWITCH')].D).sum()
-
-# simple_add_func.append(siou_sum)
-
-# def avg_iou(df, iou_sum, num_matches, num_switches):
-#     """Extra measures: average IoU of all pairs"""
-#     return iou_sum / (num_matches + num_switches)
-
-# def avg_iou_m(partials, iou_sum, num_matches, num_switches):
-#     return iou_sum / (num_matches + num_switches)
-
-# def switch_iou(df, siou_sum, num_switches):
-#     """Extra measures: average IoU of all switches"""
-#     return siou_sum / (num_switches)
-
-# def switch_iou_m(partials, siou_sum, num_switches):
-#     return siou_sum / (num_switches)
-
-
 for one in simple_add_func:
     name = one.__name__
 
@@ -777,10 +750,6 @@ def create():
     m.register(idr, formatter='{:.1%}'.format)
     m.register(idf1, formatter='{:.1%}'.format)
 
-    # m.register(iou_sum, formatter='{:.3f}'.format)
-    # m.register(siou_sum, formatter='{:.3f}'.format)
-    # m.register(avg_iou, formatter='{:.3f}'.format)
-    # m.register(switch_iou, formatter='{:.3f}'.format)
     return m
 
 
@@ -803,7 +772,5 @@ motchallenge_metrics = [
     'num_transfer',
     'num_ascend',
     'num_migrate',
-    # 'avg_iou',
-    # 'switch_iou',
 ]
 """A list of all metrics from MOTChallenge."""
