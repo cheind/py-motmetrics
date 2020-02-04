@@ -454,8 +454,9 @@ docker run desired-image-name
 ```
 MIT License
 
-Copyright (c) 2017 Christoph Heindl
+Copyright (c) 2017-2020 Christoph Heindl
 Copyright (c) 2018 Toka
+Copyright (c) 2019-2020 Jack Valmadre
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
