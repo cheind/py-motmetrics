@@ -66,9 +66,9 @@ idtp|ID measures: Number of true positives matches after global min-cost matchin
 idp|ID measures: global min-cost precision.
 idr|ID measures: global min-cost recall.
 idf1|ID measures: global min-cost F1 score.
-obj_frequencies|`pd.DataFrame` Total number of occurrences of individual objects over all frames.
-pred_frequencies|`pd.DataFrame` Total number of occurrences of individual predictions over all frames.
-track_ratios|`pd.DataFrame` Ratio of assigned to total appearance count per unique object id.
+obj_frequencies|`pd.Series` Total number of occurrences of individual objects over all frames.
+pred_frequencies|`pd.Series` Total number of occurrences of individual predictions over all frames.
+track_ratios|`pd.Series` Ratio of assigned to total appearance count per unique object id.
 id_global_assignment| `dict` ID measures: Global min-cost assignment for ID measures.
 
 
