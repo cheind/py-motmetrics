@@ -1,0 +1,1 @@
+python3 -u -m motmetrics.apps.evaluateTracking ./gt_dir/ ./res_dir/ ./seqmaps/example.txt

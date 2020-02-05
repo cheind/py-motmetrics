@@ -5,14 +5,19 @@
 # Copyright (c) 2017-2020 Christoph Heindl, Jack Valmadre and others.
 # See LICENSE file for terms.
 
-"""List metrics."""
+"""Math utility functions."""
 
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-if __name__ == '__main__':
-    import motmetrics
+import warnings
 
-    mh = motmetrics.metrics.create()
-    print(mh.list_metrics_markdown())
+import numpy as np
+
+
+def quiet_divide(a, b):
+    """Quiet divide function that does not warn about (0 / 0)."""
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', RuntimeWarning)
+        return np.true_divide(a, b)

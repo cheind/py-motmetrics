@@ -1,4 +1,4 @@
-FROM ubuntu:latest 
+FROM ubuntu:latest
 
 MAINTAINER Avgerinos Christos <christosavg@gmail.com>
 

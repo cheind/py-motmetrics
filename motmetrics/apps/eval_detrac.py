@@ -5,7 +5,7 @@
 # Copyright (c) 2017-2020 Christoph Heindl, Jack Valmadre and others.
 # See LICENSE file for terms.
 
-"""Compute metrics for trackers using MOTChallenge ground-truth data."""
+"""Compute metrics for trackers using DETRAC challenge ground-truth data."""
 
 from __future__ import absolute_import
 from __future__ import division
@@ -24,24 +24,30 @@ import motmetrics as mm
 def parse_args():
     """Defines and parses command-line arguments."""
     parser = argparse.ArgumentParser(description="""
-Compute metrics for trackers using MOTChallenge ground-truth data.
+Compute metrics for trackers using DETRAC challenge ground-truth data.
 
 Files
 -----
-All file content, ground truth and test files, have to comply with the
-format described in
+Ground truth files can be in .XML format or .MAT format as provided by http://detrac-db.rit.albany.edu/download
+
+Test Files for the challenge are reuired to be in MOTchallenge format, they have to comply with the format described in
 
 Milan, Anton, et al.
 "Mot16: A benchmark for multi-object tracking."
 arXiv preprint arXiv:1603.00831 (2016).
 https://motchallenge.net/
 
-Structure
+Directory Structure
 ---------
 
 Layout for ground truth data
-    <GT_ROOT>/<SEQUENCE_1>/gt/gt.txt
-    <GT_ROOT>/<SEQUENCE_2>/gt/gt.txt
+    <GT_ROOT>/<SEQUENCE_1>.txt
+    <GT_ROOT>/<SEQUENCE_2>.txt
+    ...
+
+    OR
+    <GT_ROOT>/<SEQUENCE_1>.mat
+    <GT_ROOT>/<SEQUENCE_2>.mat
     ...
 
 Layout for test data
@@ -55,11 +61,9 @@ string.""", formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('groundtruths', type=str, help='Directory containing ground truth files.')
     parser.add_argument('tests', type=str, help='Directory containing tracker result files')
     parser.add_argument('--loglevel', type=str, help='Log level', default='info')
-    parser.add_argument('--fmt', type=str, help='Data format', default='mot15-2D')
-    parser.add_argument('--solver', type=str, help='LAP solver to use for matching between frames.')
-    parser.add_argument('--id_solver', type=str, help='LAP solver to use for ID metrics. Defaults to --solver.')
-    parser.add_argument('--exclude_id', dest='exclude_id', default=False, action='store_true',
-                        help='Disable ID metrics')
+    parser.add_argument('--gtfmt', type=str, help='Groundtruth data format', default='detrac-xml')
+    parser.add_argument('--tsfmt', type=str, help='Test data format', default='mot15-2D')
+    parser.add_argument('--solver', type=str, help='LAP solver to use')
     return parser.parse_args()
 
 
@@ -90,29 +94,23 @@ def main():
     if args.solver:
         mm.lap.default_solver = args.solver
 
-    gtfiles = glob.glob(os.path.join(args.groundtruths, '*/gt/gt.txt'))
-    tsfiles = [f for f in glob.glob(os.path.join(args.tests, '*.txt')) if not os.path.basename(f).startswith('eval')]
+    gtfiles = glob.glob(os.path.join(args.groundtruths, '*'))
+    tsfiles = glob.glob(os.path.join(args.tests, '*'))
 
     logging.info('Found %d groundtruths and %d test files.', len(gtfiles), len(tsfiles))
     logging.info('Available LAP solvers %s', str(mm.lap.available_solvers))
     logging.info('Default LAP solver \'%s\'', mm.lap.default_solver)
     logging.info('Loading files.')
 
-    gt = OrderedDict([(Path(f).parts[-3], mm.io.loadtxt(f, fmt=args.fmt, min_confidence=1)) for f in gtfiles])
-    ts = OrderedDict([(os.path.splitext(Path(f).parts[-1])[0], mm.io.loadtxt(f, fmt=args.fmt)) for f in tsfiles])
+    gt = OrderedDict([(os.path.splitext(Path(f).parts[-1])[0], mm.io.loadtxt(f, fmt=args.gtfmt)) for f in gtfiles])
+    ts = OrderedDict([(os.path.splitext(Path(f).parts[-1])[0], mm.io.loadtxt(f, fmt=args.tsfmt)) for f in tsfiles])
 
     mh = mm.metrics.create()
     accs, names = compare_dataframes(gt, ts)
 
-    metrics = list(mm.metrics.motchallenge_metrics)
-    if args.exclude_id:
-        metrics = [x for x in metrics if not x.startswith('id')]
-
     logging.info('Running metrics')
 
-    if args.id_solver:
-        mm.lap.default_solver = args.id_solver
-    summary = mh.compute_many(accs, names=names, metrics=metrics, generate_overall=True)
+    summary = mh.compute_many(accs, names=names, metrics=mm.metrics.motchallenge_metrics, generate_overall=True)
     print(mm.io.render_summary(summary, formatters=mh.formatters, namemap=mm.io.motchallenge_metric_names))
     logging.info('Completed')
 

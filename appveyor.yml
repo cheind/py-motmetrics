@@ -7,13 +7,13 @@ environment:
   matrix:
     - PYTHON: "C:\\Miniconda36-x64"
       PYTHON_VERSION: "3.6"
-      PYTHON_ARCH: "64"    
+      PYTHON_ARCH: "64"
     - PYTHON: "C:\\Miniconda36"
       PYTHON_VERSION: "3.6"
-      PYTHON_ARCH: "32"    
+      PYTHON_ARCH: "32"
     - PYTHON: "C:\\Miniconda35-x64"
       PYTHON_VERSION: "3.5"
-      PYTHON_ARCH: "64"    
+      PYTHON_ARCH: "64"
     - PYTHON: "C:\\Miniconda35"
       PYTHON_VERSION: "3.5"
       PYTHON_ARCH: "32"
@@ -24,23 +24,31 @@ install:
   - conda config --set always_yes yes
   - conda update -q conda
   - conda config --set auto_update_conda no
-  - conda install -q pip pytest numpy cython
+  - conda install -q pip pytest pytest-benchmark numpy cython
   - python -m pip install -U pip
   - pip install wheel
   - pip install --upgrade --ignore-installed setuptools
-  - pip install lapsolver
-  
+  # Install solvers for testing.
+  - pip install lap lapsolver munkres
+  # OR-Tools does not support 32-bit.
+  # https://developers.google.com/optimization/install/python/windows
+  - ps: >-
+      if ($env:PYTHON_ARCH -eq "64") {
+        cmd /c 'pip install ortools 2>&1'
+      }
+
 build_script:
   - python setup.py sdist
   - python setup.py bdist_wheel
-  
+
 test_script:
-  # Try building source wheel and install  
+  # Try building source wheel and install
+  # Redirect stderr of pip within powershell.
   - ps: >-
       $wheel = cmd /r dir .\dist\*.tar.gz /b/s;
-      pip install --verbose $wheel
+      cmd /c "pip install --verbose $wheel 2>&1"
   - pytest --pyargs motmetrics
-  
+
 on_success:
   ps: >-
     if ($env:APPVEYOR_REPO_BRANCH -eq "master") {
@@ -52,7 +60,7 @@ on_success:
     } else {
       Write-Output "Not deploying as this is not a tagged commit or commit on master"
     }
-    
+
 artifacts:
   - path: "dist\\*.whl"
   - path: "dist\\*.tar.gz"

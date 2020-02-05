@@ -10,22 +10,23 @@ While benchmarking single object trackers is rather straightforward, measuring t
 
 <div style="text-align:center;">
 
-![](motmetrics/etc/mot.png)<br/>
+![](./motmetrics/etc/mot.png)<br/>
+
 *Pictures courtesy of Bernardin, Keni, and Rainer Stiefelhagen [[1]](#References)*
 </div>
 
-In particular **py-motmetrics** supports `CLEAR-MOT`[[1,2]](#References) metrics and `ID`[[4]](#References) metrics. Both metrics attempt to find a minimum cost assignment between ground truth objects and predictions. However, while CLEAR-MOT solves the assignment problem on a local per-frame basis, `ID-MEASURE` solves the bipartite graph matching by finding the minimum cost of objects and predictions over all frames. This [blog-post](http://vision.cs.duke.edu/DukeMTMC/IDmeasures.html) by Ergys illustrates the differences in more detail.
+In particular **py-motmetrics** supports `CLEAR-MOT`[[1,2]](#References) metrics and `ID`[[4]](#References) metrics. Both metrics attempt to find a minimum cost assignment between ground truth objects and predictions. However, while CLEAR-MOT solves the assignment problem on a local per-frame basis, `ID-MEASURE` solves the bipartite graph matching by finding the minimum cost of objects and predictions over all frames. This [blog-post](https://web.archive.org/web/20190413133409/http://vision.cs.duke.edu:80/DukeMTMC/IDmeasures.html) by Ergys illustrates the differences in more detail.
 
 ### Features at a glance
 - *Variety of metrics* <br/>
 Provides MOTA, MOTP, track quality measures, global ID measures and more. The results are [comparable](#MOTChallengeCompatibility) with the popular [MOTChallenge][MOTChallenge] benchmarks.
 - *Distance agnostic* <br/>
 Supports Euclidean, Intersection over Union and other distances measures.
-- *Complete event history* <br/> 
+- *Complete event history* <br/>
 Tracks all relevant per-frame events suchs as correspondences, misses, false alarms and switches.
-- *Flexible solver backend* <br/> 
+- *Flexible solver backend* <br/>
 Support for switching minimum assignment cost solvers. Supports `scipy`, `ortools`, `munkres` out of the box. Auto-tunes solver selection based on [availability and problem size](#SolverBackends).
-- *Easy to extend* <br/> 
+- *Easy to extend* <br/>
 Events and summaries are utilizing [pandas][pandas] for data structures and analysis. New metrics can reuse already computed values from depending metrics.
 
 <a name="Metrics"></a>
@@ -43,8 +44,6 @@ print(mh.list_metrics_markdown())
 Name|Description
 :---|:---
 num_frames|Total number of frames.
-obj_frequencies|Total number of occurrences of individual objects over all frames.
-pred_frequencies|Total number of occurrences of individual predictions over all frames.
 num_matches|Total number matches.
 num_switches|Total number of track switches.
 num_false_positives|Total number of false positives (false-alarms).
@@ -53,7 +52,6 @@ num_detections|Total number of detected objects including matches and switches.
 num_objects|Total number of unique object appearances over all frames.
 num_predictions|Total number of unique prediction appearances over all frames.
 num_unique_objects|Total number of unique object ids encountered.
-track_ratios|Ratio of assigned to total appearance count per unique object id.
 mostly_tracked|Number of objects tracked for at least 80 percent of lifespan.
 partially_tracked|Number of objects tracked between 20 and 80 percent of lifespan.
 mostly_lost|Number of objects tracked less than 20 percent of lifespan.
@@ -62,13 +60,18 @@ motp|Multiple object tracker precision.
 mota|Multiple object tracker accuracy.
 precision|Number of detected objects over sum of detected and false positives.
 recall|Number of detections over number of objects.
-id_global_assignment|ID measures: Global min-cost assignment for ID measures.
 idfp|ID measures: Number of false positive matches after global min-cost matching.
 idfn|ID measures: Number of false negatives matches after global min-cost matching.
 idtp|ID measures: Number of true positives matches after global min-cost matching.
 idp|ID measures: global min-cost precision.
 idr|ID measures: global min-cost recall.
 idf1|ID measures: global min-cost F1 score.
+obj_frequencies|`pd.Series` Total number of occurrences of individual objects over all frames.
+pred_frequencies|`pd.Series` Total number of occurrences of individual predictions over all frames.
+track_ratios|`pd.Series` Ratio of assigned to total appearance count per unique object id.
+id_global_assignment| `dict` ID measures: Global min-cost assignment for ID measures.
+
+
 
 <a name="MOTChallengeCompatibility"></a>
 ### MOTChallenge compatibility
@@ -78,11 +81,11 @@ idf1|ID measures: global min-cost F1 score.
 ```
 
 TUD-Campus
- IDF1  IDP  IDR| Rcll  Prcn   FAR| GT  MT  PT  ML|   FP    FN  IDs   FM| MOTA  MOTP MOTAL 
+ IDF1  IDP  IDR| Rcll  Prcn   FAR| GT  MT  PT  ML|   FP    FN  IDs   FM| MOTA  MOTP MOTAL
  55.8 73.0 45.1| 58.2  94.1  0.18|  8   1   6   1|   13   150    7    7| 52.6  72.3  54.3
 
 TUD-Stadtmitte
- IDF1  IDP  IDR| Rcll  Prcn   FAR| GT  MT  PT  ML|   FP    FN  IDs   FM| MOTA  MOTP MOTAL 
+ IDF1  IDP  IDR| Rcll  Prcn   FAR| GT  MT  PT  ML|   FP    FN  IDs   FM| MOTA  MOTP MOTAL
  64.5 82.0 53.1| 60.9  94.0  0.25| 10   5   4   1|   45   452    7    6| 56.4  65.4  56.9
 
 ```
@@ -102,6 +105,10 @@ Besides naming conventions, the only obvious differences are
 You can compare tracker results to ground truth in MOTChallenge format by
 ```
 python -m motmetrics.apps.eval_motchallenge --help
+```
+For MOT16/17, you can run
+```
+python -m motmetrics.apps.evaluateTracking --help
 ```
 
 ### Installation
@@ -212,7 +219,7 @@ frameid = acc.update(
     ['a', 'b'],
     [1],
     [
-        [0.2], 
+        [0.2],
         [0.4]
     ]
 )
@@ -247,7 +254,7 @@ Event
 """
 ```
 
-`b` is now tracked by hypothesis `3` leading to a track switch. Note, although a pairing `(a, 3)` with cost less than 0.6 is possible, the algorithm prefers prefers to continue track assignments from past frames which is a property of MOT metrics. 
+`b` is now tracked by hypothesis `3` leading to a track switch. Note, although a pairing `(a, 3)` with cost less than 0.6 is possible, the algorithm prefers prefers to continue track assignments from past frames which is a property of MOT metrics.
 
 #### Computing metrics
 Once the accumulator has been populated you can compute and display metrics. Continuing the example from above
@@ -267,9 +274,9 @@ Computing metrics for multiple accumulators or accumulator views is also possibl
 
 ```python
 summary = mh.compute_many(
-    [acc, acc.events.loc[0:1]], 
-    metrics=['num_frames', 'mota', 'motp'], 
-    names=['full', 'part'])    
+    [acc, acc.events.loc[0:1]],
+    metrics=['num_frames', 'mota', 'motp'],
+    names=['full', 'part'])
 print(summary)
 
 """
@@ -279,12 +286,12 @@ part           2   0.5  0.166667
 """
 ```
 
-Finally, you may want to reformat column names and how column values are displayed. 
+Finally, you may want to reformat column names and how column values are displayed.
 
 ```python
 strsummary = mm.io.render_summary(
-    summary, 
-    formatters={'mota' : '{:.2%}'.format}, 
+    summary,
+    formatters={'mota' : '{:.2%}'.format},
     namemap={'mota': 'MOTA', 'motp' : 'MOTP'}
 )
 print(strsummary)
@@ -292,7 +299,7 @@ print(strsummary)
 """
       num_frames   MOTA      MOTP
 full           3 50.00%  0.340000
-part           2 50.00%  0.166667 
+part           2 50.00%  0.166667
 """
 ```
 
@@ -300,13 +307,13 @@ For MOTChallenge **py-motmetrics** provides predefined metric selectors, formatt
 
 ```python
 summary = mh.compute_many(
-    [acc, acc.events.loc[0:1]], 
-    metrics=mm.metrics.motchallenge_metrics, 
+    [acc, acc.events.loc[0:1]],
+    metrics=mm.metrics.motchallenge_metrics,
     names=['full', 'part'])
 
 strsummary = mm.io.render_summary(
-    summary, 
-    formatters=mh.formatters, 
+    summary,
+    formatters=mh.formatters,
     namemap=mm.io.motchallenge_metric_names
 )
 print(strsummary)
@@ -322,15 +329,15 @@ In order to generate an overall summary that computes the metrics jointly over a
 
 ```python
 summary = mh.compute_many(
-    [acc, acc.events.loc[0:1]], 
-    metrics=mm.metrics.motchallenge_metrics, 
+    [acc, acc.events.loc[0:1]],
+    metrics=mm.metrics.motchallenge_metrics,
     names=['full', 'part'],
     generate_overall=True
     )
 
 strsummary = mm.io.render_summary(
-    summary, 
-    formatters=mh.formatters, 
+    summary,
+    formatters=mh.formatters,
     namemap=mm.io.motchallenge_metric_names
 )
 print(strsummary)
@@ -359,7 +366,7 @@ o = np.array([
 # Hypothesis related points
 h = np.array([
     [0., 0],
-    [1., 1],      
+    [1., 1],
 ])
 
 C = mm.distances.norm2squared_matrix(o, h, max_d2=5.)
@@ -374,7 +381,7 @@ C = mm.distances.norm2squared_matrix(o, h, max_d2=5.)
 ##### Intersection over union norm for 2D rectangles
 ```python
 a = np.array([
-    [0, 0, 20, 100],    # Format X, Y, Width, Height
+    [0, 0, 1, 2],    # Format X, Y, Width, Height
     [0, 0, 0.8, 1.5],
 ])
 
@@ -396,13 +403,13 @@ mm.distances.iou_matrix(a, b, max_iou=0.5)
 For large datasets solving the minimum cost assignment becomes the dominant runtime part. **py-motmetrics** therefore supports these solvers out of the box
   - `lapsolver` - https://github.com/cheind/py-lapsolver
   - `lapjv` - https://github.com/gatagat/lap
-  - `scipy` - https://github.com/scipy/scipy/tree/master/scipy  
+  - `scipy` - https://github.com/scipy/scipy/tree/master/scipy
   - `ortools` - https://github.com/google/or-tools
   - `munkres` - http://software.clapper.org/munkres/
 
 A comparison for different sized matrices is shown below (taken from [here](https://github.com/cheind/py-lapsolver#benchmarks))
 
-Please note that the x-axis is scaled logarithmically. Missing bars indicate excessive runtime or errors in returned result. 
+Please note that the x-axis is scaled logarithmically. Missing bars indicate excessive runtime or errors in returned result.
 ![](https://github.com/cheind/py-lapsolver/raw/master/lapsolver/etc/benchmark-dtype-numpy.float32.png)
 
 By default **py-motmetrics** will try to find a LAP solver in the order of the list above. In order to temporarly replace the default solver use
@@ -411,7 +418,7 @@ By default **py-motmetrics** will try to find a LAP solver in the order of the l
 costs = ...
 mysolver = lambda x: ... # solver code that returns pairings
 
-with lap.set_default_solver(mysolver): 
+with lap.set_default_solver(mysolver):
     ...
 ```
 
@@ -420,20 +427,20 @@ with lap.set_default_solver(mysolver):
 
 <a name="References"></a>
 ### References
-1. Bernardin, Keni, and Rainer Stiefelhagen. "Evaluating multiple object tracking performance: the CLEAR MOT metrics." 
+1. Bernardin, Keni, and Rainer Stiefelhagen. "Evaluating multiple object tracking performance: the CLEAR MOT metrics."
 EURASIP Journal on Image and Video Processing 2008.1 (2008): 1-10.
 2. Milan, Anton, et al. "Mot16: A benchmark for multi-object tracking." arXiv preprint arXiv:1603.00831 (2016).
-3. Li, Yuan, Chang Huang, and Ram Nevatia. "Learning to associate: Hybridboosted multi-target tracker for crowded scene." 
+3. Li, Yuan, Chang Huang, and Ram Nevatia. "Learning to associate: Hybridboosted multi-target tracker for crowded scene."
 Computer Vision and Pattern Recognition, 2009. CVPR 2009. IEEE Conference on. IEEE, 2009.
 4. Performance Measures and a Data Set for Multi-Target, Multi-Camera Tracking. E. Ristani, F. Solera, R. S. Zou, R. Cucchiara and C. Tomasi. ECCV 2016 Workshop on Benchmarking Multi-Target Tracking.
 
-### Docker 
+### Docker
 
 #### Update ground truth and test data:
-/data/train directory should contain MOT 2D 2015 Ground Truth files. 
+/data/train directory should contain MOT 2D 2015 Ground Truth files.
 /data/test directory should contain your results.
 
-You can check usage and directory listing at 
+You can check usage and directory listing at
 https://github.com/cheind/py-motmetrics/blob/master/motmetrics/apps/eval_motchallenge.py
 
 #### Build Image
@@ -449,7 +456,9 @@ docker run desired-image-name
 ```
 MIT License
 
-Copyright (c) 2017 Christoph Heindl
+Copyright (c) 2017-2020 Christoph Heindl
+Copyright (c) 2018 Toka
+Copyright (c) 2019-2020 Jack Valmadre
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

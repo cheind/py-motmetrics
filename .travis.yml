@@ -1,14 +1,15 @@
 language: python
+
 env:
-  - PYTHON=3.5 PANDAS>=0.19.2
-  - PYTHON=3.6 PANDAS>=0.19.2
+  - PYTHON=2.7
+  - PYTHON=3.5
+  - PYTHON=3.6
+  - PYTHON=3.7
+
 install:
     # Install conda
-    - if [[ "$PYTHON" == "2.7" ]]; then
-        wget https://repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86_64.sh -O miniconda.sh;
-      else
-        wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
-      fi
+    - wget https://repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86_64.sh -O miniconda.sh  # Python 2.7
+    - wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
     - bash miniconda.sh -b -p $HOME/miniconda
     - export PATH="$HOME/miniconda/bin:$PATH"
     - hash -r
@@ -18,12 +19,18 @@ install:
     - conda info -a
 
     # Install deps
-    - deps='pip numpy scipy cython'
-    - conda create -q -n pyenv python=$PYTHON pandas=$PANDAS $deps
+    - conda create -q -n pyenv python=$PYTHON pip
     - source activate pyenv
     - python -m pip install -U pip
+    - pip install -r requirements.txt
     - pip install pytest
+    - pip install pytest-benchmark
     - pip install .
-    - pip install ortools
+    # Install solvers for tests.
+    - pip install lap scipy ortools
+    # lapsolver does not provide a version for python 2
+    - pip install "lapsolver; python_version >= '3'"
+    # munkres no longer supports python 2
+    - pip install "munkres; python_version >= '3'"
 
 script: pytest
