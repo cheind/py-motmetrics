@@ -53,12 +53,12 @@ on_success:
   ps: >-
     pip install --upgrade twine;
     if ($env:APPVEYOR_REPO_BRANCH -eq "master") {
-      Write-Output ("Deploying to PyPI")      
+      Write-Output("Deploying to PyPI")      
       # If powershell ever sees anything on stderr it thinks it's a fail.
       # So we use cmd to redirect stderr to stdout before PS can see it.
       cmd /c 'twine upload --skip-existing dist\* 2>&1'
     } else {      
-      Write-Output "Deploying to PyPI-Test"
+      Write-Output("Deploying to PyPI-Test")
       cmd /c 'twine upload --skip-existing --repository-url https://test.pypi.org/legacy/ dist\* 2>&1'
     }
 
