@@ -1,10 +1,11 @@
-"""py-motmetrics - metrics for multiple object tracker (MOT) benchmarking.
+# py-motmetrics - Metrics for multiple object tracker (MOT) benchmarking.
+# https://github.com/cheind/py-motmetrics/
+#
+# MIT License
+# Copyright (c) 2017-2020 Christoph Heindl, Jack Valmadre and others.
+# See LICENSE file for terms.
 
-Christoph Heindl, 2017
-https://github.com/cheind/py-motmetrics
-Modified by Toka, 2018
-https://github.com/Helicopt/fast-py-MOTMetrics.git
-"""
+"""Functions for loading data and writing summaries."""
 
 from __future__ import absolute_import
 from __future__ import division
@@ -184,10 +185,11 @@ def load_vatictxt(fname, **kwargs):
 
 def load_detrac_mat(fname):
     """Loads UA-DETRAC annotations data from mat files
-       Competition Site: http://detrac-db.rit.albany.edu/download
 
-       File contains a nested structure of 2d arrays for indexed by frame id
-       and Object ID. Separate arrays for top, left, width and height are given.
+    Competition Site: http://detrac-db.rit.albany.edu/download
+
+    File contains a nested structure of 2d arrays for indexed by frame id
+    and Object ID. Separate arrays for top, left, width and height are given.
 
     Params
     ------
@@ -246,7 +248,8 @@ def load_detrac_mat(fname):
 
 def load_detrac_xml(fname):
     """Loads UA-DETRAC annotations data from xml files
-       Competition Site: http://detrac-db.rit.albany.edu/download
+
+    Competition Site: http://detrac-db.rit.albany.edu/download
 
     Params
     ------

@@ -1,9 +1,11 @@
-"""py-motmetrics - metrics for multiple object tracker (MOT) benchmarking.
+# py-motmetrics - Metrics for multiple object tracker (MOT) benchmarking.
+# https://github.com/cheind/py-motmetrics/
+#
+# MIT License
+# Copyright (c) 2017-2020 Christoph Heindl, Jack Valmadre and others.
+# See LICENSE file for terms.
 
-Toka, 2018
-Origin: https://github.com/cheind/py-motmetrics
-Extended: <reposity>
-"""
+"""Preprocess data for CLEAR_MOT_M."""
 
 from __future__ import absolute_import
 from __future__ import division

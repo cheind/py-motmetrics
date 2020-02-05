@@ -1,4 +1,4 @@
-"""py-motmetrics - metrics for multiple object tracker (MOT) benchmarking.
+"""py-motmetrics - Metrics for multiple object tracker (MOT) benchmarking.
 
 Christoph Heindl, 2017
 https://github.com/cheind/py-motmetrics
