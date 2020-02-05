@@ -1,3 +1,14 @@
+# py-motmetrics - Metrics for multiple object tracker (MOT) benchmarking.
+# https://github.com/cheind/py-motmetrics/
+#
+# MIT License
+#
+# Copyright (c) 2017-2020 Christoph Heindl
+# Copyright (c) 2018 Toka
+# Copyright (c) 2019-2020 Jack Valmadre
+#
+# See LICENSE file.
+
 """Tests issue 19.
 
 https://github.com/cheind/py-motmetrics/issues/19
