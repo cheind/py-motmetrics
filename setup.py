@@ -12,7 +12,7 @@ except ImportError:
 with open('requirements.txt') as f:
     required = f.read().splitlines()
 
-with open('Readme.md'), encoding='utf-8') as f:
+with open('Readme.md', encoding='utf-8') as f:
     long_description = f.read()
 
 setup(
