@@ -3,7 +3,7 @@
 Christoph Heindl, 2017
 https://github.com/cheind/py-motmetrics
 """
-
+import os
 try:
     from setuptools import setup
 except ImportError:
@@ -12,9 +12,17 @@ except ImportError:
 with open('requirements.txt') as f:
     required = f.read().splitlines()
 
+# Handle version number with optional .dev postfix when building a develop branch
+# on AppVeyor.
+VERSION = open('motmetrics/__init__.py').readlines()[-1].split()[-1].strip('\'')
+BUILD_NUMBER = os.environ.get('APPVEYOR_BUILD_NUMBER', None)
+BRANCH_NAME = os.environ.get('APPVEYOR_REPO_BRANCH', 'develop')
+if BUILD_NUMBER is not None and BRANCH_NAME=='develop':
+    VERSION = '{}.dev{}'.format(VERSION, BUILD_NUMBER)
+
 setup(
     name='motmetrics',
-    version=open('motmetrics/__init__.py').readlines()[-1].split()[-1].strip('\''),
+    version=VERSION,
     description='Metrics for multiple object tracker benchmarking.',
     author='Christoph Heindl, Jack Valmadre',
     url='https://github.com/cheind/py-motmetrics',
