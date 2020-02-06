@@ -46,18 +46,18 @@ test_script:
   # Redirect stderr of pip within powershell.
   - ps: >-
       $wheel = cmd /r dir .\dist\*.tar.gz /b/s;
-      cmd /c "pip install --verbose $wheel 2>&1"
+      cmd /c "pip install $wheel 2>&1"
   - pytest --pyargs motmetrics
 
 on_success:
   ps: >-
     pip install --upgrade twine;
     if ($env:APPVEYOR_REPO_BRANCH -eq "master") {
-      Write-Output("Deploying to PyPI")      
+      Write-Output("Deploying to PyPI")
       # If powershell ever sees anything on stderr it thinks it's a fail.
       # So we use cmd to redirect stderr to stdout before PS can see it.
       cmd /c 'twine upload --skip-existing dist\* 2>&1'
-    } else {      
+    } else {
       Write-Output("Deploying to PyPI-Test")
       cmd /c 'twine upload --skip-existing --repository-url https://test.pypi.org/legacy/ dist\* 2>&1'
     }
