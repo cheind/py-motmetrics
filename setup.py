@@ -13,7 +13,7 @@ except ImportError:
 with io.open('requirements.txt') as f:
     required = f.read().splitlines()
 
-with io.open('Readme.md', encoding='utf-8') as f:
+with io.open('README.md', encoding='utf-8') as f:
     long_description = f.read()
 
 # Handle version number with optional .dev postfix when building a develop branch
