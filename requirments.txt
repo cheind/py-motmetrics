@@ -1,0 +1,4 @@
+mkdocs
+mkdocs-material
+mkdocs-awesome-pages-plugin
+python-markdown-math
