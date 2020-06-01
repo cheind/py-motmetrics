@@ -62,21 +62,24 @@ def compare_to_groundtruth(gt, dt, dist='iou', distfields=None, distth=0.5):
     # case a frame is missing in detector results this will lead to FNs.
     allframeids = gt.index.union(dt.index).levels[0]
 
+    gt = gt[distfields]
+    dt = dt[distfields]
+    fid_to_fgt = dict(iter(gt.groupby('FrameId')))
+    fid_to_fdt = dict(iter(dt.groupby('FrameId')))
+
     for fid in allframeids:
         oids = np.empty(0)
         hids = np.empty(0)
         dists = np.empty((0, 0))
 
-        if fid in gt.index:
-            fgt = gt.loc[fid]
-            oids = fgt.index.values
-
-        if fid in dt.index:
-            fdt = dt.loc[fid]
-            hids = fdt.index.values
-
-        if oids.shape[0] > 0 and hids.shape[0] > 0:
-            dists = compute_dist(fgt[distfields].values, fdt[distfields].values)
+        fgt = fid_to_fgt.get(fid, None)
+        fdt = fid_to_fdt.get(fid, None)
+        if fgt is not None and fdt is not None:
+            oids = fgt.index.get_level_values(1)
+            hids = fdt.index.get_level_values(1)
+            if len(oids) > 0 and len(hids) > 0:
+                # dists = compute_dist(fgt[distfields].values, fdt[distfields].values)
+                dists = compute_dist(fgt.values, fdt.values)
 
         acc.update(oids, hids, dists, frameid=fid)
 
