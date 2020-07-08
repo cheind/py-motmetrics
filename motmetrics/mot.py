@@ -20,7 +20,7 @@ import pandas as pd
 from motmetrics.lap import linear_sum_assignment
 
 _INDEX_FIELDS = ['FrameId', 'Event']
-_EVENT_FIELDS = ['Type', 'OId', 'HId', 'D']
+_EVENT_FIELDS = ['Type', 'OId', 'HId', 'D', 'C']
 
 
 class MOTAccumulator(object):
@@ -126,13 +126,14 @@ class MOTAccumulator(object):
         self._indices['FrameId'].append(frameid)
         self._indices['Event'].append(eid)
 
-    def _append_to_events(self, typestr, oid, hid, distance):
+    def _append_to_events(self, typestr, oid, hid, distance, centroid):
         self._events['Type'].append(typestr)
         self._events['OId'].append(oid)
         self._events['HId'].append(hid)
         self._events['D'].append(distance)
+        self._events['C'].append(centroid)
 
-    def update(self, oids, hids, dists, frameid=None, vf=''):
+    def update(self, oids, hids, dists, frameid=None, vf='', gt_centroids=None):
         """Updates the accumulator with frame specific objects/detections.
 
         This method generates events based on the following algorithm [1]:
@@ -172,7 +173,7 @@ class MOTAccumulator(object):
         EURASIP Journal on Image and Video Processing 2008.1 (2008): 1-10.
         """
         # pylint: disable=too-many-locals, too-many-statements
-
+        gt_centroids = np.array(gt_centroids)
         self.dirty_events = True
         oids = np.asarray(oids)
         oids_masked = np.zeros_like(oids, dtype=np.bool)
@@ -198,7 +199,7 @@ class MOTAccumulator(object):
 
         # Add a RAW event simply to ensure the frame is counted.
         self._append_to_indices(frameid, next(eid))
-        self._append_to_events('RAW', np.nan, np.nan, np.nan)
+        self._append_to_events('RAW', np.nan, np.nan, np.nan, np.nan)
 
         # There must be at least one RAW event per object and hypothesis.
         # Record all finite distances as RAW events.
@@ -206,19 +207,23 @@ class MOTAccumulator(object):
         valid_dists = dists[valid_i, valid_j]
         for i, j, dist_ij in zip(valid_i, valid_j, valid_dists):
             self._append_to_indices(frameid, next(eid))
-            self._append_to_events('RAW', oids[i], hids[j], dist_ij)
+            try:
+                self._append_to_events('RAW', oids[i], hids[j], dist_ij, gt_centroids[i])
+            except:
+                import pdb;pdb.set_trace()
         # Add a RAW event for objects and hypotheses that were present but did
         # not overlap with anything.
         used_i = np.unique(valid_i)
         used_j = np.unique(valid_j)
         unused_i = np.setdiff1d(np.arange(no), used_i)
         unused_j = np.setdiff1d(np.arange(nh), used_j)
-        for oid in oids[unused_i]:
+        assert len(oids[unused_i]) == len(gt_centroids[unused_i])
+        for oid, ocent in zip(oids[unused_i], gt_centroids[unused_i]):
             self._append_to_indices(frameid, next(eid))
-            self._append_to_events('RAW', oid, np.nan, np.nan)
+            self._append_to_events('RAW', oid, np.nan, np.nan, ocent)
         for hid in hids[unused_j]:
             self._append_to_indices(frameid, next(eid))
-            self._append_to_events('RAW', np.nan, hid, np.nan)
+            self._append_to_events('RAW', np.nan, hid, np.nan, np.nan)
 
         if oids.size * hids.size > 0:
             # 1. Try to re-establish tracks from previous correspondences
@@ -241,7 +246,7 @@ class MOTAccumulator(object):
                     self.m[oids[i]] = hids[j]
 
                     self._append_to_indices(frameid, next(eid))
-                    self._append_to_events('MATCH', oids[i], hids[j], dists[i, j])
+                    self._append_to_events('MATCH', oids[i], hids[j], dists[i, j], gt_centroids[i])
                     self.last_match[o] = frameid
                     self.hypHistory[h] = frameid
 
@@ -265,7 +270,7 @@ class MOTAccumulator(object):
                     if h not in self.hypHistory:
                         subcat = 'ASCEND'
                         self._append_to_indices(frameid, next(eid))
-                        self._append_to_events(subcat, oids[i], hids[j], dists[i, j])
+                        self._append_to_events(subcat, oids[i], hids[j], dists[i, j], np.nan)
                 # ignore the last condition temporarily
                 is_transfer = (h in self.res_m and
                                self.res_m[h] != o)
@@ -277,9 +282,9 @@ class MOTAccumulator(object):
                     if o not in self.last_match:
                         subcat = 'MIGRATE'
                         self._append_to_indices(frameid, next(eid))
-                        self._append_to_events(subcat, oids[i], hids[j], dists[i, j])
+                        self._append_to_events(subcat, oids[i], hids[j], dists[i, j], np.nan)
                     self._append_to_indices(frameid, next(eid))
-                    self._append_to_events(cat2, oids[i], hids[j], dists[i, j])
+                    self._append_to_events(cat2, oids[i], hids[j], dists[i, j], np.nan)
                 if vf != '' and (cat1 != 'MATCH' or cat2 != 'MATCH'):
                     if cat1 == 'SWITCH':
                         vf.write('%s %d %d %d %d %d\n' % (subcat[:2], o, self.last_match[o], self.m[o], frameid, h))
@@ -288,7 +293,7 @@ class MOTAccumulator(object):
                 self.hypHistory[h] = frameid
                 self.last_match[o] = frameid
                 self._append_to_indices(frameid, next(eid))
-                self._append_to_events(cat1, oids[i], hids[j], dists[i, j])
+                self._append_to_events(cat1, oids[i], hids[j], dists[i, j], np.nan)
                 oids_masked[i] = True
                 hids_masked[j] = True
                 self.m[o] = h
@@ -297,14 +302,14 @@ class MOTAccumulator(object):
         # 3. All remaining objects are missed
         for o in oids[~oids_masked]:
             self._append_to_indices(frameid, next(eid))
-            self._append_to_events('MISS', o, np.nan, np.nan)
+            self._append_to_events('MISS', o, np.nan, np.nan, np.nan)
             if vf != '':
                 vf.write('FN %d %d\n' % (frameid, o))
 
         # 4. All remaining hypotheses are false alarms
         for h in hids[~hids_masked]:
             self._append_to_indices(frameid, next(eid))
-            self._append_to_events('FP', np.nan, h, np.nan)
+            self._append_to_events('FP', np.nan, h, np.nan, np.nan)
             if vf != '':
                 vf.write('FP %d %d\n' % (frameid, h))
 
@@ -337,6 +342,7 @@ class MOTAccumulator(object):
                 ('OId', pd.Series(dtype=float)),      # Object ID or -1 if FP. Using float as missing values will be converted to NaN anyways.
                 ('HId', pd.Series(dtype=float)),      # Hypothesis ID or NaN if MISS. Using float as missing values will be converted to NaN anyways.
                 ('D', pd.Series(dtype=float)),      # Distance or NaN when FP or MISS
+                ('C', pd.Series(dtype=object))       # GT centroid. Only for RAW for the moment
             ]),
             index=idx
         )
@@ -365,7 +371,9 @@ class MOTAccumulator(object):
             pd.Series(raw_type, name='Type'),
             pd.Series(events['OId'], dtype=float, name='OId'),
             pd.Series(events['HId'], dtype=float, name='HId'),
-            pd.Series(events['D'], dtype=float, name='D')
+            pd.Series(events['D'], dtype=float, name='D'),
+            pd.Series(events['C'], dtype=object, name='C')
+
         ]
 
         idx = pd.MultiIndex.from_arrays(

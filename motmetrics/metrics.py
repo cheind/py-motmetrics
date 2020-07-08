@@ -20,11 +20,14 @@ import time
 
 import numpy as np
 import pandas as pd
+import sys
+import more_itertools as mit
 
 from motmetrics import math_util
 from motmetrics.lap import linear_sum_assignment
 from motmetrics.mot import MOTAccumulator
 
+from scipy.optimize import linear_sum_assignment as hungarian
 try:
     _getargspec = inspect.getfullargspec
 except AttributeError:
@@ -568,6 +571,30 @@ def events_to_df_map(df):
     df_map = DataFrameMap(full=df, raw=raw, noraw=noraw, extra=extra)
     return df_map
 
+def get_missing_range(oid_dict):
+    interrupt_dict = {}
+    for k,v in oid_dict.items():
+        consec_group = [list(group) for group in mit.consecutive_groups(v)]
+        if len(consec_group) == 1:
+            continue
+        missing_list = []
+        for l1, l2 in zip(consec_group, consec_group[1:]):
+            missing_list.append((l1[-1], l2[0]))
+        interrupt_dict[k] = missing_list
+    interrupt_dict = {int(k) : v for k,v in interrupt_dict.items()}
+    return interrupt_dict
+
+def get_nfrag_matches(interrupt_dict, frame_matches):
+    n_matches = 0
+    for oid, frames in interrupt_dict.items():
+        for (start, stop) in frames:
+            p_before = frame_matches[start].get(oid, None)
+            p_after = frame_matches[stop].get(oid, None)
+            if p_before or p_after is None:
+                continue
+            if p_before == p_after:
+                n_matches += 1
+    return n_matches
 
 def extract_counts_from_df_map(df):
     """
@@ -592,6 +619,77 @@ def extract_counts_from_df_map(df):
     # Count events with non-empty distance for each pair.
     tps = dists.groupby(['OId', 'HId'])['D'].count().to_dict()
     return ocs, hcs, tps
+
+# def idfrag(df):
+#     oids = df.full['OId'].dropna().unique()
+#     hids = df.full['HId'].dropna().unique()
+#     flat = df.raw.reset_index()
+#     flat = flat[flat['OId'].isin(oids) | flat['HId'].isin(hids)]
+#     gtid_frames = flat.set_index('OId')['FrameId'].groupby('OId').apply(list).to_dict()
+#     interrupt_dict = get_missing_range(gtid_frames)
+#     matches_df = df.full[df.full.Type == 'MATCH'].reset_index()
+#     frame_matches = matches_df.groupby('FrameId').apply(lambda x: dict(zip(x['OId'],x['HId']))).to_dict()
+#     ngt_frag = sum([len(i) for i in list(interrupt_dict.values())])
+#     npred_frag = get_nfrag_matches(interrupt_dict, frame_matches)
+#     return math_util.quiet_divide(npred_frag, ngt_frag)
+
+def ideucl(df):
+    oids = df.full['OId'].dropna().unique()
+    hids = df.full['HId'].dropna().unique()
+    flat = df.raw.reset_index()
+    flat = flat[flat['OId'].isin(oids)].dropna()
+
+    # Compute the total distance travelled by GT
+    id_cent_dict = flat.set_index('OId')['C'].groupby('OId').apply(list).to_dict()
+    id_cent_dist_dict = {int(k) : np.sum(np.linalg.norm(np.diff(np.array(v), axis=0), axis=1)) for k, v in id_cent_dict.items()}
+    
+    # DF with only MATCH
+    matches_df = df.full[df.full.Type == 'MATCH'].reset_index()
+    matches_df = matches_df[matches_df['OId'].isin(oids)].dropna()
+    ## Important 
+    # Object ID -> (Multiple hypothesis -> (Multiple frames centroids))
+    oid_hid_cent_dict = matches_df.set_index(['OId', 'HId'])['C'].groupby(['OId', 'HId']).apply(list).to_dict()
+    oid_hid_dist_dict = {k : np.sum(np.linalg.norm(np.diff(np.array(v), axis=0), axis=1)) for k, v in oid_hid_cent_dict.items()}
+
+    min_oid = min([i[0] for i in oid_hid_dist_dict.keys()])
+    max_oid = max([i[0] for i in oid_hid_dist_dict.keys()])
+    min_hid = min([i[1] for i in oid_hid_dist_dict.keys()])
+    max_hid = max([i[1] for i in oid_hid_dist_dict.keys()])
+    # o_len = int(max_oid) + 1
+    # h_len = int(max_hid) + 1
+    unique_oid = np.unique([i[0] for i in oid_hid_dist_dict.keys()]).tolist()
+    unique_hid = np.unique([i[1] for i in oid_hid_dist_dict.keys()]).tolist()
+    o_len = len(unique_oid)
+    h_len = len(unique_hid)
+    dist_matrix = np.zeros((o_len, h_len))
+    for ((oid, hid), dist) in oid_hid_dist_dict.items():
+        oid_ind = unique_oid.index(oid)
+        hid_ind = unique_hid.index(hid)
+        dist_matrix[oid_ind, hid_ind] = dist
+
+    ## Perform Hungarian for optimal Hyp Traj assignment
+    # Converting to list as munkres doesn't operate on numpy
+    # opt_hyp_dist contains GT ID : max dist covered by track
+    opt_hyp_dist = dict.fromkeys(id_cent_dist_dict.keys(), 0.)
+    cost_matrix = np.max(dist_matrix) - dist_matrix
+    # dist_matrix = dist_matrix.tolist()
+    # m = Munkres()
+    # cost_matrix = make_cost_matrix(dist_matrix)
+    rows, cols = hungarian(cost_matrix)
+
+    for (row, col) in zip(rows, cols):
+        value = dist_matrix[row, col]
+        opt_hyp_dist[int(unique_oid[row])] = value
+
+    assert len(opt_hyp_dist.keys()) == len(id_cent_dist_dict.keys())
+    track_scores = [math_util.quiet_divide(opt_hyp_dist[i], id_cent_dist_dict[j]) for (i,j) in zip(list(opt_hyp_dist.keys()),list(id_cent_dist_dict.keys()))]
+    if np.any(np.isnan(np.array(track_scores))):
+        track_scores = np.nan_to_num(np.array(track_scores))
+    return np.average(track_scores)
+
+    #hyp_length = np.sum(list(opt_hyp_dist.values()))
+    #gt_length = np.sum(list(id_cent_dist_dict.values()))
+    #return math_util.quiet_divide(hyp_length, gt_length)
 
 
 def id_global_assignment(df, ana=None):
@@ -750,11 +848,16 @@ def create():
     m.register(idp, formatter='{:.1%}'.format)
     m.register(idr, formatter='{:.1%}'.format)
     m.register(idf1, formatter='{:.1%}'.format)
+    m.register(ideucl, formatter='{:.1%}'.format)
+    # m.register(idfrag, formatter='{:.1%}'.format)
+
 
     return m
 
 
 motchallenge_metrics = [
+    # 'idfrag',
+    'ideucl',
     'idf1',
     'idp',
     'idr',
