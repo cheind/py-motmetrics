@@ -222,7 +222,7 @@ class MetricsHost:
             A datafrom containing the metrics in columns and names in rows.
         """
         if metrics is None:
-            metrics = self.names
+            metrics = motchallenge_metrics
         elif isinstance(metrics, str):
             metrics = [metrics]
         cache = {}
