@@ -61,7 +61,7 @@ on_success:
         cmd /c 'twine upload --skip-existing dist\* 2>&1'
       } else {
         Write-Output("Deploying to PyPI-Test")
-        cmd /c 'twine upload --skip-existing --repository-url https://test.pypi.org/legacy/ dist\* 2>&1'
+        cmd /c 'twine upload --skip-existing --verbose --repository testpypi dist\* 2>&1'
       }
     }
 
@@ -81,3 +81,4 @@ branches:
   only:
     - master
     - develop
+    - /feature.*/

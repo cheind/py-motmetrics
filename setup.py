@@ -21,7 +21,7 @@ with io.open('Readme.md', encoding='utf-8') as f:
 VERSION = io.open('motmetrics/__init__.py').readlines()[-1].split()[-1].strip('\'')
 BUILD_NUMBER = os.environ.get('APPVEYOR_BUILD_NUMBER', None)
 BRANCH_NAME = os.environ.get('APPVEYOR_REPO_BRANCH', 'develop')
-if BUILD_NUMBER is not None and BRANCH_NAME == 'develop':
+if BUILD_NUMBER is not None and BRANCH_NAME != 'master':
     VERSION = '{}.dev{}'.format(VERSION, BUILD_NUMBER)
 
 setup(
