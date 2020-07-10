@@ -59,7 +59,7 @@ on_success:
         # If powershell ever sees anything on stderr it thinks it's a fail.
         # So we use cmd to redirect stderr to stdout before PS can see it.
         cmd /c 'twine upload --skip-existing dist\* 2>&1'
-      } else {
+      } elseif ($env:APPVEYOR_REPO_BRANCH -eq "develop") {
         Write-Output("Deploying to PyPI-Test")
         cmd /c 'twine upload --skip-existing --verbose --repository testpypi dist\* 2>&1'
       }
