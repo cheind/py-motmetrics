@@ -49,7 +49,10 @@ test_script:
       cmd /c "pip install $wheel 2>&1"
   - pytest --pyargs motmetrics
 
-before_deploy:
+deploy_script:
+  Write-Output("Preparing for deployment");
+
+after_deploy:
   ps: >-
     if ($env:PYTHON_VERSION -eq "3.6") {
       Write-Output("Deploying...");
