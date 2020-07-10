@@ -61,7 +61,8 @@ on_success:
         cmd /c 'twine upload --skip-existing dist\* 2>&1'
       } else {
         Write-Output("Deploying to PyPI-Test")
-        cmd /c 'twine upload --skip-existing --repository testpypi dist\* 2>&1'
+        # cmd /c 'twine upload --skip-existing --verbose --repository testpypi dist\* 2>&1'
+        twine upload --skip-existing --verbose --repository testpypi dist\*
       }
     }
 
