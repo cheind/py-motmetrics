@@ -222,7 +222,7 @@ class MetricsHost:
             A datafrom containing the metrics in columns and names in rows.
         """
         if metrics is None:
-            metrics = self.names
+            metrics = motchallenge_metrics
         elif isinstance(metrics, str):
             metrics = [metrics]
         cache = {}
@@ -267,6 +267,10 @@ class MetricsHost:
         df : pandas.DataFrame
             A datafrom containing the metrics in columns and names in rows.
         """
+        if metrics is None:
+            metrics = motchallenge_metrics
+        elif isinstance(metrics, str):
+            metrics = [metrics]
 
         assert names is None or len(names) == len(dfs)
         st = time.time()
