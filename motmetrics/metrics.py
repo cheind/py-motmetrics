@@ -500,6 +500,24 @@ def num_fragmentations(df, obj_frequencies):
 simple_add_func.append(num_fragmentations)
 
 
+def average_overlap(df):
+    matches = df.noraw.Type.isin(['MATCH'])
+    oid_ious = df.noraw.set_index('OId')['D'].fillna(0).groupby('OId').apply(list).to_dict().items()
+    return oid_ious
+
+simple_add_func.append(average_overlap)
+
+
+def modp(df, average_overlap):
+    del df # unused
+    return np.mean([np.mean(d) for _, d in average_overlap])
+
+
+def modp_m(df, average_overlap):
+    del df # unused
+    return 1. - np.mean([np.mean(d) for _, d in average_overlap])
+
+
 def motp(df, num_detections):
     """Multiple object tracker precision."""
     return math_util.quiet_divide(df.noraw['D'].sum(), num_detections)
@@ -742,6 +760,8 @@ def create():
     m.register(partially_tracked, formatter='{:d}'.format)
     m.register(mostly_lost, formatter='{:d}'.format)
     m.register(num_fragmentations)
+    m.register(average_overlap)
+    m.register(modp, formatter='{:.3f}'.format)
     m.register(motp, formatter='{:.3f}'.format)
     m.register(mota, formatter='{:.1%}'.format)
     m.register(precision, formatter='{:.1%}'.format)
@@ -772,6 +792,7 @@ motchallenge_metrics = [
     'num_misses',
     'num_switches',
     'num_fragmentations',
+    'modp',
     'mota',
     'motp',
     'num_transfer',
