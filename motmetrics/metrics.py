@@ -501,9 +501,9 @@ simple_add_func.append(num_fragmentations)
 
 
 def average_overlap(df):
-    matches = df.noraw.Type.isin(['MATCH'])
-    oid_ious = df.noraw.set_index('OId')['D'].fillna(0).groupby('OId').apply(list).to_dict().items()
-    return oid_ious
+    mdf = df.full[(df.full.Type == 'MATCH') | (df.full.Type == 'MISS')]
+    frame_dist = mdf.reset_index().set_index('FrameId')['D'].fillna(0).groupby('FrameId')
+    return frame_dist.apply(list).to_dict().items()
 
 simple_add_func.append(average_overlap)
 
