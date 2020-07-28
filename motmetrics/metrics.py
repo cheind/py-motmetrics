@@ -518,6 +518,18 @@ def modp_m(df, average_overlap):
     return 1. - np.mean([np.mean(d) for _, d in average_overlap])
 
 
+def moda(df, average_overlap, num_misses, num_false_positives):
+    del df
+    num_oids = sum([len(d) for _, d in average_overlap])
+    return math_util.quiet_divide(num_misses+num_false_positives, num_oids)
+
+
+def moda_m(df, average_overlap, num_misses, num_false_positives):
+    del df
+    num_oids = sum([len(d) for _, d in average_overlap])
+    return 1. - math_util.quiet_divide(num_misses+num_false_positives, num_oids)
+
+
 def motp(df, num_detections):
     """Multiple object tracker precision."""
     return math_util.quiet_divide(df.noraw['D'].sum(), num_detections)
@@ -762,6 +774,7 @@ def create():
     m.register(num_fragmentations)
     m.register(average_overlap)
     m.register(modp, formatter='{:.3f}'.format)
+    m.register(moda, formatter='{:.3f}'.format)
     m.register(motp, formatter='{:.3f}'.format)
     m.register(mota, formatter='{:.1%}'.format)
     m.register(precision, formatter='{:.1%}'.format)
@@ -793,6 +806,7 @@ motchallenge_metrics = [
     'num_switches',
     'num_fragmentations',
     'modp',
+    'moda',
     'mota',
     'motp',
     'num_transfer',
