@@ -19,7 +19,7 @@ In particular **py-motmetrics** supports `CLEAR-MOT`[[1,2]](#References) metrics
 
 ### Features at a glance
 - *Variety of metrics* <br/>
-Provides MOTA, MOTP, track quality measures, global ID measures and more. The results are [comparable](#MOTChallengeCompatibility) with the popular [MOTChallenge][MOTChallenge] benchmarks.
+Provides MOTA, MOTP, track quality measures, global ID measures and more. The results are [comparable](#MOTChallengeCompatibility) with the popular [MOTChallenge][MOTChallenge] benchmarks [(*1)](#asterixcompare).
 - *Distance agnostic* <br/>
 Supports Euclidean, Intersection over Union and other distances measures.
 - *Complete event history* <br/>
@@ -76,7 +76,7 @@ id_global_assignment| `dict` ID measures: Global min-cost assignment for ID meas
 <a name="MOTChallengeCompatibility"></a>
 ### MOTChallenge compatibility
 
-**py-motmetrics** produces results compatible with popular [MOTChallenge][MOTChallenge] benchmarks. Below are two results taken from MOTChallenge [Matlab devkit][devkit] corresponding to the results of the CEM tracker on the training set of the 2015 MOT 2DMark.
+**py-motmetrics** produces results compatible with popular [MOTChallenge][MOTChallenge] benchmarks [(*1)](#asterixcompare). Below are two results taken from MOTChallenge [Matlab devkit][devkit] corresponding to the results of the CEM tracker on the training set of the 2015 MOT 2DMark.
 
 ```
 
@@ -98,7 +98,7 @@ TUD-Campus     55.8% 73.0% 45.1% 58.2% 94.1%  8  1  6  1 13 150   7   7 52.6% 0.
 TUD-Stadtmitte 64.5% 82.0% 53.1% 60.9% 94.0% 10  5  4  1 45 452   7   6 56.4% 0.346
 ```
 
-Besides naming conventions, the only obvious differences are
+<a name="asterixcompare"></a>(*1) Besides naming conventions, the only obvious differences are
 - Metric `FAR` is missing. This metric is given implicitly and can be recovered by `FalsePos / Frames * 100`.
 - Metric `MOTP` seems to be off. To convert compute `(1 - MOTP) * 100`. [MOTChallenge][MOTChallenge] benchmarks compute `MOTP` as percentage, while **py-motmetrics** sticks to the original definition of average distance over number of assigned objects [[1]](#References).
 
