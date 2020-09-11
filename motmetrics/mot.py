@@ -340,6 +340,7 @@ class MOTAccumulator(object):
             ]),
             index=idx
         )
+        df.sort_index(level=_INDEX_FIELDS)
         return df
 
     @staticmethod
@@ -373,6 +374,7 @@ class MOTAccumulator(object):
             names=_INDEX_FIELDS)
         df = pd.concat(series, axis=1)
         df.index = idx
+        df.sort_index(level=_INDEX_FIELDS)
         return df
 
     @staticmethod
