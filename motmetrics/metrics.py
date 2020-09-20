@@ -456,7 +456,7 @@ def track_ratios(df, obj_frequencies):
 def mostly_tracked(df, track_ratios):
     """Number of objects tracked for at least 80 percent of lifespan."""
     del df  # unused
-    return track_ratios[track_ratios >= 0.8].count()
+    return track_ratios[track_ratios > 0.8].count()
 
 
 simple_add_func.append(mostly_tracked)
@@ -465,7 +465,7 @@ simple_add_func.append(mostly_tracked)
 def partially_tracked(df, track_ratios):
     """Number of objects tracked between 20 and 80 percent of lifespan."""
     del df  # unused
-    return track_ratios[(track_ratios >= 0.2) & (track_ratios < 0.8)].count()
+    return track_ratios[(track_ratios >= 0.2) & (track_ratios <= 0.8)].count()
 
 
 simple_add_func.append(partially_tracked)
