@@ -100,6 +100,8 @@ class MOTAccumulator(object):
         self._events = None
         self._indices = None
         self.m = None
+        self.m_prev = None
+        self.m_curr = None
         self.res_m = None
         self.last_occurrence = None
         self.last_match = None
@@ -115,6 +117,8 @@ class MOTAccumulator(object):
         self._events = {field: [] for field in _EVENT_FIELDS}
         self._indices = {field: [] for field in _INDEX_FIELDS}
         self.m = {}  # Pairings up to current timestamp
+        self.m_prev = {}
+        self.m_curr = {}
         self.res_m = {}  # Result pairings up to now
         self.last_occurrence = {}  # Tracks most recent occurance of object
         self.last_match = {}  # Tracks most recent match of object
@@ -190,6 +194,7 @@ class MOTAccumulator(object):
             assert not self.auto_id, 'Cannot provide frame id when auto-id is enabled'
 
         eid = itertools.count()
+        self.m_prev, self.m_curr = self.m_curr, {}
 
         # 0. Record raw events
 
@@ -224,10 +229,10 @@ class MOTAccumulator(object):
             # 1. Try to re-establish tracks from previous correspondences
             for i in range(oids.shape[0]):
                 # No need to check oids_masked[i] here.
-                if oids[i] not in self.m:
+                if oids[i] not in self.m_prev:
                     continue
 
-                hprev = self.m[oids[i]]
+                hprev = self.m_prev[oids[i]]
                 j, = np.where(~hids_masked & (hids == hprev))
                 if j.shape[0] == 0:
                     continue
@@ -239,6 +244,7 @@ class MOTAccumulator(object):
                     oids_masked[i] = True
                     hids_masked[j] = True
                     self.m[oids[i]] = hids[j]
+                    self.m_curr[oids[i]] = hids[j]
 
                     self._append_to_indices(frameid, next(eid))
                     self._append_to_events('MATCH', oids[i], hids[j], dists[i, j])
@@ -292,6 +298,7 @@ class MOTAccumulator(object):
                 oids_masked[i] = True
                 hids_masked[j] = True
                 self.m[o] = h
+                self.m_curr[o] = h
                 self.res_m[h] = o
 
         # 3. All remaining objects are missed
