@@ -106,6 +106,7 @@ class MOTAccumulator(object):
         self.hypHistory = None
         self.dirty_events = None
         self.cached_events_df = None
+        self.last_update_frameid = None
 
         self.reset()
 
@@ -121,6 +122,7 @@ class MOTAccumulator(object):
         self.hypHistory = {}
         self.dirty_events = True
         self.cached_events_df = None
+        self.last_update_frameid = None
 
     def _append_to_indices(self, frameid, eid):
         self._indices['FrameId'].append(frameid)
@@ -221,10 +223,10 @@ class MOTAccumulator(object):
             self._append_to_events('RAW', np.nan, hid, np.nan)
 
         if oids.size * hids.size > 0:
-            # 1. Try to re-establish tracks from previous correspondences
+            # 1. Try to re-establish tracks from correspondences in last update
             for i in range(oids.shape[0]):
                 # No need to check oids_masked[i] here.
-                if oids[i] not in self.m:
+                if not (oids[i] in self.m and self.last_match[oids[i]] == self.last_update_frameid):
                     continue
 
                 hprev = self.m[oids[i]]
@@ -321,6 +323,8 @@ class MOTAccumulator(object):
         # 5. Update occurance state
         for o in oids:
             self.last_occurrence[o] = frameid
+
+        self.last_update_frameid = frameid
 
         return frameid
 
