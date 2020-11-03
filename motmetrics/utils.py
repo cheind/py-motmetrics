@@ -71,16 +71,14 @@ def compare_to_groundtruth(gt, dt, dist='iou', distfields=None, distth=0.5):
         oids = np.empty(0)
         hids = np.empty(0)
         dists = np.empty((0, 0))
-
-        fgt = fid_to_fgt.get(fid, None)
-        fdt = fid_to_fdt.get(fid, None)
-        if fgt is not None and fdt is not None:
-            oids = fgt.index.get_level_values(1)
-            hids = fdt.index.get_level_values(1)
-            if len(oids) > 0 and len(hids) > 0:
-                # dists = compute_dist(fgt[distfields].values, fdt[distfields].values)
-                dists = compute_dist(fgt.values, fdt.values)
-
+        if fid in fid_to_fgt:
+            fgt = fid_to_fgt[fid]
+            oids = fgt.index.get_level_values('Id')
+        if fid in fid_to_fdt:
+            fdt = fid_to_fdt[fid]
+            hids = fdt.index.get_level_values('Id')
+        if len(oids) > 0 and len(hids) > 0:
+            dists = compute_dist(fgt.values, fdt.values)
         acc.update(oids, hids, dists, frameid=fid)
 
     return acc
