@@ -12,6 +12,8 @@ from __future__ import division
 from __future__ import print_function
 
 import numpy as np
+from shapely.geometry import Point
+from shapely.geometry.polygon import Polygon
 
 from motmetrics.distances import iou_matrix, norm2squared_matrix
 from motmetrics.mot import MOTAccumulator
@@ -176,3 +178,42 @@ def CLEAR_MOT_M(gt, dt, inifile, dist='iou', distfields=None, distth=0.5, includ
         acc.update(oids, hids, dists, frameid=fid, vf=vflag)
 
     return acc, analysis
+
+
+# Andreu
+def is_in_region(bbox, reg):
+    # Check if the 4 points of the bbox are inside region
+    points = []
+    # Center
+    cx = bbox[0] + (bbox[2] / 2)
+    cy = bbox[1] + (bbox[3] / 2)
+    points.append(Point(cx, cy))
+    # # Top-left
+    # x1 = bbox[0]
+    # y1 = bbox[1]
+    # points.append(Point(x1, y1))
+    # # Top-right
+    # x1 = bbox[0] + bbox[2]
+    # y1 = bbox[1]
+    # points.append(Point(x1, y1))
+    # # Bot-right
+    # x1 = bbox[0] + bbox[2]
+    # y1 = bbox[1] + bbox[3]
+    # points.append(Point(x1, y1))
+    # # Bot-left
+    # x1 = bbox[0]
+    # y1 = bbox[1] + bbox[3]
+    # points.append(Point(x1, y1))
+
+    # Region
+    p_xy0 = (reg[0], reg[1])
+    p_xy1 = (reg[0] + reg[2], reg[1])
+    p_xy2 = (reg[0] + reg[2], reg[1] + reg[3])
+    p_xy3 = (reg[0], reg[1] + reg[3])
+    region = [p_xy0, p_xy1, p_xy2, p_xy3]
+    polygon = Polygon(region)
+
+    flags_inside = [polygon.contains(p) for p in points]
+    flag_inside = all(flags_inside)
+
+    return flag_inside
