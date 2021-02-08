@@ -19,7 +19,6 @@ import os
 from pathlib import Path
 
 import motmetrics as mm
-# Andreu
 from motmetrics.utils import is_in_region
 
 
@@ -69,7 +68,6 @@ string.""", formatter_class=argparse.RawTextHelpFormatter)
     return parser.parse_args()
 
 
-# Andreu
 def filter_dets_by_zone(gt_df, test_df):
     ig_region = gt_df[['X_reg', 'Y_reg', 'W_reg', 'H_reg']].dropna().values
     dets = test_df[['X', 'Y', 'Width', 'Height']]

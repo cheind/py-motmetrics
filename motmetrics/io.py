@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 import scipy.io
 import xmltodict
-# Andreu
+
 from motmetrics.utils import is_in_region
 
 
@@ -277,7 +277,6 @@ def load_detrac_xml(fname):
     if type(ignored_region_list['box']) != list:
         ignored_region_list['box'] = [ignored_region_list['box']]
 
-    # Andreu
     parsed_ig = []
     for ig in ignored_region_list['box']:
         row = []

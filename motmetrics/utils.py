@@ -180,7 +180,6 @@ def CLEAR_MOT_M(gt, dt, inifile, dist='iou', distfields=None, distth=0.5, includ
     return acc, analysis
 
 
-# Andreu
 def is_in_region(bbox, reg):
     # Check if the 4 points of the bbox are inside region
     points = []
