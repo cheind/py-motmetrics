@@ -121,17 +121,6 @@ def main():
     gt = OrderedDict([(os.path.splitext(Path(f).parts[-1])[0], mm.io.loadtxt(f, fmt=args.gtfmt)) for f in gtfiles])
     ts = OrderedDict([(os.path.splitext(Path(f).parts[-1])[0], mm.io.loadtxt(f, fmt=args.tsfmt)) for f in tsfiles])
 
-    # # Debug
-    # # f = gtfiles[1]
-    # # seq = os.path.splitext(Path(f).parts[-1])[0]
-    # seq = 'MVI_39511'
-    # f_gt = gtfiles[0].split('/')[:-1]
-    # f = '/'.join(f_gt) + '/' + seq + '.xml'
-    # gt = OrderedDict([(seq, mm.io.loadtxt(f, fmt=args.gtfmt))])
-    # f_test = tsfiles[0].split('/')[:-1]
-    # f = '/'.join(f_test) + '/' + seq + '.txt'
-    # ts = OrderedDict([(seq, mm.io.loadtxt(f, fmt=args.tsfmt))])
-
     mh = mm.metrics.create()
     accs, names = compare_dataframes(gt, ts)
 
