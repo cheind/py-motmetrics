@@ -7,9 +7,7 @@
 
 """Functions for comparing predictions and ground-truth."""
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+from __future__ import absolute_import, division, print_function
 
 import numpy as np
 
@@ -39,8 +37,8 @@ def norm2squared_matrix(objs, hyps, max_d2=float('inf')):
         Distance matrix containing pairwise distances or np.nan.
     """
 
-    objs = np.atleast_2d(objs).astype(float)
-    hyps = np.atleast_2d(hyps).astype(float)
+    objs = np.atleast_2d(objs).astype(np.float32)
+    hyps = np.atleast_2d(hyps).astype(np.float32)
 
     if objs.size == 0 or hyps.size == 0:
         return np.empty((0, 0))
@@ -76,7 +74,7 @@ def boxiou(a, b):
     a_vol = np.prod(a_size, axis=-1)
     b_vol = np.prod(b_size, axis=-1)
     u_vol = a_vol + b_vol - i_vol
-    return np.where(i_vol == 0, np.zeros_like(i_vol, dtype=np.float),
+    return np.where(i_vol == 0, np.zeros_like(i_vol, dtype=np.float32),
                     math_util.quiet_divide(i_vol, u_vol))
 
 

@@ -7,12 +7,10 @@
 
 """Accumulate tracking events frame by frame."""
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+from __future__ import absolute_import, division, print_function
 
-from collections import OrderedDict
 import itertools
+from collections import OrderedDict
 
 import numpy as np
 import pandas as pd
@@ -175,10 +173,10 @@ class MOTAccumulator(object):
 
         self.dirty_events = True
         oids = np.asarray(oids)
-        oids_masked = np.zeros_like(oids, dtype=np.bool)
+        oids_masked = np.zeros_like(oids, dtype=np.bool_)
         hids = np.asarray(hids)
-        hids_masked = np.zeros_like(hids, dtype=np.bool)
-        dists = np.atleast_2d(dists).astype(float).reshape(oids.shape[0], hids.shape[0]).copy()
+        hids_masked = np.zeros_like(hids, dtype=np.bool_)
+        dists = np.atleast_2d(dists).astype(np.float32).reshape(oids.shape[0], hids.shape[0]).copy()
 
         if frameid is None:
             assert self.auto_id, 'auto-id is not enabled'
@@ -334,9 +332,11 @@ class MOTAccumulator(object):
         df = pd.DataFrame(
             OrderedDict([
                 ('Type', pd.Series(cats)),          # Type of event. One of FP (false positive), MISS, SWITCH, MATCH
-                ('OId', pd.Series(dtype=float)),      # Object ID or -1 if FP. Using float as missing values will be converted to NaN anyways.
-                ('HId', pd.Series(dtype=float)),      # Hypothesis ID or NaN if MISS. Using float as missing values will be converted to NaN anyways.
-                ('D', pd.Series(dtype=float)),      # Distance or NaN when FP or MISS
+                # Object ID or -1 if FP. Using float as missing values will be converted to NaN anyways.
+                ('OId', pd.Series(dtype=np.float32)),
+                # Hypothesis ID or NaN if MISS. Using float as missing values will be converted to NaN anyways.
+                ('HId', pd.Series(dtype=np.float32)),
+                ('D', pd.Series(dtype=np.float32)),      # Distance or NaN when FP or MISS
             ]),
             index=idx
         )
@@ -363,9 +363,9 @@ class MOTAccumulator(object):
             ordered=False)
         series = [
             pd.Series(raw_type, name='Type'),
-            pd.Series(events['OId'], dtype=float, name='OId'),
-            pd.Series(events['HId'], dtype=float, name='HId'),
-            pd.Series(events['D'], dtype=float, name='D')
+            pd.Series(events['OId'], dtype=np.float32, name='OId'),
+            pd.Series(events['HId'], dtype=np.float32, name='HId'),
+            pd.Series(events['D'], dtype=np.float32, name='D')
         ]
 
         idx = pd.MultiIndex.from_arrays(
@@ -396,7 +396,12 @@ class MOTAccumulator(object):
         return res
 
     @staticmethod
-    def merge_event_dataframes(dfs, update_frame_indices=True, update_oids=True, update_hids=True, return_mappings=False):
+    def merge_event_dataframes(
+            dfs,
+            update_frame_indices=True,
+            update_oids=True,
+            update_hids=True,
+            return_mappings=False):
         """Merge dataframes.
 
         Params
@@ -437,7 +442,9 @@ class MOTAccumulator(object):
             # Update index
             if update_frame_indices:
                 # pylint: disable=cell-var-from-loop
-                next_frame_id = max(r.index.get_level_values(0).max() + 1, r.index.get_level_values(0).unique().shape[0])
+                next_frame_id = max(
+                    r.index.get_level_values(0).max() + 1,
+                    r.index.get_level_values(0).unique().shape[0])
                 if np.isnan(next_frame_id):
                     next_frame_id = 0
                 copy.index = copy.index.map(lambda x: (x[0] + next_frame_id, x[1]))
