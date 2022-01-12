@@ -113,7 +113,7 @@ python -m motmetrics.apps.evaluateTracking --help
 
 ## Installation
 
-To install latest development branch (usually a bit more recent than PyPi below)
+To install latest development version of **py-motmetrics** (usually a bit more recent than PyPi below)
 
 ```
 pip install git+https://github.com/cheind/py-motmetrics.git
