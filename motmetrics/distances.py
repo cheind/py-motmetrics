@@ -76,7 +76,7 @@ def boxiou(a, b):
     a_vol = np.prod(a_size, axis=-1)
     b_vol = np.prod(b_size, axis=-1)
     u_vol = a_vol + b_vol - i_vol
-    return np.where(i_vol == 0, np.zeros_like(i_vol, dtype=np.float),
+    return np.where(i_vol == 0, np.zeros_like(i_vol, dtype=np.float64),
                     math_util.quiet_divide(i_vol, u_vol))
 
 
