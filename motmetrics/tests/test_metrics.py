@@ -369,10 +369,10 @@ def test_motchallenge_files():
     print()
     print(mm.io.render_summary(summary, namemap=mm.io.motchallenge_metric_names, formatters=mh.formatters))
     # assert ((summary['num_transfer'] - summary['num_migrate']) == (summary['num_switches'] - summary['num_ascend'])).all() # False assertion
-    summary = summary[mm.metrics.motchallenge_metrics[:15]]
+    summary = summary[mm.metrics.motchallenge_metrics[:17]]
     expected = pd.DataFrame([
-        [0.557659, 0.729730, 0.451253, 0.582173, 0.941441, 8.0, 1, 6, 1, 13, 150, 7, 7, 0.526462, 0.277201],
-        [0.644619, 0.819760, 0.531142, 0.608997, 0.939920, 10.0, 5, 4, 1, 45, 452, 7, 6, 0.564014, 0.345904],
-        [0.624296, 0.799176, 0.512211, 0.602640, 0.940268, 18.0, 6, 10, 2, 58, 602, 14, 13, 0.555116, 0.330177],
+        [0.557659, 0.729730, 0.451253, 0.582173, 0.941441, 8.0, 1, 6, 1, 13, 150, 7, 7, 0.160351, 0.463068, 0.526462, 0.277201],
+        [0.644619, 0.819760, 0.531142, 0.608997, 0.939920, 10.0, 5, 4, 1, 45, 452, 7, 6, 0.210594, 0.432550, 0.564014, 0.345904],
+        [0.624296, 0.799176, 0.512211, 0.602640, 0.940268, 18.0, 6, 10, 2, 58, 602, 14, 13, 0.351243, 0.439707, 0.555116, 0.330177],
     ])
     np.testing.assert_allclose(summary, expected, atol=1e-3)

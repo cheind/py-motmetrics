@@ -500,6 +500,44 @@ def num_fragmentations(df, obj_frequencies):
 simple_add_func.append(num_fragmentations)
 
 
+def average_overlap(df):
+    mdf = df.full[(df.full.Type == 'MATCH') | (df.full.Type == 'MISS')]
+    overlaps = mdf.reset_index().set_index('FrameId')['D'].fillna(0).groupby('FrameId')
+    return overlaps.agg(np.mean)
+
+
+simple_add_func.append(average_overlap)
+
+
+def num_overlaps(df):
+    mdf = df.full[(df.full.Type == 'MATCH') | (df.full.Type == 'MISS')]
+    overlaps = mdf.reset_index().set_index('FrameId')['D'].fillna(0).groupby('FrameId')
+    return overlaps.count().sum()
+
+
+simple_add_func.append(num_overlaps)
+
+
+def modp(df, average_overlap):
+    del df
+    return average_overlap.mean()
+
+
+def modp_m(partials, average_overlap):
+    del partials
+    return average_overlap.mean()
+
+
+def moda(df, num_overlaps, num_misses, num_false_positives):
+    del df
+    return math_util.quiet_divide(num_misses+num_false_positives, num_overlaps)
+
+
+def moda_m(partials, num_overlaps, num_misses, num_false_positives):
+    del partials
+    return math_util.quiet_divide(num_misses+num_false_positives, num_overlaps)
+
+
 def motp(df, num_detections):
     """Multiple object tracker precision."""
     return math_util.quiet_divide(df.noraw['D'].sum(), num_detections)
@@ -742,6 +780,10 @@ def create():
     m.register(partially_tracked, formatter='{:d}'.format)
     m.register(mostly_lost, formatter='{:d}'.format)
     m.register(num_fragmentations)
+    m.register(average_overlap, formatter='{:d}'.format)
+    m.register(num_overlaps, formatter='{:d}'.format)
+    m.register(modp, formatter='{:.3f}'.format)
+    m.register(moda, formatter='{:.3f}'.format)
     m.register(motp, formatter='{:.3f}'.format)
     m.register(mota, formatter='{:.1%}'.format)
     m.register(precision, formatter='{:.1%}'.format)
@@ -772,6 +814,8 @@ motchallenge_metrics = [
     'num_misses',
     'num_switches',
     'num_fragmentations',
+    'modp',
+    'moda',
     'mota',
     'motp',
     'num_transfer',
