@@ -37,7 +37,16 @@ class MetricsHost:
     def __init__(self):
         self.metrics = OrderedDict()
 
-    def register(self, fnc, deps='auto', name=None, helpstr=None, formatter=None, fnc_m=None, deps_m='auto'):
+    def register(
+        self,
+        fnc,
+        deps="auto",
+        name=None,
+        helpstr=None,
+        formatter=None,
+        fnc_m=None,
+        deps_m="auto",
+    ):
         """Register a new metric.
 
         Params
@@ -71,67 +80,72 @@ class MetricsHost:
             The order of the argument passed is `df, result_dep1, result_dep2, ...`.
         """
 
-        assert fnc is not None, 'No function given for metric {}'.format(name)
+        assert fnc is not None, "No function given for metric {}".format(name)
 
         if deps is None:
             deps = []
-        elif deps == 'auto':
+        elif deps == "auto":
             if _getargspec(fnc).defaults is not None:
-                k = - len(_getargspec(fnc).defaults)
+                k = -len(_getargspec(fnc).defaults)
             else:
                 k = len(_getargspec(fnc).args)
             deps = _getargspec(fnc).args[1:k]  # assumes dataframe as first argument
 
         if name is None:
-            name = fnc.__name__  # Relies on meaningful function names, i.e don't use for lambdas
+            name = (
+                fnc.__name__
+            )  # Relies on meaningful function names, i.e don't use for lambdas
 
         if helpstr is None:
-            helpstr = inspect.getdoc(fnc) if inspect.getdoc(fnc) else 'No description.'
-            helpstr = ' '.join(helpstr.split())
-        if fnc_m is None and name + '_m' in globals():
-            fnc_m = globals()[name + '_m']
+            helpstr = inspect.getdoc(fnc) if inspect.getdoc(fnc) else "No description."
+            helpstr = " ".join(helpstr.split())
+        if fnc_m is None and name + "_m" in globals():
+            fnc_m = globals()[name + "_m"]
         if fnc_m is not None:
             if deps_m is None:
                 deps_m = []
-            elif deps_m == 'auto':
+            elif deps_m == "auto":
                 if _getargspec(fnc_m).defaults is not None:
-                    k = - len(_getargspec(fnc_m).defaults)
+                    k = -len(_getargspec(fnc_m).defaults)
                 else:
                     k = len(_getargspec(fnc_m).args)
-                deps_m = _getargspec(fnc_m).args[1:k]  # assumes dataframe as first argument
+                deps_m = _getargspec(fnc_m).args[
+                    1:k
+                ]  # assumes dataframe as first argument
         else:
             deps_m = None
 
         self.metrics[name] = {
-            'name': name,
-            'fnc': fnc,
-            'fnc_m': fnc_m,
-            'deps': deps,
-            'deps_m': deps_m,
-            'help': helpstr,
-            'formatter': formatter
+            "name": name,
+            "fnc": fnc,
+            "fnc_m": fnc_m,
+            "deps": deps,
+            "deps_m": deps_m,
+            "help": helpstr,
+            "formatter": formatter,
         }
 
     @property
     def names(self):
         """Returns the name identifiers of all registered metrics."""
-        return [v['name'] for v in self.metrics.values()]
+        return [v["name"] for v in self.metrics.values()]
 
     @property
     def formatters(self):
         """Returns the formatters for all metrics that have associated formatters."""
         return {
-            k: v['formatter'] for k, v in self.metrics.items()
-            if v['formatter'] is not None
+            k: v["formatter"]
+            for k, v in self.metrics.items()
+            if v["formatter"] is not None
         }
 
     def list_metrics(self, include_deps=False):
         """Returns a dataframe containing names, descriptions and optionally dependencies for each metric."""
-        cols = ['Name', 'Description', 'Dependencies']
+        cols = ["Name", "Description", "Dependencies"]
         if include_deps:
-            data = [(m['name'], m['help'], m['deps']) for m in self.metrics.values()]
+            data = [(m["name"], m["help"], m["deps"]) for m in self.metrics.values()]
         else:
-            data = [(m['name'], m['help']) for m in self.metrics.values()]
+            data = [(m["name"], m["help"]) for m in self.metrics.values()]
             cols = cols[:-1]
 
         return pd.DataFrame(data, columns=cols)
@@ -139,12 +153,20 @@ class MetricsHost:
     def list_metrics_markdown(self, include_deps=False):
         """Returns a markdown ready version of `list_metrics`."""
         df = self.list_metrics(include_deps=include_deps)
-        fmt = [':---' for i in range(len(df.columns))]
+        fmt = [":---" for i in range(len(df.columns))]
         df_fmt = pd.DataFrame([fmt], columns=df.columns)
         df_formatted = pd.concat([df_fmt, df])
         return df_formatted.to_csv(sep="|", index=False)
 
-    def compute(self, df, ana=None, metrics=None, return_dataframe=True, return_cached=False, name=None):
+    def compute(
+        self,
+        df,
+        ana=None,
+        metrics=None,
+        return_dataframe=True,
+        return_cached=False,
+        name=None,
+    ):
         """Compute metrics on the dataframe / accumulator.
 
         Params
@@ -180,9 +202,11 @@ class MetricsHost:
         df_map = events_to_df_map(df)
 
         cache = {}
-        options = {'ana': ana}
+        options = {"ana": ana}
         for mname in metrics:
-            cache[mname] = self._compute(df_map, mname, cache, options, parent='summarize')
+            cache[mname] = self._compute(
+                df_map, mname, cache, options, parent="summarize"
+            )
 
         if name is None:
             name = 0
@@ -195,7 +219,14 @@ class MetricsHost:
         ret = pd.DataFrame(data, index=[name]) if return_dataframe else data
         return ret
 
-    def compute_overall(self, partials, metrics=None, return_dataframe=True, return_cached=False, name=None):
+    def compute_overall(
+        self,
+        partials,
+        metrics=None,
+        return_dataframe=True,
+        return_cached=False,
+        name=None,
+    ):
         """Compute overall metrics based on multiple results.
 
         Params
@@ -228,7 +259,9 @@ class MetricsHost:
         cache = {}
 
         for mname in metrics:
-            cache[mname] = self._compute_overall(partials, mname, cache, parent='summarize')
+            cache[mname] = self._compute_overall(
+                partials, mname, cache, parent="summarize"
+            )
 
         if name is None:
             name = 0
@@ -238,7 +271,9 @@ class MetricsHost:
             data = OrderedDict([(k, cache[k]) for k in metrics])
         return pd.DataFrame(data, index=[name]) if return_dataframe else data
 
-    def compute_many(self, dfs, anas=None, metrics=None, names=None, generate_overall=False):
+    def compute_many(
+        self, dfs, anas=None, metrics=None, names=None, generate_overall=False
+    ):
         """Compute metrics on multiple dataframe / accumulators.
 
         Params
@@ -279,59 +314,72 @@ class MetricsHost:
         if anas is None:
             anas = [None] * len(dfs)
         partials = [
-            self.compute(acc,
-                         ana=analysis,
-                         metrics=metrics,
-                         name=name,
-                         return_cached=True,
-                         return_dataframe=False
-                         )
-            for acc, analysis, name in zip(dfs, anas, names)]
-        logging.info('partials: %.3f seconds.', time.time() - st)
+            self.compute(
+                acc,
+                ana=analysis,
+                metrics=metrics,
+                name=name,
+                return_cached=True,
+                return_dataframe=False,
+            )
+            for acc, analysis, name in zip(dfs, anas, names)
+        ]
+        logging.info("partials: %.3f seconds.", time.time() - st)
         details = partials
-        partials = [pd.DataFrame(OrderedDict([(k, i[k]) for k in metrics]), index=[name]) for i, name in zip(partials, names)]
+        partials = [
+            pd.DataFrame(OrderedDict([(k, i[k]) for k in metrics]), index=[name])
+            for i, name in zip(partials, names)
+        ]
         if generate_overall:
-            names = 'OVERALL'
+            names = "OVERALL"
             # merged, infomap = MOTAccumulator.merge_event_dataframes(dfs, return_mappings = True)
             # dfs = merged
             # anas = MOTAccumulator.merge_analysis(anas, infomap)
             # partials.append(self.compute(dfs, ana=anas, metrics=metrics, name=names)[0])
             partials.append(self.compute_overall(details, metrics=metrics, name=names))
-        logging.info('mergeOverall: %.3f seconds.', time.time() - st)
+        logging.info("mergeOverall: %.3f seconds.", time.time() - st)
         return pd.concat(partials)
 
     def _compute(self, df_map, name, cache, options, parent=None):
         """Compute metric and resolve dependencies."""
-        assert name in self.metrics, 'Cannot find metric {} required by {}.'.format(name, parent)
+        assert name in self.metrics, "Cannot find metric {} required by {}.".format(
+            name, parent
+        )
         already = cache.get(name, None)
         if already is not None:
             return already
         minfo = self.metrics[name]
         vals = []
-        for depname in minfo['deps']:
+        for depname in minfo["deps"]:
             v = cache.get(depname, None)
             if v is None:
-                v = cache[depname] = self._compute(df_map, depname, cache, options, parent=name)
+                v = cache[depname] = self._compute(
+                    df_map, depname, cache, options, parent=name
+                )
             vals.append(v)
-        if _getargspec(minfo['fnc']).defaults is None:
-            return minfo['fnc'](df_map, *vals)
+        if _getargspec(minfo["fnc"]).defaults is None:
+            return minfo["fnc"](df_map, *vals)
         else:
-            return minfo['fnc'](df_map, *vals, **options)
+            return minfo["fnc"](df_map, *vals, **options)
 
     def _compute_overall(self, partials, name, cache, parent=None):
-        assert name in self.metrics, 'Cannot find metric {} required by {}.'.format(name, parent)
+        assert name in self.metrics, "Cannot find metric {} required by {}.".format(
+            name, parent
+        )
         already = cache.get(name, None)
         if already is not None:
             return already
         minfo = self.metrics[name]
         vals = []
-        for depname in minfo['deps_m']:
+        for depname in minfo["deps_m"]:
             v = cache.get(depname, None)
             if v is None:
-                v = cache[depname] = self._compute_overall(partials, depname, cache, parent=name)
+                v = cache[depname] = self._compute_overall(
+                    partials, depname, cache, parent=name
+                )
             vals.append(v)
-        assert minfo['fnc_m'] is not None, 'merge function for metric %s is None' % name
-        return minfo['fnc_m'](partials, *vals)
+        assert minfo["fnc_m"] is not None, "merge function for metric %s is None" % name
+        return minfo["fnc_m"](partials, *vals)
 
 
 simple_add_func = []
@@ -366,7 +414,7 @@ simple_add_func.append(num_unique_objects)
 
 def num_matches(df):
     """Total number matches."""
-    return df.noraw.Type.isin(['MATCH']).sum()
+    return df.noraw.Type.isin(["MATCH"]).sum()
 
 
 simple_add_func.append(num_matches)
@@ -374,7 +422,7 @@ simple_add_func.append(num_matches)
 
 def num_switches(df):
     """Total number of track switches."""
-    return df.noraw.Type.isin(['SWITCH']).sum()
+    return df.noraw.Type.isin(["SWITCH"]).sum()
 
 
 simple_add_func.append(num_switches)
@@ -382,7 +430,7 @@ simple_add_func.append(num_switches)
 
 def num_transfer(df):
     """Total number of track transfer."""
-    return df.extra.Type.isin(['TRANSFER']).sum()
+    return df.extra.Type.isin(["TRANSFER"]).sum()
 
 
 simple_add_func.append(num_transfer)
@@ -390,7 +438,7 @@ simple_add_func.append(num_transfer)
 
 def num_ascend(df):
     """Total number of track ascend."""
-    return df.extra.Type.isin(['ASCEND']).sum()
+    return df.extra.Type.isin(["ASCEND"]).sum()
 
 
 simple_add_func.append(num_ascend)
@@ -398,7 +446,7 @@ simple_add_func.append(num_ascend)
 
 def num_migrate(df):
     """Total number of track migrate."""
-    return df.extra.Type.isin(['MIGRATE']).sum()
+    return df.extra.Type.isin(["MIGRATE"]).sum()
 
 
 simple_add_func.append(num_migrate)
@@ -406,7 +454,7 @@ simple_add_func.append(num_migrate)
 
 def num_false_positives(df):
     """Total number of false positives (false-alarms)."""
-    return df.noraw.Type.isin(['FP']).sum()
+    return df.noraw.Type.isin(["FP"]).sum()
 
 
 simple_add_func.append(num_false_positives)
@@ -414,7 +462,7 @@ simple_add_func.append(num_false_positives)
 
 def num_misses(df):
     """Total number of misses."""
-    return df.noraw.Type.isin(['MISS']).sum()
+    return df.noraw.Type.isin(["MISS"]).sum()
 
 
 simple_add_func.append(num_misses)
@@ -449,8 +497,8 @@ simple_add_func.append(num_predictions)
 
 def track_ratios(df, obj_frequencies):
     """Ratio of assigned to total appearance count per unique object id."""
-    tracked = df.noraw[df.noraw.Type != 'MISS']['OId'].value_counts()
-    return tracked.div(obj_frequencies).fillna(0.)
+    tracked = df.noraw[df.noraw.Type != "MISS"]["OId"].value_counts()
+    return tracked.div(obj_frequencies).fillna(0.0)
 
 
 def mostly_tracked(df, track_ratios):
@@ -487,12 +535,12 @@ def num_fragmentations(df, obj_frequencies):
         # Find first and last time object was not missed (track span). Then count
         # the number switches from NOT MISS to MISS state.
         dfo = df.noraw[df.noraw.OId == o]
-        notmiss = dfo[dfo.Type != 'MISS']
+        notmiss = dfo[dfo.Type != "MISS"]
         if len(notmiss) == 0:
             continue
         first = notmiss.index[0]
         last = notmiss.index[-1]
-        diffs = dfo.loc[first:last].Type.apply(lambda x: 1 if x == 'MISS' else 0).diff()
+        diffs = dfo.loc[first:last].Type.apply(lambda x: 1 if x == "MISS" else 0).diff()
         fra += diffs[diffs == 1].count()
     return fra
 
@@ -502,44 +550,40 @@ simple_add_func.append(num_fragmentations)
 
 def motp(df, num_detections):
     """Multiple object tracker precision."""
-    return math_util.quiet_divide(df.noraw['D'].sum(), num_detections)
+    return math_util.quiet_divide(df.noraw["D"].sum(), num_detections)
 
 
 def motp_m(partials, num_detections):
     res = 0
     for v in partials:
-        res += v['motp'] * v['num_detections']
+        res += v["motp"] * v["num_detections"]
     return math_util.quiet_divide(res, num_detections)
 
 
 def mota(df, num_misses, num_switches, num_false_positives, num_objects):
     """Multiple object tracker accuracy."""
     del df  # unused
-    return 1. - math_util.quiet_divide(
-        num_misses + num_switches + num_false_positives,
-        num_objects)
+    return 1.0 - math_util.quiet_divide(
+        num_misses + num_switches + num_false_positives, num_objects
+    )
 
 
 def mota_m(partials, num_misses, num_switches, num_false_positives, num_objects):
     del partials  # unused
-    return 1. - math_util.quiet_divide(
-        num_misses + num_switches + num_false_positives,
-        num_objects)
+    return 1.0 - math_util.quiet_divide(
+        num_misses + num_switches + num_false_positives, num_objects
+    )
 
 
 def precision(df, num_detections, num_false_positives):
     """Number of detected objects over sum of detected and false positives."""
     del df  # unused
-    return math_util.quiet_divide(
-        num_detections,
-        num_false_positives + num_detections)
+    return math_util.quiet_divide(num_detections, num_false_positives + num_detections)
 
 
 def precision_m(partials, num_detections, num_false_positives):
     del partials  # unused
-    return math_util.quiet_divide(
-        num_detections,
-        num_false_positives + num_detections)
+    return math_util.quiet_divide(num_detections, num_false_positives + num_detections)
 
 
 def recall(df, num_detections, num_objects):
@@ -554,7 +598,6 @@ def recall_m(partials, num_detections, num_objects):
 
 
 class DataFrameMap:  # pylint: disable=too-few-public-methods
-
     def __init__(self, full, raw, noraw, extra):
         self.full = full
         self.raw = raw
@@ -563,12 +606,14 @@ class DataFrameMap:  # pylint: disable=too-few-public-methods
 
 
 def events_to_df_map(df):
-    raw = df[df.Type == 'RAW']
-    noraw = df[(df.Type != 'RAW')
-               & (df.Type != 'ASCEND')
-               & (df.Type != 'TRANSFER')
-               & (df.Type != 'MIGRATE')]
-    extra = df[df.Type != 'RAW']
+    raw = df[df.Type == "RAW"]
+    noraw = df[
+        (df.Type != "RAW")
+        & (df.Type != "ASCEND")
+        & (df.Type != "TRANSFER")
+        & (df.Type != "MIGRATE")
+    ]
+    extra = df[df.Type != "RAW"]
     df_map = DataFrameMap(full=df, raw=raw, noraw=noraw, extra=extra)
     return df_map
 
@@ -582,19 +627,19 @@ def extract_counts_from_df_map(df):
         tps: Dict from (object id, hypothesis id) to true-positive count.
         The ids are arbitrary, they might NOT be consecutive integers from 0.
     """
-    oids = df.full['OId'].dropna().unique()
-    hids = df.full['HId'].dropna().unique()
+    oids = df.full["OId"].dropna().unique()
+    hids = df.full["HId"].dropna().unique()
 
     flat = df.raw.reset_index()
     # Exclude events that do not belong to either set.
-    flat = flat[flat['OId'].isin(oids) | flat['HId'].isin(hids)]
+    flat = flat[flat["OId"].isin(oids) | flat["HId"].isin(hids)]
     # Count number of frames where each (non-empty) OId and HId appears.
-    ocs = flat.set_index('OId')['FrameId'].groupby('OId').nunique().to_dict()
-    hcs = flat.set_index('HId')['FrameId'].groupby('HId').nunique().to_dict()
+    ocs = flat.set_index("OId")["FrameId"].groupby("OId").nunique().to_dict()
+    hcs = flat.set_index("HId")["FrameId"].groupby("HId").nunique().to_dict()
     # Select three columns of interest and index by ('OId', 'HId').
-    dists = flat[['OId', 'HId', 'D']].set_index(['OId', 'HId']).dropna()
+    dists = flat[["OId", "HId", "D"]].set_index(["OId", "HId"]).dropna()
     # Count events with non-empty distance for each pair.
-    tps = dists.groupby(['OId', 'HId'])['D'].count().to_dict()
+    tps = dists.groupby(["OId", "HId"])["D"].count().to_dict()
     return ocs, hcs, tps
 
 
@@ -610,8 +655,8 @@ def id_global_assignment(df, ana=None):
     no = len(ocs)
     nh = len(hcs)
 
-    fpmatrix = np.full((no + nh, no + nh), 0.)
-    fnmatrix = np.full((no + nh, no + nh), 0.)
+    fpmatrix = np.full((no + nh, no + nh), 0.0)
+    fnmatrix = np.full((no + nh, no + nh), 0.0)
     fpmatrix[no:, :nh] = np.nan
     fnmatrix[:no, nh:] = np.nan
 
@@ -635,20 +680,20 @@ def id_global_assignment(df, ana=None):
     rids, cids = linear_sum_assignment(costs)
 
     return {
-        'fpmatrix': fpmatrix,
-        'fnmatrix': fnmatrix,
-        'rids': rids,
-        'cids': cids,
-        'costs': costs,
-        'min_cost': costs[rids, cids].sum()
+        "fpmatrix": fpmatrix,
+        "fnmatrix": fnmatrix,
+        "rids": rids,
+        "cids": cids,
+        "costs": costs,
+        "min_cost": costs[rids, cids].sum(),
     }
 
 
 def idfp(df, id_global_assignment):
     """ID measures: Number of false positive matches after global min-cost matching."""
     del df  # unused
-    rids, cids = id_global_assignment['rids'], id_global_assignment['cids']
-    return id_global_assignment['fpmatrix'][rids, cids].sum()
+    rids, cids = id_global_assignment["rids"], id_global_assignment["cids"]
+    return id_global_assignment["fpmatrix"][rids, cids].sum()
 
 
 simple_add_func.append(idfp)
@@ -657,8 +702,8 @@ simple_add_func.append(idfp)
 def idfn(df, id_global_assignment):
     """ID measures: Number of false negatives matches after global min-cost matching."""
     del df  # unused
-    rids, cids = id_global_assignment['rids'], id_global_assignment['cids']
-    return id_global_assignment['fnmatrix'][rids, cids].sum()
+    rids, cids = id_global_assignment["rids"], id_global_assignment["cids"]
+    return id_global_assignment["fnmatrix"][rids, cids].sum()
 
 
 simple_add_func.append(idfn)
@@ -715,67 +760,69 @@ for one in simple_add_func:
             for v in partials:
                 res += v[nm]
             return res
+
         return simpleAddHolder
-    locals()[name + '_m'] = getSimpleAdd(name)
+
+    locals()[name + "_m"] = getSimpleAdd(name)
 
 
 def create():
     """Creates a MetricsHost and populates it with default metrics."""
     m = MetricsHost()
 
-    m.register(num_frames, formatter='{:d}'.format)
-    m.register(obj_frequencies, formatter='{:d}'.format)
-    m.register(pred_frequencies, formatter='{:d}'.format)
-    m.register(num_matches, formatter='{:d}'.format)
-    m.register(num_switches, formatter='{:d}'.format)
-    m.register(num_transfer, formatter='{:d}'.format)
-    m.register(num_ascend, formatter='{:d}'.format)
-    m.register(num_migrate, formatter='{:d}'.format)
-    m.register(num_false_positives, formatter='{:d}'.format)
-    m.register(num_misses, formatter='{:d}'.format)
-    m.register(num_detections, formatter='{:d}'.format)
-    m.register(num_objects, formatter='{:d}'.format)
-    m.register(num_predictions, formatter='{:d}'.format)
-    m.register(num_unique_objects, formatter='{:d}'.format)
+    m.register(num_frames, formatter="{:d}".format)
+    m.register(obj_frequencies, formatter="{:d}".format)
+    m.register(pred_frequencies, formatter="{:d}".format)
+    m.register(num_matches, formatter="{:d}".format)
+    m.register(num_switches, formatter="{:d}".format)
+    m.register(num_transfer, formatter="{:d}".format)
+    m.register(num_ascend, formatter="{:d}".format)
+    m.register(num_migrate, formatter="{:d}".format)
+    m.register(num_false_positives, formatter="{:d}".format)
+    m.register(num_misses, formatter="{:d}".format)
+    m.register(num_detections, formatter="{:d}".format)
+    m.register(num_objects, formatter="{:d}".format)
+    m.register(num_predictions, formatter="{:d}".format)
+    m.register(num_unique_objects, formatter="{:d}".format)
     m.register(track_ratios)
-    m.register(mostly_tracked, formatter='{:d}'.format)
-    m.register(partially_tracked, formatter='{:d}'.format)
-    m.register(mostly_lost, formatter='{:d}'.format)
+    m.register(mostly_tracked, formatter="{:d}".format)
+    m.register(partially_tracked, formatter="{:d}".format)
+    m.register(mostly_lost, formatter="{:d}".format)
     m.register(num_fragmentations)
-    m.register(motp, formatter='{:.3f}'.format)
-    m.register(mota, formatter='{:.1%}'.format)
-    m.register(precision, formatter='{:.1%}'.format)
-    m.register(recall, formatter='{:.1%}'.format)
+    m.register(motp, formatter="{:.3f}".format)
+    m.register(mota, formatter="{:.1%}".format)
+    m.register(precision, formatter="{:.1%}".format)
+    m.register(recall, formatter="{:.1%}".format)
 
     m.register(id_global_assignment)
     m.register(idfp)
     m.register(idfn)
     m.register(idtp)
-    m.register(idp, formatter='{:.1%}'.format)
-    m.register(idr, formatter='{:.1%}'.format)
-    m.register(idf1, formatter='{:.1%}'.format)
+    m.register(idp, formatter="{:.1%}".format)
+    m.register(idr, formatter="{:.1%}".format)
+    m.register(idf1, formatter="{:.1%}".format)
 
     return m
 
 
 motchallenge_metrics = [
-    'idf1',
-    'idp',
-    'idr',
-    'recall',
-    'precision',
-    'num_unique_objects',
-    'mostly_tracked',
-    'partially_tracked',
-    'mostly_lost',
-    'num_false_positives',
-    'num_misses',
-    'num_switches',
-    'num_fragmentations',
-    'mota',
-    'motp',
-    'num_transfer',
-    'num_ascend',
-    'num_migrate',
+    "idf1",
+    "idp",
+    "idr",
+    "recall",
+    "precision",
+    "num_unique_objects",
+    "mostly_tracked",
+    "partially_tracked",
+    "mostly_lost",
+    "num_false_positives",
+    "num_misses",
+    "num_switches",
+    "num_fragmentations",
+    "mota",
+    "motp",
+    "num_transfer",
+    "num_ascend",
+    "num_migrate",
 ]
 """A list of all metrics from MOTChallenge."""

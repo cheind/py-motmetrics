@@ -205,7 +205,7 @@ def load_detrac_mat(fname):
     df : pandas.DataFrame
         The returned dataframe has the following columns
             'X', 'Y', 'Width', 'Height', 'Confidence', 'ClassId', 'Visibility'
-        The dataframe is indexed by ('FrameId', 'Id')   
+        The dataframe is indexed by ('FrameId', 'Id')
     """
 
     matData = scipy.io.loadmat(fname)
