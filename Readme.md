@@ -1,6 +1,4 @@
-
-
-[![PyPI version](https://badge.fury.io/py/motmetrics.svg)](https://badge.fury.io/py/motmetrics) [![Build Status](https://app.travis-ci.com/cheind/py-motmetrics.svg?branch=develop)](https://app.travis-ci.com/cheind/py-motmetrics)
+[![PyPI version](https://badge.fury.io/py/motmetrics.svg)](https://badge.fury.io/py/motmetrics) [![Build Status](https://github.com/cheind/py-motmetrics/actions/workflows/python-package.yml/badge.svg)](https://github.com/cheind/py-motmetrics/actions/workflows/python-package.yml)
 
 # py-motmetrics
 
