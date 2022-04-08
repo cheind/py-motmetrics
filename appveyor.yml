@@ -46,21 +46,25 @@ test_script:
   # Redirect stderr of pip within powershell.
   - ps: >-
       $wheel = cmd /r dir .\dist\*.tar.gz /b/s;
-      cmd /c "pip install --verbose $wheel 2>&1"
+      cmd /c "pip install $wheel 2>&1"
   - pytest --pyargs motmetrics
 
-on_success:
+deploy_script:
   ps: >-
-    if ($env:APPVEYOR_REPO_BRANCH -eq "master") {
-      Write-Output ("Deploying to PyPI")
-      pip install --upgrade twine
-      # If powershell ever sees anything on stderr it thinks it's a fail.
-      # So we use cmd to redirect stderr to stdout before PS can see it.
-      cmd /c 'twine upload --skip-existing dist\* 2>&1'
-    } else {
-      Write-Output "Not deploying as this is not a tagged commit or commit on master"
-    }
-
+      if ($env:PYTHON_VERSION -eq "3.6") {
+        Write-Output("Deploying...");
+        pip install --upgrade twine;
+        if ($env:APPVEYOR_REPO_BRANCH -eq "master") {
+          Write-Output("Deploying to PyPI")
+          # If powershell ever sees anything on stderr it thinks it's a fail.
+          # So we use cmd to redirect stderr to stdout before PS can see it.
+          cmd /c 'twine upload --skip-existing dist\* 2>&1'
+        } elseif ($env:APPVEYOR_REPO_BRANCH -eq "develop") {
+          Write-Output("Deploying to PyPI-Test")
+          cmd /c 'twine upload --skip-existing --verbose --repository testpypi dist\* 2>&1'
+        }
+      }
+      
 artifacts:
   - path: "dist\\*.whl"
   - path: "dist\\*.tar.gz"
@@ -77,3 +81,4 @@ branches:
   only:
     - master
     - develop
+    - /feature.*/

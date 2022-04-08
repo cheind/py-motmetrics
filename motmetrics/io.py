@@ -211,10 +211,10 @@ def load_detrac_mat(fname):
     matData = scipy.io.loadmat(fname)
 
     frameList = matData['gtInfo'][0][0][4][0]
-    leftArray = matData['gtInfo'][0][0][0]
-    topArray = matData['gtInfo'][0][0][1]
-    widthArray = matData['gtInfo'][0][0][3]
-    heightArray = matData['gtInfo'][0][0][2]
+    leftArray = matData['gtInfo'][0][0][0].astype(np.float32)
+    topArray = matData['gtInfo'][0][0][1].astype(np.float32)
+    widthArray = matData['gtInfo'][0][0][3].astype(np.float32)
+    heightArray = matData['gtInfo'][0][0][2].astype(np.float32)
 
     parsedGT = []
     for f in frameList:
