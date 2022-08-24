@@ -436,7 +436,9 @@ Before you begin, make sure to have Ground truth and your Tracker output data in
 <frame number>, <object id>, <bb_left>, <bb_top>, <bb_width>, <bb_height>, <confidence>, <x>, <y>, <z>
 ````
 
-A sample is shown below. You can read more about MOT16 format [here](https://arxiv.org/abs/1603.00831). To create MOT16 annotation for your custom dataset you can use the MOT16 Annotator tool [here](https://github.com/khalidw/MOT16_Annotator).
+A sample ground truth/tracker output file is shown below. If you are using a custom dataset, then it is highly likely that you will have to create your own ground truth file. If you already have a MOT16 format ground truth file, you can use it directly otherwise, you will need a MOT16 annotator tool to create the annotations (ground truth). You can use any tool to create your ground truth data, just make sure it is as per MOT16 format.
+
+If you can't find a tool to create your ground truth files, you can use this free MOT16 annotator [tool](https://github.com/khalidw/MOT16_Annotator) to create ground truth for your dataset which can then be used in conjunction with your tracker output to generate the MOT metrics.
 
 ````
 1,1,763.00,272.00,189.00,38.00,1,-1,-1,-1
@@ -446,18 +448,16 @@ A sample is shown below. You can read more about MOT16 format [here](https://arx
 3,1,760.00,272.00,186.00,38.00,1,-1,-1,-1
 ````
 
-Import required packages
-
-```python
-import motmetrics as mm
-import numpy as np
-```
+You can read more about MOT16 format [here](https://arxiv.org/abs/1603.00831).
 
 Following function loads the ground truth and tracker object files, processes them and produces a set of metrices.
 
 ```python
 def motMetricsEnhancedCalculator(gtSource, tSource):
-
+  # import required packages
+  import motmetrics as mm
+  import numpy as np
+  
   # load ground truth
   gt = np.loadtxt(gtSource, delimiter=',')
 
@@ -510,14 +510,14 @@ def motMetricsEnhancedCalculator(gtSource, tSource):
   print(strsummary)
 ```
 
-Run the function by pointing to the ground truth and your generated results as follows
+Run the function by pointing to the ground truth and tracker output file. A sample output is shown below.
 
 ```python
-# Calculate for pre-trained Yolov3 + SORT
+# Calculate the MOT metrics
 motMetricsEnhancedCalculator('gt/groundtruth.txt', \
                              'to/trackeroutput.txt')
 """
-   num_frames  IDF1       IDP       IDR      Rcll      Prcn   GT  MT  PT  ML  FP  FN  IDsw  FM      MOTA      MOTP
+     num_frames  IDF1       IDP       IDR      Rcll      Prcn   GT  MT  PT  ML  FP  FN  IDsw  FM      MOTA      MOTP
 acc         150  0.75  0.857143  0.666667  0.743295  0.955665  261   0   2   0   9  67     1  12  0.704981  0.244387
 """
 ```
