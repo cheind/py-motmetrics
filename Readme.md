@@ -426,6 +426,102 @@ with lap.set_default_solver(mysolver):
     ...
 ```
 
+## For custom dataset
+
+Use this section as a guide for calculating MOT metrics for your custom dataset.
+
+Before you begin, make sure to have Ground truth and your Tracker output data in the form of text files. The code below assumes MOT16 format for the ground truth as well as the tracker ouput. The data is arranged in the following sequence:
+
+````
+<frame number>, <object id>, <bb_left>, <bb_top>, <bb_width>, <bb_height>, <confidence>, <x>, <y>, <z>
+````
+
+A sample is shown below. You can read more about MOT16 format [here](https://arxiv.org/abs/1603.00831). To create MOT16 annotation for your custom dataset you can use the MOT16 Annotator tool [here](https://github.com/khalidw/MOT16_Annotator).
+
+````
+1,1,763.00,272.00,189.00,38.00,1,-1,-1,-1
+1,2,412.00,265.00,153.00,30.00,1,-1,-1,-1
+2,1,762.00,269.00,185.00,41.00,1,-1,-1,-1
+2,2,413.00,267.00,151.00,26.00,1,-1,-1,-1
+3,1,760.00,272.00,186.00,38.00,1,-1,-1,-1
+````
+
+Import required packages
+
+```python
+import motmetrics as mm
+import numpy as np
+```
+
+Following function loads the ground truth and tracker object files, processes them and produces a set of metrices.
+
+```python
+def motMetricsEnhancedCalculator(gtSource, tSource):
+
+  # load ground truth
+  gt = np.loadtxt(gtSource, delimiter=',')
+
+  # load tracking output
+  t = np.loadtxt(tSource, delimiter=',')
+
+  # Create an accumulator that will be updated during each frame
+  acc = mm.MOTAccumulator(auto_id=True)
+
+  # Max frame number maybe different for gt and t files
+  for frame in range(int(gt[:,0].max())):
+    frame += 1 # detection and frame numbers begin at 1
+
+    # select id, x, y, width, height for current frame
+    # required format for distance calculation is X, Y, Width, Height \
+    # We already have this format
+    gt_dets = gt[gt[:,0]==frame,1:6] # select all detections in gt
+    t_dets = t[t[:,0]==frame,1:6] # select all detections in t
+
+    C = mm.distances.iou_matrix(gt_dets[:,1:], t_dets[:,1:], \
+                                max_iou=0.5) # format: gt, t
+
+    # Call update once for per frame.
+    # format: gt object ids, t object ids, distance
+    acc.update(gt_dets[:,0].astype('int').tolist(), \
+              t_dets[:,0].astype('int').tolist(), C)
+
+  mh = mm.metrics.create()
+
+  summary = mh.compute(acc, metrics=['num_frames', 'idf1', 'idp', 'idr', \
+                                     'recall', 'precision', 'num_objects', \
+                                     'mostly_tracked', 'partially_tracked', \
+                                     'mostly_lost', 'num_false_positives', \
+                                     'num_misses', 'num_switches', \
+                                     'num_fragmentations', 'mota', 'motp' \
+                                    ], \
+                      name='acc')
+
+  strsummary = mm.io.render_summary(
+      summary,
+      #formatters={'mota' : '{:.2%}'.format},
+      namemap={'idf1': 'IDF1', 'idp': 'IDP', 'idr': 'IDR', 'recall': 'Rcll', \
+               'precision': 'Prcn', 'num_objects': 'GT', \
+               'mostly_tracked' : 'MT', 'partially_tracked': 'PT', \
+               'mostly_lost' : 'ML', 'num_false_positives': 'FP', \
+               'num_misses': 'FN', 'num_switches' : 'IDsw', \
+               'num_fragmentations' : 'FM', 'mota': 'MOTA', 'motp' : 'MOTP',  \
+              }
+  )
+  print(strsummary)
+```
+
+Run the function by pointing to the ground truth and your generated results as follows
+
+```python
+# Calculate for pre-trained Yolov3 + SORT
+motMetricsEnhancedCalculator('gt/groundtruth.txt', \
+                             'to/trackeroutput.txt')
+"""
+   num_frames  IDF1       IDP       IDR      Rcll      Prcn   GT  MT  PT  ML  FP  FN  IDsw  FM      MOTA      MOTP
+acc         150  0.75  0.857143  0.666667  0.743295  0.955665  261   0   2   0   9  67     1  12  0.704981  0.244387
+"""
+```
+
 ## Running tests
 **py-motmetrics** uses the pytest framework. To run the tests, simply `cd` into the source directly and run `pytest`.
 
