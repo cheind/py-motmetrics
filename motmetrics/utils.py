@@ -37,7 +37,8 @@ def compare_to_groundtruth(gt, dt, dist='iou', distfields=None, distth=0.5):
     Kwargs
     ------
     dist : str, optional
-        String identifying distance to be used. Defaults to intersection over union.
+        String identifying distance to be used. Defaults to intersection over union ('iou'). Euclidean
+        distance ('euc') and squared euclidean distance ('seuc') are also supported.
     distfields: array, optional
         Fields relevant for extracting distance information. Defaults to ['X', 'Y', 'Width', 'Height']
     distth: float, optional
@@ -51,9 +52,19 @@ def compare_to_groundtruth(gt, dt, dist='iou', distfields=None, distth=0.5):
         return iou_matrix(a, b, max_iou=distth)
 
     def compute_euc(a, b):
+        return np.sqrt(norm2squared_matrix(a, b, max_d2=distth**2))
+
+    def compute_seuc(a, b):
         return norm2squared_matrix(a, b, max_d2=distth)
 
-    compute_dist = compute_iou if dist.upper() == 'IOU' else compute_euc
+    if dist.upper() == 'IOU':
+        compute_dist = compute_iou
+    elif dist.upper() == 'EUC':
+        compute_dist = compute_euc
+    elif dist.upper() == 'SEUC':
+        compute_dist = compute_seuc
+    else:
+        raise f'Unknown distance metric {dist}. Use "IOU", "EUC" or "SEUC"'
 
     acc = MOTAccumulator()
 
