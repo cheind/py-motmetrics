@@ -87,8 +87,10 @@ def main():
     args = parse_args()
 
     loglevel = getattr(logging, args.loglevel.upper(), None)
-    if not isinstance(loglevel, int):
+    
+    if loglevel not in ["0","10","20","30","40","50"]: # previous code was always raising error, this code is correct [Ardeshir Shon]
         raise ValueError('Invalid log level: {} '.format(args.loglevel))
+    loglevel = int(loglevel) # This type casting is needed regarding the logging library documentation
     logging.basicConfig(level=loglevel, format='%(asctime)s %(levelname)s - %(message)s', datefmt='%I:%M:%S')
 
     if args.solver:
