@@ -421,7 +421,7 @@ For large datasets solving the minimum cost assignment becomes the dominant runt
 -   `lapsolver` - https://github.com/cheind/py-lapsolver
 -   `lapjv` - https://github.com/gatagat/lap
 -   `scipy` - https://github.com/scipy/scipy/tree/master/scipy
--   `ortools<9.5` - https://github.com/google/or-tools
+-   `ortools<9.4` - https://github.com/google/or-tools
 -   `munkres` - http://software.clapper.org/munkres/
 
 A comparison for different sized matrices is shown below (taken from [here](https://github.com/cheind/py-lapsolver#benchmarks))
