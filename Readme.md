@@ -10,27 +10,30 @@ While benchmarking single object trackers is rather straightforward, measuring t
 
 ![](./motmetrics/etc/mot.png)<br/>
 
-*Pictures courtesy of Bernardin, Keni, and Rainer Stiefelhagen [[1]](#References)*
+_Pictures courtesy of Bernardin, Keni, and Rainer Stiefelhagen [[1]](#References)_
+
 </div>
 
 In particular **py-motmetrics** supports `CLEAR-MOT`[[1,2]](#References) metrics and `ID`[[4]](#References) metrics. Both metrics attempt to find a minimum cost assignment between ground truth objects and predictions. However, while CLEAR-MOT solves the assignment problem on a local per-frame basis, `ID-MEASURE` solves the bipartite graph matching by finding the minimum cost of objects and predictions over all frames. This [blog-post](https://web.archive.org/web/20190413133409/http://vision.cs.duke.edu:80/DukeMTMC/IDmeasures.html) by Ergys illustrates the differences in more detail.
 
 ## Features at a glance
-- *Variety of metrics* <br/>
-Provides MOTA, MOTP, track quality measures, global ID measures and more. The results are [comparable](#MOTChallengeCompatibility) with the popular [MOTChallenge][MOTChallenge] benchmarks [(*1)](#asterixcompare).
-- *Distance agnostic* <br/>
-Supports Euclidean, Intersection over Union and other distances measures.
-- *Complete event history* <br/>
-Tracks all relevant per-frame events suchs as correspondences, misses, false alarms and switches.
-- *Flexible solver backend* <br/>
-Support for switching minimum assignment cost solvers. Supports `scipy`, `ortools`, `munkres` out of the box. Auto-tunes solver selection based on [availability and problem size](#SolverBackends).
-- *Easy to extend* <br/>
-Events and summaries are utilizing [pandas][pandas] for data structures and analysis. New metrics can reuse already computed values from depending metrics.
+
+-   _Variety of metrics_ <br/>
+    Provides MOTA, MOTP, track quality measures, global ID measures and more. The results are [comparable](#MOTChallengeCompatibility) with the popular [MOTChallenge][motchallenge] benchmarks [(\*1)](#asterixcompare).
+-   _Distance agnostic_ <br/>
+    Supports Euclidean, Intersection over Union and other distances measures.
+-   _Complete event history_ <br/>
+    Tracks all relevant per-frame events suchs as correspondences, misses, false alarms and switches.
+-   _Flexible solver backend_ <br/>
+    Support for switching minimum assignment cost solvers. Supports `scipy`, `ortools`, `munkres` out of the box. Auto-tunes solver selection based on [availability and problem size](#SolverBackends).
+-   _Easy to extend_ <br/>
+    Events and summaries are utilizing [pandas][pandas] for data structures and analysis. New metrics can reuse already computed values from depending metrics.
 
 <a name="Metrics"></a>
+
 ## Metrics
 
-**py-motmetrics** implements the following metrics. The metrics have been aligned with what is reported by [MOTChallenge][MOTChallenge] benchmarks.
+**py-motmetrics** implements the following metrics. The metrics have been aligned with what is reported by [MOTChallenge][motchallenge] benchmarks.
 
 ```python
 import motmetrics as mm
@@ -39,42 +42,41 @@ mh = mm.metrics.create()
 print(mh.list_metrics_markdown())
 ```
 
-Name|Description
-:---|:---
-num_frames|Total number of frames.
-num_matches|Total number matches.
-num_switches|Total number of track switches.
-num_false_positives|Total number of false positives (false-alarms).
-num_misses|Total number of misses.
-num_detections|Total number of detected objects including matches and switches.
-num_objects|Total number of unique object appearances over all frames.
-num_predictions|Total number of unique prediction appearances over all frames.
-num_unique_objects|Total number of unique object ids encountered.
-mostly_tracked|Number of objects tracked for at least 80 percent of lifespan.
-partially_tracked|Number of objects tracked between 20 and 80 percent of lifespan.
-mostly_lost|Number of objects tracked less than 20 percent of lifespan.
-num_fragmentations|Total number of switches from tracked to not tracked.
-motp|Multiple object tracker precision.
-mota|Multiple object tracker accuracy.
-precision|Number of detected objects over sum of detected and false positives.
-recall|Number of detections over number of objects.
-idfp|ID measures: Number of false positive matches after global min-cost matching.
-idfn|ID measures: Number of false negatives matches after global min-cost matching.
-idtp|ID measures: Number of true positives matches after global min-cost matching.
-idp|ID measures: global min-cost precision.
-idr|ID measures: global min-cost recall.
-idf1|ID measures: global min-cost F1 score.
-obj_frequencies|`pd.Series` Total number of occurrences of individual objects over all frames.
-pred_frequencies|`pd.Series` Total number of occurrences of individual predictions over all frames.
-track_ratios|`pd.Series` Ratio of assigned to total appearance count per unique object id.
-id_global_assignment| `dict` ID measures: Global min-cost assignment for ID measures.
-
-
+| Name                 | Description                                                                        |
+| :------------------- | :--------------------------------------------------------------------------------- |
+| num_frames           | Total number of frames.                                                            |
+| num_matches          | Total number matches.                                                              |
+| num_switches         | Total number of track switches.                                                    |
+| num_false_positives  | Total number of false positives (false-alarms).                                    |
+| num_misses           | Total number of misses.                                                            |
+| num_detections       | Total number of detected objects including matches and switches.                   |
+| num_objects          | Total number of unique object appearances over all frames.                         |
+| num_predictions      | Total number of unique prediction appearances over all frames.                     |
+| num_unique_objects   | Total number of unique object ids encountered.                                     |
+| mostly_tracked       | Number of objects tracked for at least 80 percent of lifespan.                     |
+| partially_tracked    | Number of objects tracked between 20 and 80 percent of lifespan.                   |
+| mostly_lost          | Number of objects tracked less than 20 percent of lifespan.                        |
+| num_fragmentations   | Total number of switches from tracked to not tracked.                              |
+| motp                 | Multiple object tracker precision.                                                 |
+| mota                 | Multiple object tracker accuracy.                                                  |
+| precision            | Number of detected objects over sum of detected and false positives.               |
+| recall               | Number of detections over number of objects.                                       |
+| idfp                 | ID measures: Number of false positive matches after global min-cost matching.      |
+| idfn                 | ID measures: Number of false negatives matches after global min-cost matching.     |
+| idtp                 | ID measures: Number of true positives matches after global min-cost matching.      |
+| idp                  | ID measures: global min-cost precision.                                            |
+| idr                  | ID measures: global min-cost recall.                                               |
+| idf1                 | ID measures: global min-cost F1 score.                                             |
+| obj_frequencies      | `pd.Series` Total number of occurrences of individual objects over all frames.     |
+| pred_frequencies     | `pd.Series` Total number of occurrences of individual predictions over all frames. |
+| track_ratios         | `pd.Series` Ratio of assigned to total appearance count per unique object id.      |
+| id_global_assignment | `dict` ID measures: Global min-cost assignment for ID measures.                    |
 
 <a name="MOTChallengeCompatibility"></a>
+
 ## MOTChallenge compatibility
 
-**py-motmetrics** produces results compatible with popular [MOTChallenge][MOTChallenge] benchmarks [(*1)](#asterixcompare). Below are two results taken from MOTChallenge [Matlab devkit][devkit] corresponding to the results of the CEM tracker on the training set of the 2015 MOT 2DMark.
+**py-motmetrics** produces results compatible with popular [MOTChallenge][motchallenge] benchmarks [(\*1)](#asterixcompare). Below are two results taken from MOTChallenge [Matlab devkit][devkit] corresponding to the results of the CEM tracker on the training set of the 2015 MOT 2DMark.
 
 ```
 
@@ -96,15 +98,19 @@ TUD-Campus     55.8% 73.0% 45.1% 58.2% 94.1%  8  1  6  1 13 150   7   7 52.6% 0.
 TUD-Stadtmitte 64.5% 82.0% 53.1% 60.9% 94.0% 10  5  4  1 45 452   7   6 56.4% 0.346
 ```
 
-<a name="asterixcompare"></a>(*1) Besides naming conventions, the only obvious differences are
-- Metric `FAR` is missing. This metric is given implicitly and can be recovered by `FalsePos / Frames * 100`.
-- Metric `MOTP` seems to be off. To convert compute `(1 - MOTP) * 100`. [MOTChallenge][MOTChallenge] benchmarks compute `MOTP` as percentage, while **py-motmetrics** sticks to the original definition of average distance over number of assigned objects [[1]](#References).
+<a name="asterixcompare"></a>(\*1) Besides naming conventions, the only obvious differences are
+
+-   Metric `FAR` is missing. This metric is given implicitly and can be recovered by `FalsePos / Frames * 100`.
+-   Metric `MOTP` seems to be off. To convert compute `(1 - MOTP) * 100`. [MOTChallenge][motchallenge] benchmarks compute `MOTP` as percentage, while **py-motmetrics** sticks to the original definition of average distance over number of assigned objects [[1]](#References).
 
 You can compare tracker results to ground truth in MOTChallenge format by
+
 ```
 python -m motmetrics.apps.eval_motchallenge --help
 ```
+
 For MOT16/17, you can run
+
 ```
 python -m motmetrics.apps.evaluateTracking --help
 ```
@@ -117,8 +123,8 @@ To install latest development version of **py-motmetrics** (usually a bit more r
 pip install git+https://github.com/cheind/py-motmetrics.git
 ```
 
-
 ### Install via PyPi
+
 To install **py-motmetrics** use `pip`
 
 ```
@@ -134,6 +140,7 @@ pip install -e <path/to/setup.py>
 ```
 
 ### Install via Conda
+
 In case you are using Conda, a simple way to run **py-motmetrics** is to create a virtual environment with all the necessary dependencies
 
 ```
@@ -261,6 +268,7 @@ Event
 Object `2` is now tracked by hypothesis `3` leading to a track switch. Note, although a pairing `(1, 3)` with cost less than 0.6 is possible, the algorithm prefers prefers to continue track assignments from past frames which is a property of MOT metrics.
 
 ### Computing metrics
+
 Once the accumulator has been populated you can compute and display metrics. Continuing the example from above
 
 ```python
@@ -355,6 +363,7 @@ OVERALL 80.0% 80.0% 80.0% 80.0% 80.0%  4  2  2  0  2  2   1   1 50.0% 0.275
 ```
 
 ### Computing distances
+
 Up until this point we assumed the pairwise object/hypothesis distances to be known. Usually this is not the case. You are mostly given either rectangles or points (centroids) of related objects. To compute a distance matrix from them you can use `motmetrics.distance` module as shown below.
 
 #### Euclidean norm squared on points
@@ -383,6 +392,7 @@ C = mm.distances.norm2squared_matrix(o, h, max_d2=5.)
 ```
 
 #### Intersection over union norm for 2D rectangles
+
 ```python
 a = np.array([
     [0, 0, 1, 2],    # Format X, Y, Width, Height
@@ -403,13 +413,16 @@ mm.distances.iou_matrix(a, b, max_iou=0.5)
 ```
 
 <a name="SolverBackends"></a>
+
 ### Solver backends
+
 For large datasets solving the minimum cost assignment becomes the dominant runtime part. **py-motmetrics** therefore supports these solvers out of the box
-  - `lapsolver` - https://github.com/cheind/py-lapsolver
-  - `lapjv` - https://github.com/gatagat/lap
-  - `scipy` - https://github.com/scipy/scipy/tree/master/scipy
-  - `ortools` - https://github.com/google/or-tools
-  - `munkres` - http://software.clapper.org/munkres/
+
+-   `lapsolver` - https://github.com/cheind/py-lapsolver
+-   `lapjv` - https://github.com/gatagat/lap
+-   `scipy` - https://github.com/scipy/scipy/tree/master/scipy
+-   `ortools<9.5` - https://github.com/google/or-tools
+-   `munkres` - http://software.clapper.org/munkres/
 
 A comparison for different sized matrices is shown below (taken from [here](https://github.com/cheind/py-lapsolver#benchmarks))
 
@@ -427,20 +440,24 @@ with lap.set_default_solver(mysolver):
 ```
 
 ## Running tests
+
 **py-motmetrics** uses the pytest framework. To run the tests, simply `cd` into the source directly and run `pytest`.
 
 <a name="References"></a>
+
 ### References
+
 1. Bernardin, Keni, and Rainer Stiefelhagen. "Evaluating multiple object tracking performance: the CLEAR MOT metrics."
-EURASIP Journal on Image and Video Processing 2008.1 (2008): 1-10.
+   EURASIP Journal on Image and Video Processing 2008.1 (2008): 1-10.
 2. Milan, Anton, et al. "Mot16: A benchmark for multi-object tracking." arXiv preprint arXiv:1603.00831 (2016).
 3. Li, Yuan, Chang Huang, and Ram Nevatia. "Learning to associate: Hybridboosted multi-target tracker for crowded scene."
-Computer Vision and Pattern Recognition, 2009. CVPR 2009. IEEE Conference on. IEEE, 2009.
+   Computer Vision and Pattern Recognition, 2009. CVPR 2009. IEEE Conference on. IEEE, 2009.
 4. Performance Measures and a Data Set for Multi-Target, Multi-Camera Tracking. E. Ristani, F. Solera, R. S. Zou, R. Cucchiara and C. Tomasi. ECCV 2016 Workshop on Benchmarking Multi-Target Tracking.
 
 ## Docker
 
 ### Update ground truth and test data:
+
 /data/train directory should contain MOT 2D 2015 Ground Truth files.
 /data/test directory should contain your results.
 
@@ -448,9 +465,11 @@ You can check usage and directory listing at
 https://github.com/cheind/py-motmetrics/blob/master/motmetrics/apps/eval_motchallenge.py
 
 ### Build Image
+
 docker build -t desired-image-name -f Dockerfile .
 
 ### Run Image
+
 docker run desired-image-name
 
 (credits to [christosavg](https://github.com/christosavg))
@@ -483,7 +502,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-
-[Pandas]: http://pandas.pydata.org/
-[MOTChallenge]: https://motchallenge.net/
+[pandas]: http://pandas.pydata.org/
+[motchallenge]: https://motchallenge.net/
 [devkit]: https://motchallenge.net/devkit/
