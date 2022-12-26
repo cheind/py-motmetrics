@@ -32,4 +32,4 @@ from motmetrics import utils
 from motmetrics.mot import MOTAccumulator
 
 # Needs to be last line
-__version__ = "1.2.5"
+__version__ = "1.4.0"
