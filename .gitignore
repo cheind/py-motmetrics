@@ -50,3 +50,4 @@ Temporary Items
 *.egg-info/
 build/
 dist/
+.venv/
