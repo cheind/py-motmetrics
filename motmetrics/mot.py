@@ -175,9 +175,9 @@ class MOTAccumulator(object):
 
         self.dirty_events = True
         oids = np.asarray(oids)
-        oids_masked = np.zeros_like(oids, dtype=np.bool)
+        oids_masked = np.zeros_like(oids, dtype=np.bool_)
         hids = np.asarray(hids)
-        hids_masked = np.zeros_like(hids, dtype=np.bool)
+        hids_masked = np.zeros_like(hids, dtype=np.bool_)
         dists = np.atleast_2d(dists).astype(float).reshape(oids.shape[0], hids.shape[0]).copy()
 
         if frameid is None:
