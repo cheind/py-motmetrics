@@ -257,9 +257,19 @@ class MOTAccumulator(object):
 
                 o = oids[i]
                 h = hids[j]
-                is_switch = (o in self.m and
-                             self.m[o] != h and
-                             abs(frameid - self.last_occurrence[o]) <= self.max_switch_time)
+                ######################################################################
+                # todo - fixed a bug:
+                # is_switch = (o in self.m and
+                #              self.m[o] != h and
+                #              abs(frameid - self.last_occurrence[o]) <= self.max_switch_time)
+                switch_condition = (
+                        o in self.m and
+                        self.m[o] != h and
+                        o in self.last_occurrence and  # Ensure the object ID 'o' is initialized in last_occurrence
+                        abs(frameid - self.last_occurrence[o]) <= self.max_switch_time
+                )
+                is_switch = switch_condition
+                ######################################################################
                 cat1 = 'SWITCH' if is_switch else 'MATCH'
                 if cat1 == 'SWITCH':
                     if h not in self.hypHistory:
