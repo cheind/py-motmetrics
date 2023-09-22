@@ -310,6 +310,9 @@ def test_merge_dataframes():
 
     idx = expect.index
     expect.index = expect.index.set_levels(
-        [idx.levels[0].astype(object), idx.levels[1].astype(object)]
+        [
+            idx.levels[0].astype(r.index.levels[0].dtype),
+            idx.levels[1].astype(r.index.levels[1].dtype),
+        ]
     )
     pd.testing.assert_frame_equal(r, expect)
