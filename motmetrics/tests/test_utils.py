@@ -31,7 +31,7 @@ def test_annotations_xor_predictions_present():
     }
     anno = _tracks_to_dataframe(anno_tracks)
     pred = _tracks_to_dataframe(pred_tracks)
-    acc = mm.utils.compare_to_groundtruth(anno, pred, 'euc', distfields=['Position'], distth=2)
+    acc = mm.utils.compare_to_groundtruth(anno, pred, 'euclidean', distfields=['Position'], distth=2)
     mh = mm.metrics.create()
     metrics = mh.compute(acc, return_dataframe=False, metrics=[
         'num_objects', 'num_predictions', 'num_unique_objects',

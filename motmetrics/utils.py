@@ -38,7 +38,7 @@ def compare_to_groundtruth(gt, dt, dist='iou', distfields=None, distth=0.5):
     ------
     dist : str, optional
         String identifying distance to be used. Defaults to intersection over union ('iou'). Euclidean
-        distance ('euc') and squared euclidean distance ('seuc') are also supported.
+        distance ('euclidean') and squared euclidean distance ('seuc') are also supported.
     distfields: array, optional
         Fields relevant for extracting distance information. Defaults to ['X', 'Y', 'Width', 'Height']
     distth: float, optional
@@ -61,10 +61,14 @@ def compare_to_groundtruth(gt, dt, dist='iou', distfields=None, distth=0.5):
         compute_dist = compute_iou
     elif dist.upper() == 'EUC':
         compute_dist = compute_euc
+        import warnings
+        warnings.warn(f"'euc' flag changed its behavior. The euclidean distance is now used instead of the squared euclidean distance. Make sure the used threshold (distth={distth}) is not squared. Use 'euclidean' flag to avoid this warning.")
+    elif dist.upper() == 'EUCLIDEAN':
+        compute_dist = compute_euc
     elif dist.upper() == 'SEUC':
         compute_dist = compute_seuc
     else:
-        raise f'Unknown distance metric {dist}. Use "IOU", "EUC" or "SEUC"'
+        raise f'Unknown distance metric {dist}. Use "IOU", "EUCLIDEAN",  or "SEUC"'
 
     acc = MOTAccumulator()
 
