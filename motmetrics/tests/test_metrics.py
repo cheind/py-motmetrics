@@ -15,6 +15,7 @@ import os
 
 import numpy as np
 import pandas as pd
+import pytest
 from pytest import approx
 
 import motmetrics as mm
@@ -340,6 +341,42 @@ def test_mota_motp():
     assert metr["num_predictions"] == 8
     assert metr["mota"] == approx(1.0 - (2 + 2 + 2) / 8)
     assert metr["motp"] == approx(11.1 / 6)
+    assert metr["num_frames"] == 6
+
+
+def test_hota():
+    """Tests values of HOTA and its dependents."""
+    acc = mm.MOTAccumulator()
+
+    # All FP
+    acc.update([], [1, 2], [], frameid=0)
+    # All miss
+    acc.update([1, 2], [], [], frameid=1)
+    # Match
+    acc.update([1, 2], [1, 2], [[1, 0.5], [0.3, 1]], frameid=2)
+    # Switch
+    acc.update([1, 2], [1, 2], [[0.2, np.nan], [np.nan, 0.1]], frameid=3)
+    # Match. Better new match is available but should prefer history
+    acc.update([1, 2], [1, 2], [[5, 1], [1, 5]], frameid=4)
+    # No data
+    acc.update([], [], [], frameid=5)
+
+    mh = mm.metrics.create()
+    metr = mh.compute(
+        acc,
+        return_dataframe=False,
+        return_cached=True,
+        metrics=[
+            "hota_iou",
+            "det_acc",
+            "ass_acc",
+            "num_frames",
+        ],
+    )
+
+    assert metr["det_acc"] == approx(6 / (8 + 2))
+    assert metr["ass_acc"] == approx(6 / (8 + 2))
+    assert metr["hota_iou"] == approx(0.6)
     assert metr["num_frames"] == 6
 
 
