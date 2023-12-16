@@ -478,7 +478,7 @@ class MOTAccumulator(object):
                 copy['HId'] = copy['HId'].map(lambda x: hid_map[x], na_action='ignore')
                 infos['hid_map'] = hid_map
 
-            r = pd.concat([r,copy])
+            r = pd.concat([r, copy])
             mapping_infos.append(infos)
 
         if return_mappings:

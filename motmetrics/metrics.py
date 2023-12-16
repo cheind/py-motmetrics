@@ -852,7 +852,7 @@ def create():
     m.register(idp, formatter="{:.1%}".format)
     m.register(idr, formatter="{:.1%}".format)
     m.register(idf1, formatter="{:.1%}".format)
-    
+
     m.register(deta_alpha, formatter="{:.1%}".format)
     m.register(assa_alpha, formatter="{:.1%}".format)
     m.register(hota_alpha, formatter="{:.1%}".format)
