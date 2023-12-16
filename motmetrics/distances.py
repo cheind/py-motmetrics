@@ -80,7 +80,7 @@ def boxiou(a, b):
                     math_util.quiet_divide(i_vol, u_vol))
 
 
-def iou_matrix(objs, hyps, max_iou=1.):
+def iou_matrix(objs, hyps, max_iou=1., return_dist=True):
     """Computes 'intersection over union (IoU)' distance matrix between object and hypothesis rectangles.
 
     The IoU is computed as
@@ -119,5 +119,7 @@ def iou_matrix(objs, hyps, max_iou=1.):
     assert objs.shape[1] == 4
     assert hyps.shape[1] == 4
     iou = boxiou(objs[:, None], hyps[None, :])
-    dist = 1 - iou
-    return np.where(dist > max_iou, np.nan, dist)
+    if return_dist:
+        dist = 1 - iou
+        return np.where(dist > max_iou, np.nan, dist)
+    return iou
