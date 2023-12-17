@@ -496,7 +496,7 @@ simple_add_func.append(num_predictions)
 
 
 def num_gt_ids(df):
-    """Number of unique object ids encountered."""
+    """Number of unique gt ids."""
     return df.full["OId"].dropna().unique().shape[0]
 
 
@@ -504,6 +504,7 @@ simple_add_func.append(num_gt_ids)
 
 
 def num_dt_ids(df):
+    """Number of unique dt ids."""
     return df.full["HId"].dropna().unique().shape[0]
 
 

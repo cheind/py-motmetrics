@@ -104,11 +104,14 @@ def iou_matrix(objs, hyps, max_iou=1., return_dist=True):
         Maximum tolerable overlap distance. Object / hypothesis points
         with larger distance are set to np.nan signalling do-not-pair. Defaults
         to 0.5
+    return_dist : bool
+        If true, return distance matrix. If false, return similarity (IoU) matrix.
 
     Returns
     -------
     C : NxK array
         Distance matrix containing pairwise distances or np.nan.
+        if `return_dist` is False, then the matrix contains the pairwise IoU.
     """
 
     if np.size(objs) == 0 or np.size(hyps) == 0:

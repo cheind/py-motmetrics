@@ -58,6 +58,32 @@ def compute_global_aligment_score(
 
 
 def compare_to_groundtruth_reweighting(gt, dt, dist="iou", distfields=None, distth=(0.5)):
+    """Compare groundtruth and detector results with global alignment score.
+
+    This method assumes both results are given in terms of DataFrames with at least the following fields
+     - `FrameId` First level index used for matching ground-truth and test frames.
+     - `Id` Secondary level index marking available object / hypothesis ids
+
+    Depending on the distance to be used relevant distfields need to be specified.
+
+    Params
+    ------
+    gt : pd.DataFrame
+        Dataframe for ground-truth
+    test : pd.DataFrame
+        Dataframe for detector results
+
+    Kwargs
+    ------
+    dist : str, optional
+        String identifying distance to be used. Defaults to intersection over union ('iou'). Euclidean
+        distance ('euclidean') and squared euclidean distance ('seuc') are also supported.
+    distfields: array, optional
+        Fields relevant for extracting distance information. Defaults to ['X', 'Y', 'Width', 'Height']
+    distth: Union(float, array_like), optional
+        Maximum tolerable distance. Pairs exceeding this threshold are marked 'do-not-pair'.
+        If a list of thresholds is given, multiple accumulators are returned.
+    """
     # pylint: disable=too-many-locals
     if distfields is None:
         distfields = ["X", "Y", "Width", "Height"]
