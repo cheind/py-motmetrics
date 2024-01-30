@@ -454,7 +454,8 @@ class MOTAccumulator(object):
                 next_frame_id = max(r.index.get_level_values(0).max() + 1, r.index.get_level_values(0).unique().shape[0])
                 if np.isnan(next_frame_id):
                     next_frame_id = 0
-                copy.index = copy.index.map(lambda x: (x[0] + next_frame_id, x[1]))
+                if not copy.index.empty:
+                    copy.index = copy.index.map(lambda x: (x[0] + next_frame_id, x[1]))
                 infos['frame_offset'] = next_frame_id
 
             # Update object / hypothesis ids
