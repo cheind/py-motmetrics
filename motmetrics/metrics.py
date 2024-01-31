@@ -751,6 +751,36 @@ def idf1_m(partials, idtp, num_objects, num_predictions):
     return math_util.quiet_divide(2 * idtp, num_objects + num_predictions)
 
 
+def det_acc(df, num_detections, num_objects, num_false_positives):
+    """Detection accuracy.
+
+    Source: https://jonathonluiten.medium.com/how-to-evaluate-tracking-with-the-hota-metrics-754036d183e1
+    """
+
+    del df  # unused
+    return math_util.quiet_divide(num_detections, num_objects + num_false_positives)
+
+
+def ass_acc(df, idtp, idfn, idfp):
+    """Association accuracy.
+
+    Source: https://jonathonluiten.medium.com/how-to-evaluate-tracking-with-the-hota-metrics-754036d183e1
+    """
+
+    del df  # unused
+    return math_util.quiet_divide(idtp, idtp + idfn + idfp)
+
+
+def hota_iou(df, det_acc, ass_acc):
+    """HOTA metric at a specific iou.
+
+    Source: https://jonathonluiten.medium.com/how-to-evaluate-tracking-with-the-hota-metrics-754036d183e1
+    """
+
+    del df
+    return (det_acc * ass_acc)**0.5
+
+
 for one in simple_add_func:
     name = one.__name__
 
@@ -801,6 +831,10 @@ def create():
     m.register(idp, formatter="{:.1%}".format)
     m.register(idr, formatter="{:.1%}".format)
     m.register(idf1, formatter="{:.1%}".format)
+
+    m.register(det_acc, formatter="{:.1%}".format)
+    m.register(ass_acc, formatter="{:.1%}".format)
+    m.register(hota_iou, formatter="{:.1%}".format)
 
     return m
 
