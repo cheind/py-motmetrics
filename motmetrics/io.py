@@ -19,6 +19,8 @@ import pandas as pd
 import scipy.io
 import xmltodict
 
+from motmetrics.utils import is_in_region
+
 
 class Format(Enum):
     """Enumerates supported file formats."""
@@ -271,6 +273,18 @@ def load_detrac_xml(fname):
     with io.open(fname) as fd:
         doc = xmltodict.parse(fd.read())
     frameList = doc['sequence']['frame']
+    ignored_region_list = doc['sequence']['ignored_region']
+    if type(ignored_region_list['box']) != list:
+        ignored_region_list['box'] = [ignored_region_list['box']]
+
+    parsed_ig = []
+    for ig in ignored_region_list['box']:
+        row = []
+        row.append(float(ig['@left']))
+        row.append(float(ig['@top']))
+        row.append(float(ig['@width']))
+        row.append(float(ig['@height']))
+        parsed_ig.append(row)
 
     parsedGT = []
     for f in frameList:
@@ -280,6 +294,7 @@ def load_detrac_xml(fname):
             targetList = [targetList]
 
         for t in targetList:
+            flag_ignore = False
             row = []
             row.append(fid)
             row.append(int(t['@id']))
@@ -291,10 +306,20 @@ def load_detrac_xml(fname):
             row.append(-1)
             row.append(-1)
             row.append(-1)
-            parsedGT.append(row)
+            bbox = [row[2], row[3], row[4], row[5]]
+            for reg in parsed_ig:
+                if is_in_region(bbox, reg):
+                    flag_ignore = True
+                    break
+            if not flag_ignore:
+                parsedGT.append(row)
 
     df = pd.DataFrame(parsedGT,
                       columns=['FrameId', 'Id', 'X', 'Y', 'Width', 'Height', 'Confidence', 'ClassId', 'Visibility', 'unused'])
+
+    df_reg = pd.DataFrame(parsed_ig, columns=['X_reg', 'Y_reg', 'W_reg', 'H_reg'])
+    df = df.append(df_reg)
+
     df.set_index(['FrameId', 'Id'], inplace=True)
 
     # Account for matlab convention.
