@@ -80,7 +80,7 @@ def boxiou(a, b):
                     math_util.quiet_divide(i_vol, u_vol))
 
 
-def iou_matrix(objs, hyps, max_iou=1.):
+def iou_matrix(objs, hyps, max_iou=1., return_dist=True):
     """Computes 'intersection over union (IoU)' distance matrix between object and hypothesis rectangles.
 
     The IoU is computed as
@@ -104,11 +104,14 @@ def iou_matrix(objs, hyps, max_iou=1.):
         Maximum tolerable overlap distance. Object / hypothesis points
         with larger distance are set to np.nan signalling do-not-pair. Defaults
         to 0.5
+    return_dist : bool
+        If true, return distance matrix. If false, return similarity (IoU) matrix.
 
     Returns
     -------
     C : NxK array
         Distance matrix containing pairwise distances or np.nan.
+        if `return_dist` is False, then the matrix contains the pairwise IoU.
     """
 
     if np.size(objs) == 0 or np.size(hyps) == 0:
@@ -119,5 +122,7 @@ def iou_matrix(objs, hyps, max_iou=1.):
     assert objs.shape[1] == 4
     assert hyps.shape[1] == 4
     iou = boxiou(objs[:, None], hyps[None, :])
-    dist = 1 - iou
-    return np.where(dist > max_iou, np.nan, dist)
+    if return_dist:
+        dist = 1 - iou
+        return np.where(dist > max_iou, np.nan, dist)
+    return iou

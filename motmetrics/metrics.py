@@ -9,14 +9,12 @@
 
 # pylint: disable=redefined-outer-name
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+from __future__ import absolute_import, division, print_function
 
-from collections import OrderedDict
 import inspect
 import logging
 import time
+from collections import OrderedDict
 
 import numpy as np
 import pandas as pd
@@ -495,6 +493,22 @@ def num_predictions(df, pred_frequencies):
 simple_add_func.append(num_predictions)
 
 
+def num_gt_ids(df):
+    """Number of unique gt ids."""
+    return df.full["OId"].dropna().unique().shape[0]
+
+
+simple_add_func.append(num_gt_ids)
+
+
+def num_dt_ids(df):
+    """Number of unique dt ids."""
+    return df.full["HId"].dropna().unique().shape[0]
+
+
+simple_add_func.append(num_dt_ids)
+
+
 def track_ratios(df, obj_frequencies):
     """Ratio of assigned to total appearance count per unique object id."""
     tracked = df.noraw[df.noraw.Type != "MISS"]["OId"].value_counts()
@@ -595,6 +609,64 @@ def recall(df, num_detections, num_objects):
 def recall_m(partials, num_detections, num_objects):
     del partials  # unused
     return math_util.quiet_divide(num_detections, num_objects)
+
+
+def deta_alpha(df, num_detections, num_objects, num_false_positives):
+    r"""DeTA under specific threshold $\alpha$
+    Source: https://jonathonluiten.medium.com/how-to-evaluate-tracking-with-the-hota-metrics-754036d183e1
+    """
+    del df  # unused
+    return math_util.quiet_divide(num_detections, max(1, num_objects + num_false_positives))
+
+
+def deta_alpha_m(partials):
+    res = 0
+    for v in partials:
+        res += v["deta_alpha"]
+    return math_util.quiet_divide(res, len(partials))
+
+
+def assa_alpha(df, num_detections, num_gt_ids, num_dt_ids):
+    r"""AssA under specific threshold $\alpha$
+    Source: https://github.com/JonathonLuiten/TrackEval/blob/12c8791b303e0a0b50f753af204249e622d0281a/trackeval/metrics/hota.py#L107-L108
+    """
+    max_gt_ids = int(df.noraw.OId.max())
+    max_dt_ids = int(df.noraw.HId.max())
+
+    match_count_array = np.zeros((max_gt_ids, max_dt_ids))
+    gt_id_counts = np.zeros((max_gt_ids, 1))
+    tracker_id_counts = np.zeros((1, max_dt_ids))
+    for idx in range(len(df.noraw)):
+        oid, hid = df.noraw.iloc[idx, 1], df.noraw.iloc[idx, 2]
+        if df.noraw.iloc[idx, 0] in ["SWITCH", "MATCH"]:
+            match_count_array[int(oid) - 1, int(hid) - 1] += 1
+        if oid == oid:  # check non nan
+            gt_id_counts[int(oid) - 1] += 1
+        if hid == hid:
+            tracker_id_counts[0, int(hid) - 1] += 1
+
+    ass_a = match_count_array / np.maximum(1, gt_id_counts + tracker_id_counts - match_count_array)
+    return math_util.quiet_divide((ass_a * match_count_array).sum(), max(1, num_detections))
+
+
+def assa_alpha_m(partials):
+    res = 0
+    for v in partials:
+        res += v["assa_alpha"]
+    return math_util.quiet_divide(res, len(partials))
+
+
+def hota_alpha(df, deta_alpha, assa_alpha):
+    r"""HOTA under specific threshold $\alpha$"""
+    del df
+    return (deta_alpha * assa_alpha) ** 0.5
+
+
+def hota_alpha_m(partials):
+    res = 0
+    for v in partials:
+        res += v["hota_alpha"]
+    return math_util.quiet_divide(res, len(partials))
 
 
 class DataFrameMap:  # pylint: disable=too-few-public-methods
@@ -783,6 +855,8 @@ def create():
     m.register(num_detections, formatter="{:d}".format)
     m.register(num_objects, formatter="{:d}".format)
     m.register(num_predictions, formatter="{:d}".format)
+    m.register(num_gt_ids, formatter="{:d}".format)
+    m.register(num_dt_ids, formatter="{:d}".format)
     m.register(num_unique_objects, formatter="{:d}".format)
     m.register(track_ratios)
     m.register(mostly_tracked, formatter="{:d}".format)
@@ -801,6 +875,10 @@ def create():
     m.register(idp, formatter="{:.1%}".format)
     m.register(idr, formatter="{:.1%}".format)
     m.register(idf1, formatter="{:.1%}".format)
+
+    m.register(deta_alpha, formatter="{:.1%}".format)
+    m.register(assa_alpha, formatter="{:.1%}".format)
+    m.register(hota_alpha, formatter="{:.1%}".format)
 
     return m
 

@@ -134,7 +134,7 @@ class MOTAccumulator(object):
         self._events['HId'].append(hid)
         self._events['D'].append(distance)
 
-    def update(self, oids, hids, dists, frameid=None, vf=''):
+    def update(self, oids, hids, dists, frameid=None, vf='', similartiy_matrix=None, th=None):
         """Updates the accumulator with frame specific objects/detections.
 
         This method generates events based on the following algorithm [1]:
@@ -202,6 +202,12 @@ class MOTAccumulator(object):
         self._append_to_indices(frameid, next(eid))
         self._append_to_events('RAW', np.nan, np.nan, np.nan)
 
+        # Postcompute the distance matrix if necessary. (e.g., HOTA)
+        cost_for_matching = dists.copy()
+        if similartiy_matrix is not None and th is not None:
+            dists = 1 - similartiy_matrix
+            dists = np.where(similartiy_matrix < th - np.finfo("float").eps, np.nan, dists)
+
         # There must be at least one RAW event per object and hypothesis.
         # Record all finite distances as RAW events.
         valid_i, valid_j = np.where(np.isfinite(dists))
@@ -224,34 +230,36 @@ class MOTAccumulator(object):
 
         if oids.size * hids.size > 0:
             # 1. Try to re-establish tracks from correspondences in last update
-            for i in range(oids.shape[0]):
-                # No need to check oids_masked[i] here.
-                if not (oids[i] in self.m and self.last_match[oids[i]] == self.last_update_frameid):
-                    continue
+            #    ignore this if post processing is performed (e.g., HOTA)
+            if similartiy_matrix is None or th is None:
+                for i in range(oids.shape[0]):
+                    # No need to check oids_masked[i] here.
+                    if not (oids[i] in self.m and self.last_match[oids[i]] == self.last_update_frameid):
+                        continue
 
-                hprev = self.m[oids[i]]
-                j, = np.where(~hids_masked & (hids == hprev))
-                if j.shape[0] == 0:
-                    continue
-                j = j[0]
+                    hprev = self.m[oids[i]]
+                    j, = np.where(~hids_masked & (hids == hprev))
+                    if j.shape[0] == 0:
+                        continue
+                    j = j[0]
 
-                if np.isfinite(dists[i, j]):
-                    o = oids[i]
-                    h = hids[j]
-                    oids_masked[i] = True
-                    hids_masked[j] = True
-                    self.m[oids[i]] = hids[j]
+                    if np.isfinite(dists[i, j]):
+                        o = oids[i]
+                        h = hids[j]
+                        oids_masked[i] = True
+                        hids_masked[j] = True
+                        self.m[oids[i]] = hids[j]
 
-                    self._append_to_indices(frameid, next(eid))
-                    self._append_to_events('MATCH', oids[i], hids[j], dists[i, j])
-                    self.last_match[o] = frameid
-                    self.hypHistory[h] = frameid
+                        self._append_to_indices(frameid, next(eid))
+                        self._append_to_events('MATCH', oids[i], hids[j], dists[i, j])
+                        self.last_match[o] = frameid
+                        self.hypHistory[h] = frameid
 
             # 2. Try to remaining objects/hypotheses
             dists[oids_masked, :] = np.nan
             dists[:, hids_masked] = np.nan
 
-            rids, cids = linear_sum_assignment(dists)
+            rids, cids = linear_sum_assignment(cost_for_matching)
 
             for i, j in zip(rids, cids):
                 if not np.isfinite(dists[i, j]):
@@ -265,10 +273,10 @@ class MOTAccumulator(object):
                 #              self.m[o] != h and
                 #              abs(frameid - self.last_occurrence[o]) <= self.max_switch_time)
                 switch_condition = (
-                        o in self.m and
-                        self.m[o] != h and
-                        o in self.last_occurrence and  # Ensure the object ID 'o' is initialized in last_occurrence
-                        abs(frameid - self.last_occurrence[o]) <= self.max_switch_time
+                    o in self.m and
+                    self.m[o] != h and
+                    o in self.last_occurrence and  # Ensure the object ID 'o' is initialized in last_occurrence
+                    abs(frameid - self.last_occurrence[o]) <= self.max_switch_time
                 )
                 is_switch = switch_condition
                 ######################################################################
@@ -471,7 +479,7 @@ class MOTAccumulator(object):
                 copy['HId'] = copy['HId'].map(lambda x: hid_map[x], na_action='ignore')
                 infos['hid_map'] = hid_map
 
-            r = pd.concat([r,copy])
+            r = pd.concat([r, copy])
             mapping_infos.append(infos)
 
         if return_mappings:

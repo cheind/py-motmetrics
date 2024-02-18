@@ -537,3 +537,49 @@ def test_paper_metrics():
     )
 
     print(summary)
+
+
+def test_hota():
+    TUD_golden_ans = {  # From TrackEval
+        "TUD-Campus": {"hota": 0.3913974378451139, "deta": 0.418047030142763, "assa": 0.36912068120832836},
+        "TUD-Stadtmitte": {"hota": 0.3978490169927877, "deta": 0.3922675723693166, "assa": 0.4088407518112996}
+    }
+
+    DATA_DIR = "motmetrics/data"
+
+    def compute_motchallenge(dname):
+        df_gt = mm.io.loadtxt(os.path.join(dname, "gt.txt"))
+        df_test = mm.io.loadtxt(os.path.join(dname, "test.txt"))
+        th_list = np.arange(0.05, 0.99, 0.05)
+        res_list = mm.utils.compare_to_groundtruth_reweighting(df_gt, df_test, "iou", distth=th_list)
+        return res_list
+
+    accs = [compute_motchallenge(os.path.join(DATA_DIR, d)) for d in TUD_golden_ans.keys()]
+    mh = mm.metrics.create()
+
+    for dataset_idx, dname in enumerate(TUD_golden_ans.keys()):
+        deta = []
+        assa = []
+        hota = []
+        for alpha_idx in range(len(accs[dataset_idx])):
+            summary = mh.compute_many(
+                [accs[dataset_idx][alpha_idx]],
+                metrics=[
+                    "deta_alpha",
+                    "assa_alpha",
+                    "hota_alpha",
+                ],
+                names=[dname],
+                generate_overall=False,
+            )
+            deta.append(float(summary["deta_alpha"].iloc[0]))
+            assa.append(float(summary["assa_alpha"].iloc[0]))
+            hota.append(float(summary["hota_alpha"].iloc[0]))
+
+        deta = sum(deta) / len(deta)
+        assa = sum(assa) / len(assa)
+        hota = sum(hota) / len(hota)
+
+        assert deta == approx(TUD_golden_ans[dname]["deta"])
+        assert assa == approx(TUD_golden_ans[dname]["assa"])
+        assert hota == approx(TUD_golden_ans[dname]["hota"])
