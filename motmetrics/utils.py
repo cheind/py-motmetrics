@@ -7,9 +7,7 @@
 
 """Functions for populating event accumulators."""
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+from __future__ import absolute_import, division, print_function
 
 import numpy as np
 
@@ -52,7 +50,7 @@ def compute_global_aligment_score(
             gt_id_count[gt_ids] += 1
             tracker_id_count[0, dt_ids] += 1
     global_alignment_score = potential_matches_count / (
-        gt_id_count + tracker_id_count - potential_matches_count
+        np.maximum(1, gt_id_count + tracker_id_count - potential_matches_count)
     )
     return global_alignment_score
 
