@@ -9,14 +9,12 @@
 
 # pylint: disable=redefined-outer-name
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+from __future__ import absolute_import, division, print_function
 
-from collections import OrderedDict
 import inspect
 import logging
 import time
+from collections import OrderedDict
 
 import numpy as np
 import pandas as pd
@@ -621,6 +619,13 @@ def deta_alpha(df, num_detections, num_objects, num_false_positives):
     return math_util.quiet_divide(num_detections, max(1, num_objects + num_false_positives))
 
 
+def deta_alpha_m(partials):
+    res = 0
+    for v in partials:
+        res += v["deta_alpha"]
+    return math_util.quiet_divide(res, len(partials))
+
+
 def assa_alpha(df, num_detections, num_gt_ids, num_dt_ids):
     r"""AssA under specific threshold $\alpha$
     Source: https://github.com/JonathonLuiten/TrackEval/blob/12c8791b303e0a0b50f753af204249e622d0281a/trackeval/metrics/hota.py#L107-L108
@@ -641,10 +646,24 @@ def assa_alpha(df, num_detections, num_gt_ids, num_dt_ids):
     return math_util.quiet_divide((ass_a * match_count_array).sum(), max(1, num_detections))
 
 
+def assa_alpha_m(partials):
+    res = 0
+    for v in partials:
+        res += v["assa_alpha"]
+    return math_util.quiet_divide(res, len(partials))
+
+
 def hota_alpha(df, deta_alpha, assa_alpha):
     r"""HOTA under specific threshold $\alpha$"""
     del df
     return (deta_alpha * assa_alpha) ** 0.5
+
+
+def hota_alpha_m(partials):
+    res = 0
+    for v in partials:
+        res += v["hota_alpha"]
+    return math_util.quiet_divide(res, len(partials))
 
 
 class DataFrameMap:  # pylint: disable=too-few-public-methods
