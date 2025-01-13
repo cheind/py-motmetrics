@@ -117,8 +117,8 @@ def iou_matrix(objs, hyps, max_iou=1., return_dist=True):
     if np.size(objs) == 0 or np.size(hyps) == 0:
         return np.empty((0, 0))
 
-    objs = np.asfarray(objs)
-    hyps = np.asfarray(hyps)
+    objs = np.asarray(objs, dtype=float)
+    hyps = np.asarray(hyps, dtype=float)
     assert objs.shape[1] == 4
     assert hyps.shape[1] == 4
     iou = boxiou(objs[:, None], hyps[None, :])
