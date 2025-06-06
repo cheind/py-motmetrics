@@ -630,8 +630,13 @@ def assa_alpha(df, num_detections, num_gt_ids, num_dt_ids):
     r"""AssA under specific threshold $\alpha$
     Source: https://github.com/JonathonLuiten/TrackEval/blob/12c8791b303e0a0b50f753af204249e622d0281a/trackeval/metrics/hota.py#L107-L108
     """
-    max_gt_ids = int(df.noraw.OId.max())
-    max_dt_ids = int(df.noraw.HId.max())
+    oids = np.sort(df.full["OId"].dropna().unique())
+    hids = np.sort(df.full["HId"].dropna().unique())
+    oids_idx = dict((o, i) for i, o in enumerate(oids))
+    hids_idx = dict((h, i) for i, h in enumerate(hids))
+
+    max_gt_ids = len(oids)
+    max_dt_ids = len(hids)
 
     match_count_array = np.zeros((max_gt_ids, max_dt_ids))
     gt_id_counts = np.zeros((max_gt_ids, 1))
@@ -639,11 +644,11 @@ def assa_alpha(df, num_detections, num_gt_ids, num_dt_ids):
     for idx in range(len(df.noraw)):
         oid, hid = df.noraw.iloc[idx, 1], df.noraw.iloc[idx, 2]
         if df.noraw.iloc[idx, 0] in ["SWITCH", "MATCH"]:
-            match_count_array[int(oid) - 1, int(hid) - 1] += 1
+            match_count_array[oids_idx[oid], hids_idx[hid]] += 1
         if oid == oid:  # check non nan
-            gt_id_counts[int(oid) - 1] += 1
+            gt_id_counts[oids_idx[oid]] += 1
         if hid == hid:
-            tracker_id_counts[0, int(hid) - 1] += 1
+            tracker_id_counts[0, hids_idx[hid]] += 1
 
     ass_a = match_count_array / np.maximum(1, gt_id_counts + tracker_id_counts - match_count_array)
     return math_util.quiet_divide((ass_a * match_count_array).sum(), max(1, num_detections))
