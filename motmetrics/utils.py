@@ -138,6 +138,7 @@ def compare_to_groundtruth_reweighting(gt, dt, dist="iou", distfields=None, dist
     for fid in allframeids:
         oids = np.empty(0)
         hids = np.empty(0)
+        dists = np.empty((0, 0))
         weighted_dists = np.empty((0, 0))
         if fid in fid_to_fgt:
             fgt = fid_to_fgt[fid]
