@@ -676,10 +676,10 @@ def hota_alpha_m(partials):
 
 class DataFrameMap:  # pylint: disable=too-few-public-methods
     def __init__(self, full, raw, noraw, extra):
-        self.full = full
-        self.raw = raw
-        self.noraw = noraw
-        self.extra = extra
+        self.full: pd.DataFrame = full
+        self.raw: pd.DataFrame= raw
+        self.noraw: pd.DataFrame= noraw
+        self.extra: pd.DataFrame= extra
 
 
 def events_to_df_map(df):
