@@ -118,8 +118,8 @@ def compare_to_groundtruth_reweighting(gt, dt, dist="iou", distfields=None, dist
 
     acc_list = [MOTAccumulator() for _ in range(len(distth))]
 
-    num_gt_id = gt.index.get_level_values("Id").max()
-    num_det_id = dt.index.get_level_values("Id").max()
+    num_gt_id = gt.index.get_level_values("Id").max()  if not gt.empty else 0 
+    num_det_id = dt.index.get_level_values("Id").max() if not dt.empty else 0
 
     # We need to account for all frames reported either by ground truth or
     # detector. In case a frame is missing in GT this will lead to FPs, in
@@ -138,6 +138,7 @@ def compare_to_groundtruth_reweighting(gt, dt, dist="iou", distfields=None, dist
     for fid in allframeids:
         oids = np.empty(0)
         hids = np.empty(0)
+        dists = np.empty((0, 0))
         weighted_dists = np.empty((0, 0))
         if fid in fid_to_fgt:
             fgt = fid_to_fgt[fid]
