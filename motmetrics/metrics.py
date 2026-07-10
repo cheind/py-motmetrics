@@ -619,11 +619,9 @@ def deta_alpha(df, num_detections, num_objects, num_false_positives):
     return math_util.quiet_divide(num_detections, max(1, num_objects + num_false_positives))
 
 
-def deta_alpha_m(partials):
-    res = 0
-    for v in partials:
-        res += v["deta_alpha"]
-    return math_util.quiet_divide(res, len(partials))
+def deta_alpha_m(partials, num_detections, num_objects, num_false_positives):
+    del partials  # unused
+    return math_util.quiet_divide(num_detections, max(1, num_objects + num_false_positives))
 
 
 def assa_alpha(df, num_detections, num_gt_ids, num_dt_ids):
@@ -654,11 +652,11 @@ def assa_alpha(df, num_detections, num_gt_ids, num_dt_ids):
     return math_util.quiet_divide((ass_a * match_count_array).sum(), max(1, num_detections))
 
 
-def assa_alpha_m(partials):
-    res = 0
+def assa_alpha_m(partials, num_detections):
+    weighted_sum = 0
     for v in partials:
-        res += v["assa_alpha"]
-    return math_util.quiet_divide(res, len(partials))
+        weighted_sum += v["assa_alpha"] * v["num_detections"]
+    return math_util.quiet_divide(weighted_sum, max(1, num_detections))
 
 
 def hota_alpha(df, deta_alpha, assa_alpha):
@@ -667,11 +665,9 @@ def hota_alpha(df, deta_alpha, assa_alpha):
     return (deta_alpha * assa_alpha) ** 0.5
 
 
-def hota_alpha_m(partials):
-    res = 0
-    for v in partials:
-        res += v["hota_alpha"]
-    return math_util.quiet_divide(res, len(partials))
+def hota_alpha_m(partials, deta_alpha, assa_alpha):
+    del partials  # unused
+    return (deta_alpha * assa_alpha) ** 0.5
 
 
 class DataFrameMap:  # pylint: disable=too-few-public-methods

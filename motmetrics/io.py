@@ -17,7 +17,6 @@ import io
 import numpy as np
 import pandas as pd
 import scipy.io
-import xmltodict
 
 
 class Format(Enum):
@@ -267,6 +266,7 @@ def load_detrac_xml(fname):
             'X', 'Y', 'Width', 'Height', 'Confidence', 'ClassId', 'Visibility'
         The dataframe is indexed by ('FrameId', 'Id')
     """
+    import xmltodict
 
     with io.open(fname) as fd:
         doc = xmltodict.parse(fd.read())
