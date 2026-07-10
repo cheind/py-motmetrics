@@ -544,6 +544,11 @@ def test_hota():
         "TUD-Campus": {"hota": 0.3913974378451139, "deta": 0.418047030142763, "assa": 0.36912068120832836},
         "TUD-Stadtmitte": {"hota": 0.3978490169927877, "deta": 0.3922675723693166, "assa": 0.4088407518112996}
     }
+    TUD_combined_golden_ans = {  # TrackEval combine_sequences over both TUD sequences.
+        "hota": 0.3999570912884786,
+        "deta": 0.3976832912424188,
+        "assa": 0.4124495298453543,
+    }
 
     DATA_DIR = "motmetrics/data"
 
@@ -583,3 +588,25 @@ def test_hota():
         assert deta == approx(TUD_golden_ans[dname]["deta"])
         assert assa == approx(TUD_golden_ans[dname]["assa"])
         assert hota == approx(TUD_golden_ans[dname]["hota"])
+
+    deta = []
+    assa = []
+    hota = []
+    for alpha_idx in range(len(accs[0])):
+        summary = mh.compute_many(
+            [seq_accs[alpha_idx] for seq_accs in accs],
+            metrics=[
+                "deta_alpha",
+                "assa_alpha",
+                "hota_alpha",
+            ],
+            names=list(TUD_golden_ans),
+            generate_overall=True,
+        )
+        deta.append(float(summary.loc["OVERALL", "deta_alpha"]))
+        assa.append(float(summary.loc["OVERALL", "assa_alpha"]))
+        hota.append(float(summary.loc["OVERALL", "hota_alpha"]))
+
+    assert sum(deta) / len(deta) == approx(TUD_combined_golden_ans["deta"])
+    assert sum(assa) / len(assa) == approx(TUD_combined_golden_ans["assa"])
+    assert sum(hota) / len(hota) == approx(TUD_combined_golden_ans["hota"])
