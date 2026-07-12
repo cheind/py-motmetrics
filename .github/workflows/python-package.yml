@@ -30,7 +30,11 @@ jobs:
                   pip install --upgrade pip==22.0.3
                   python -m pip install flake8 pytest pytest-benchmark        
                   if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-                  pip install lap scipy "ortools<9.4" lapsolver munkres
+                  # lapsolver is unmaintained and no longer builds with the C++
+                  # toolchain on current GitHub-hosted runners. The test suite
+                  # discovers optional solvers dynamically, so exercise the
+                  # maintained LAP backends here instead.
+                  pip install lap scipy "ortools<9.4" munkres
             - name: Lint with flake8
               run: |
                   # stop the build if there are Python syntax errors or undefined names
