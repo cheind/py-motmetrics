@@ -173,7 +173,7 @@ def _zero_pad_to_square(costs):
 
 def lsa_solve_ortools(costs):
     """Solves the LSA problem using Google's optimization tools. """
-    from ortools.graph import pywrapgraph
+    from ortools.graph.python import linear_sum_assignment as ortools_lsa
 
     if costs.shape[0] != costs.shape[1]:
         # ortools assumes that the problem is square.
@@ -189,17 +189,17 @@ def lsa_solve_ortools(costs):
         warnings.warn('costs are not integers; using approximation')
     int_costs = np.round(scale * finite_costs).astype(int)
 
-    assignment = pywrapgraph.LinearSumAssignment()
+    assignment = ortools_lsa.SimpleLinearSumAssignment()
     # OR-Tools does not like to receive indices of type np.int64.
     rs = rs.tolist()  # pylint: disable=no-member
     cs = cs.tolist()
     int_costs = int_costs.tolist()
     for r, c, int_cost in zip(rs, cs, int_costs):
-        assignment.AddArcWithCost(r, c, int_cost)
+        assignment.add_arc_with_cost(r, c, int_cost)
 
-    status = assignment.Solve()
+    status = assignment.solve()
     try:
-        _ortools_assert_is_optimal(pywrapgraph, status)
+        _ortools_assert_is_optimal(ortools_lsa, status)
     except AssertionError:
         # Default to scipy solver rather than add finite edges.
         # (This maintains the same behaviour as previous versions.)
@@ -259,24 +259,25 @@ def _assert_integer(costs):
     np.testing.assert_equal(np.round(costs), costs)
 
 
-def _ortools_assert_is_optimal(pywrapgraph, status):
-    if status == pywrapgraph.LinearSumAssignment.OPTIMAL:
+def _ortools_assert_is_optimal(ortools_lsa, status):
+    assignment = ortools_lsa.SimpleLinearSumAssignment
+    if status == assignment.OPTIMAL:
         pass
-    elif status == pywrapgraph.LinearSumAssignment.INFEASIBLE:
+    elif status == assignment.INFEASIBLE:
         raise AssertionError('ortools: infeasible assignment problem')
-    elif status == pywrapgraph.LinearSumAssignment.POSSIBLE_OVERFLOW:
+    elif status == assignment.POSSIBLE_OVERFLOW:
         raise AssertionError('ortools: possible overflow in assignment problem')
     else:
         raise AssertionError('ortools: unknown status')
 
 
 def _ortools_extract_solution(assignment):
-    if assignment.NumNodes() == 0:
+    if assignment.num_nodes() == 0:
         return np.array([], dtype=int), np.array([], dtype=int)
 
     pairings = []
-    for i in range(assignment.NumNodes()):
-        pairings.append([i, assignment.RightMate(i)])
+    for i in range(assignment.num_nodes()):
+        pairings.append([i, assignment.right_mate(i)])
 
     indices = np.array(pairings, dtype=int)
     return indices[:, 0], indices[:, 1]
