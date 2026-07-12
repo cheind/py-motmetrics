@@ -349,13 +349,16 @@ OVERALL 80.0% 80.0% 80.0% 80.0% 80.0%  4  2  2  0  2  2   1   1 50.0% 0.275
 """
 ```
 
-#### [Underdeveloped] Computing HOTA metrics
+#### Computing HOTA metrics
 
-Computing HOTA metrics is also possible. However, it cannot be used with the `Accumulator` class directly, as HOTA requires to computing a reweighting matrix from all the frames at the beginning. Here is an example of how to use it:
+HOTA cannot use `MOTAccumulator` directly because it requires a reweighting matrix computed from all frames. The example below computes HOTA over the standard alpha thresholds for one or more MOTChallenge sequences:
 
 ```python
 import os
+
 import numpy as np
+import pandas as pd
+
 import motmetrics as mm
 
 
@@ -368,34 +371,43 @@ def compute_motchallenge(dir_name):
     res_list = mm.utils.compare_to_groundtruth_reweighting(df_gt, df_test, "iou", distth=th_list)
     return res_list
 
-# `data_dir` is the directory containing the gt.txt and test.txt files
-acc = compute_motchallenge("data_dir")
-mh = mm.metrics.create()
 
-summary = mh.compute_many(
-    acc,
-    metrics=[
-        "deta_alpha",
-        "assa_alpha",
-        "hota_alpha",
-    ],
-    generate_overall=True,  # `Overall` is the average we need only
-)
-strsummary = mm.io.render_summary(
-    summary.iloc[[-1], :],  # Use list to preserve `DataFrame` type
+def compute_hota(sequence_dirs):
+    sequence_accs = [compute_motchallenge(path) for path in sequence_dirs]
+    mh = mm.metrics.create()
+    metrics = ["deta_alpha", "assa_alpha", "hota_alpha"]
+    alpha_results = []
+
+    for alpha_idx in range(len(sequence_accs[0])):
+        summary = mh.compute_many(
+            [accs[alpha_idx] for accs in sequence_accs],
+            metrics=metrics,
+            names=sequence_dirs,
+            generate_overall=True,
+        )
+        alpha_results.append(summary.loc["OVERALL"])
+
+    # HOTA, DetA, and AssA are averaged over the alpha thresholds.
+    result = pd.DataFrame(alpha_results).mean().to_frame().T
+    result.index = ["OVERALL"]
+    return result, mh
+
+
+summary, mh = compute_hota([
+    "motmetrics/data/TUD-Campus",
+    "motmetrics/data/TUD-Stadtmitte",
+])
+print(mm.io.render_summary(
+    summary,
     formatters=mh.formatters,
-    namemap={"hota_alpha": "HOTA", "assa_alpha": "ASSA", "deta_alpha": "DETA"},
-)
-print(strsummary)
-"""
-# data_dir=motmetrics/data/TUD-Campus
-         DETA  ASSA  HOTA
-OVERALL 41.8% 36.9% 39.1%
-# data_dir=motmetrics/data/TUD-Stadtmitte
-         DETA  ASSA  HOTA
-OVERALL 39.2% 40.9% 39.8%
-"""
+    namemap={"hota_alpha": "HOTA", "assa_alpha": "AssA", "deta_alpha": "DetA"},
+))
+
+#          DetA  AssA  HOTA
+# OVERALL 39.8% 41.2% 40.0%
 ```
+
+When multiple sequences are supplied, `OVERALL` follows TrackEval's combination rules: detection counts are summed for DetA, AssA is weighted by detections, and HOTA is recomputed as `sqrt(DetA * AssA)` at each alpha before the final threshold average. This avoids incorrectly averaging per-sequence HOTA values.
 
 ### Computing distances
 
