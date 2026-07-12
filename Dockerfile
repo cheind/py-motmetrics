@@ -22,11 +22,9 @@ COPY ./data /motmetrics/data
 #RUN pip install motmetrics
 RUN pip install -e ./motmetrics/py-motmetrics/
 
-#RUN pip install -r motmetrics/py-motmetrics/requirements.txt
 
 ENV GT_DIR motmetrics/data/train/
 ENV TEST_DIR motmetrics/data/test/
 
 #ENTRYPOINT python3 -m motmetrics.apps.eval_motchallenge motmetrics/data/train/ motmetrics/data/test/ && /bin/bash
 CMD ["sh", "-c", "python3 -m motmetrics.apps.eval_motchallenge ${GT_DIR} ${TEST_DIR} && /bin/bash"]
-

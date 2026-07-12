@@ -134,37 +134,21 @@ To install **py-motmetrics** use `pip`
 pip install motmetrics
 ```
 
-Python 3.5/3.6/3.9 and numpy, pandas and scipy is required. If no binary packages are available for your platform and building source packages fails, you might want to try a distribution like Conda (see below) to install dependencies.
+Python 3.8 through 3.14 and NumPy, pandas, and SciPy are required. If no binary packages are available for your platform and building source packages fails, you might want to try a distribution like Conda (see below) to install dependencies.
 
 Alternatively for developing, clone or fork this repository and install in editing mode.
 
 ```
-pip install -e <path/to/setup.py>
+uv venv
+uv pip install --group dev
 ```
 
-### Install via Conda
-
-In case you are using Conda, a simple way to run **py-motmetrics** is to create a virtual environment with all the necessary dependencies
+To install the development dependencies and run the tests:
 
 ```
-conda env create -f environment.yml
-> activate motmetrics-env
-```
-
-Then activate / source the `motmetrics-env` and install **py-motmetrics** and run the tests.
-
-```
-activate motmetrics-env
-pip install .
-pytest
-```
-
-In case you already have an environment you install the dependencies from within your environment by
-
-```
-conda install --file requirements.txt
-pip install .
-pytest
+uv venv
+uv pip install --group dev
+uv run --no-project --no-sync pytest
 ```
 
 ## Usage
@@ -472,7 +456,7 @@ For large datasets solving the minimum cost assignment becomes the dominant runt
 -   `lapsolver` - https://github.com/cheind/py-lapsolver
 -   `lapjv` - https://github.com/gatagat/lap
 -   `scipy` - https://github.com/scipy/scipy/tree/master/scipy
--   `ortools<9.4` - https://github.com/google/or-tools
+-   `ortools` - https://github.com/google/or-tools
 -   `munkres` - http://software.clapper.org/munkres/
 
 A comparison for different sized matrices is shown below (taken from [here](https://github.com/cheind/py-lapsolver#benchmarks))

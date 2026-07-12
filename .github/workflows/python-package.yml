@@ -5,9 +5,13 @@ name: Python package
 
 on:
     push:
-        branches: [develop]
+        branches: [master, develop]
+        tags: ["v*"]
     pull_request:
-        branches: [develop]
+        branches: [master, develop]
+
+permissions:
+    contents: read
 
 jobs:
     build:
@@ -15,32 +19,31 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                python-version: ["3.8", "3.9", "3.10"]
+                python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
 
         steps:
-            - uses: actions/checkout@v3
+            - uses: actions/checkout@v6
             - name: Set up Python ${{ matrix.python-version }}
-              uses: actions/setup-python@v3
+              uses: actions/setup-python@v6
               with:
                   python-version: ${{ matrix.python-version }}
+            - uses: astral-sh/setup-uv@v7
             - name: Install dependencies
               run: |
-                  # The following is commented due to issue in package lap
-                  # python -m pip install --upgrade pip
-                  pip install --upgrade pip==22.0.3
-                  python -m pip install flake8 pytest pytest-benchmark        
-                  if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+                  uv venv --python ${{ matrix.python-version }}
+                  uv pip install --group dev
                   # lapsolver is unmaintained and no longer builds with the C++
                   # toolchain on current GitHub-hosted runners. The test suite
                   # discovers optional solvers dynamically, so exercise the
                   # maintained LAP backends here instead.
-                  pip install lap scipy "ortools<9.4" munkres
+                  uv pip install lap scipy munkres
+                  uv pip install "ortools<9.12; python_version < '3.9'" "ortools; python_version >= '3.9'"
             - name: Lint with flake8
               run: |
                   # stop the build if there are Python syntax errors or undefined names
-                  flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+                  uv run --no-project --no-sync flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
                   # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-                  flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+                  uv run --no-project --no-sync flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
             - name: Test with pytest
               run: |
-                  pytest
+                  uv run --no-project --no-sync pytest

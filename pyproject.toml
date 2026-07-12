@@ -1,0 +1,70 @@
+[build-system]
+requires = ["setuptools>=77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "motmetrics"
+dynamic = ["version"]
+description = "Metrics for multiple object tracker benchmarking."
+readme = { file = "Readme.md", content-type = "text/markdown" }
+requires-python = ">=3.8,<3.15"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Christoph Heindl" },
+    { name = "Jack Valmadre" },
+]
+keywords = ["tracker", "MOT", "evaluation", "metrics", "compare"]
+classifiers = [
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
+dependencies = [
+    "numpy>=1.23.2",
+    "pandas>=1.5.0",
+    "scipy>=1.9.3",
+    "xmltodict>=0.13.0",
+]
+
+[dependency-groups]
+dev = [
+    "numpy>=1.23.2",
+    "pandas>=1.5.0",
+    "scipy>=1.9.3",
+    "xmltodict>=0.13.0",
+    "flake8>=5.0.0,<7.2.0; python_version < '3.9'",
+    "flake8>=7.3.0; python_version >= '3.9'",
+    "flake8-import-order>=0.18.2,<0.19.0; python_version < '3.9'",
+    "flake8-import-order>=0.19.2; python_version >= '3.9'",
+    "pytest>=7.4.4,<8.4.0; python_version < '3.9'",
+    "pytest>=8.4.1; python_version >= '3.9'",
+    "pytest-benchmark>=4.0.0,<5.0.0; python_version < '3.9'",
+    "pytest-benchmark>=5.1.0; python_version >= '3.9'",
+]
+
+[project.urls]
+Homepage = "https://github.com/cheind/py-motmetrics"
+Issues = "https://github.com/cheind/py-motmetrics/issues"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.package-data]
+motmetrics = [
+    "data/**/*.mat",
+    "data/**/*.txt",
+    "data/**/*.xml",
+    "etc/*.png",
+]
+
+[tool.setuptools.packages.find]
+include = ["motmetrics*"]
+
+[tool.setuptools.dynamic]
+version = { attr = "motmetrics.__version__" }
