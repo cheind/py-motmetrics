@@ -29,7 +29,7 @@ GitHub.
        python -m twine check dist/*
        uv venv
        uv pip install --group dev
-       uv run --no-project --no-sync pytest
+       uv run --no-project pytest
 
 5. Install the generated wheel in a clean environment and smoke-test the
    import and version.

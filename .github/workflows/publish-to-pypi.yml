@@ -27,7 +27,7 @@ jobs:
               run: |
                   uv venv --python ${{ matrix.python-version }}
                   uv pip install --group dev
-                  uv run --no-project --no-sync pytest
+                  uv run --no-project pytest
 
     build:
         name: Build and validate distributions

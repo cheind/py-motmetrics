@@ -148,7 +148,7 @@ To install the development dependencies and run the tests:
 ```
 uv venv
 uv pip install --group dev
-uv run --no-project --no-sync pytest
+uv run --no-project pytest
 ```
 
 ## Usage
