@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "motmetrics"
-dynamic = ["version"]
+version = "1.4.0"
 description = "Metrics for multiple object tracker benchmarking."
 readme = { file = "Readme.md", content-type = "text/markdown" }
 requires-python = ">=3.8,<3.15"
@@ -13,6 +13,7 @@ license-files = ["LICENSE"]
 authors = [
     { name = "Christoph Heindl" },
     { name = "Jack Valmadre" },
+    { name = "Mikel Broström" },
 ]
 keywords = ["tracker", "MOT", "evaluation", "metrics", "compare"]
 classifiers = [
@@ -62,9 +63,6 @@ motmetrics = [
 
 [tool.setuptools.packages.find]
 include = ["motmetrics*"]
-
-[tool.setuptools.dynamic]
-version = { attr = "motmetrics.__version__" }
 
 [tool.ruff]
 line-length = 127

@@ -32,6 +32,7 @@ jobs:
               run: |
                   uv venv --python ${{ matrix.python-version }}
                   uv pip install --group dev
+                  uv pip install --editable .
                   # lapsolver is unmaintained and no longer builds with the C++
                   # toolchain on current GitHub-hosted runners. The test suite
                   # discovers optional solvers dynamically, so exercise the

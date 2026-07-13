@@ -15,6 +15,8 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+from importlib.metadata import version as _distribution_version
+
 __all__ = [
     "distances",
     "io",
@@ -31,5 +33,4 @@ from motmetrics import metrics
 from motmetrics import utils
 from motmetrics.mot import MOTAccumulator
 
-# Needs to be last line
-__version__ = "1.4.0"
+__version__ = _distribution_version("motmetrics")
