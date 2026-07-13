@@ -1,0 +1,77 @@
+name: Publish to PyPI
+
+on:
+    push:
+        tags: ["v*"]
+
+permissions:
+    contents: read
+
+jobs:
+    test:
+        name: Test on Python ${{ matrix.python-version }}
+        runs-on: ubuntu-latest
+        strategy:
+            fail-fast: false
+            matrix:
+                python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  persist-credentials: false
+            - uses: actions/setup-python@v6
+              with:
+                  python-version: ${{ matrix.python-version }}
+            - uses: astral-sh/setup-uv@v7
+            - name: Install and test
+              run: |
+                  uv venv --python ${{ matrix.python-version }}
+                  uv pip install --group dev
+                  uv run --no-project pytest
+
+    build:
+        name: Build and validate distributions
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  persist-credentials: false
+            - uses: actions/setup-python@v6
+              with:
+                  python-version: "3.x"
+            - name: Build wheel and source distribution
+              run: |
+                  python -m pip install --upgrade build twine
+                  python -m build
+                  python -m twine check dist/*
+            - name: Verify version matches tag
+              env:
+                  RELEASE_TAG: ${{ github.ref_name }}
+              run: |
+                  python -c "import os, pathlib, sys; from packaging.utils import parse_sdist_filename, parse_wheel_filename; from packaging.version import Version; expected=Version(os.environ['RELEASE_TAG'].removeprefix('v')); files=list(pathlib.Path('dist').iterdir()); versions=[parse_wheel_filename(p.name)[1] if p.suffix == '.whl' else parse_sdist_filename(p.name)[1] for p in files]; sys.exit(0 if files and all(v == expected for v in versions) else f'artifact versions {versions} do not match tag {expected}')"
+            - name: Smoke-test the wheel
+              run: |
+                  python -m venv /tmp/motmetrics-wheel-test
+                  /tmp/motmetrics-wheel-test/bin/python -m pip install dist/*.whl
+                  /tmp/motmetrics-wheel-test/bin/python -c "import motmetrics; print(motmetrics.__version__)"
+            - uses: actions/upload-artifact@v5
+              with:
+                  name: python-package-distributions
+                  path: dist/
+                  if-no-files-found: error
+
+    publish:
+        name: Publish distribution to PyPI
+        needs: [test, build]
+        runs-on: ubuntu-latest
+        environment:
+            name: pypi
+            url: https://pypi.org/p/motmetrics
+        permissions:
+            id-token: write
+        steps:
+            - uses: actions/download-artifact@v6
+              with:
+                  name: python-package-distributions
+                  path: dist/
+            - uses: pypa/gh-action-pypi-publish@release/v1

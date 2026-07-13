@@ -130,6 +130,9 @@ def test_merge_dataframes():
     )
 
     expect = mm.MOTAccumulator.new_event_dataframe()
+    # Remapped IDs are strings. Declare those columns accordingly because
+    # pandas 3 no longer permits implicit string upcasts from float columns.
+    expect = expect.astype({"OId": object, "HId": object})
 
     expect.loc[(0, 0), :] = ["RAW", np.nan, np.nan, np.nan]
     expect.loc[(0, 1), :] = ["RAW", np.nan, mappings[0]["hid_map"][1], np.nan]
