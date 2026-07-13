@@ -63,6 +63,7 @@ jobs:
               run: |
                   uv venv --python 3.11
                   uv pip install --group dev
+                  uv pip install --editable .
                   uv pip install trackeval==1.3.0
             - name: Compare py-motmetrics with TrackEval
               run: |
