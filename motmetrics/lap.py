@@ -71,8 +71,8 @@ def linear_sum_assignment(costs, solver=None):
 
     assert callable(solver), 'Invalid LAP solver.'
     rids, cids = solver(costs)
-    rids = np.asarray(rids).astype(int)
-    cids = np.asarray(cids).astype(int)
+    rids = np.asarray(rids, dtype=int)
+    cids = np.asarray(cids, dtype=int)
     return rids, cids
 
 
@@ -111,11 +111,8 @@ def add_expensive_edges(costs):
 
 
 def _exclude_missing_edges(costs, rids, cids):
-    subset = [
-        index for index, (i, j) in enumerate(zip(rids, cids))
-        if np.isfinite(costs[i, j])
-    ]
-    return rids[subset], cids[subset]
+    valid = np.isfinite(costs[rids, cids])
+    return rids[valid], cids[valid]
 
 
 def lsa_solve_scipy(costs):

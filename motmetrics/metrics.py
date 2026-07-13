@@ -15,6 +15,7 @@ import inspect
 import logging
 import time
 from collections import OrderedDict
+from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 import pandas as pd
@@ -270,7 +271,13 @@ class MetricsHost:
         return pd.DataFrame(data, index=[name]) if return_dataframe else data
 
     def compute_many(
-        self, dfs, anas=None, metrics=None, names=None, generate_overall=False
+        self,
+        dfs,
+        anas=None,
+        metrics=None,
+        names=None,
+        generate_overall=False,
+        n_jobs=1,
     ):
         """Compute metrics on multiple dataframe / accumulators.
 
@@ -294,6 +301,9 @@ class MetricsHost:
             using the same metrics over an accumulator that is the concatentation of
             all input containers. In creating this temporary accumulator, care is taken
             to offset frame indices avoid object id collisions.
+        n_jobs : int, optional
+            Number of worker threads used to compute independent sequences. Defaults
+            to one, preserving serial execution.
 
         Returns
         -------
@@ -311,8 +321,12 @@ class MetricsHost:
             names = list(range(len(dfs)))
         if anas is None:
             anas = [None] * len(dfs)
-        partials = [
-            self.compute(
+        if n_jobs < 1:
+            raise ValueError("n_jobs must be at least 1")
+
+        def compute_partial(values):
+            acc, analysis, name = values
+            return self.compute(
                 acc,
                 ana=analysis,
                 metrics=metrics,
@@ -320,8 +334,13 @@ class MetricsHost:
                 return_cached=True,
                 return_dataframe=False,
             )
-            for acc, analysis, name in zip(dfs, anas, names)
-        ]
+
+        inputs = list(zip(dfs, anas, names))
+        if n_jobs == 1 or len(inputs) < 2:
+            partials = [compute_partial(values) for values in inputs]
+        else:
+            with ThreadPoolExecutor(max_workers=n_jobs) as executor:
+                partials = list(executor.map(compute_partial, inputs))
         logging.info("partials: %.3f seconds.", time.time() - st)
         details = partials
         partials = [
@@ -393,12 +412,12 @@ simple_add_func.append(num_frames)
 
 def obj_frequencies(df):
     """Total number of occurrences of individual objects over all frames."""
-    return df.noraw.OId.value_counts()
+    return df.obj_frequencies
 
 
 def pred_frequencies(df):
     """Total number of occurrences of individual predictions over all frames."""
-    return df.noraw.HId.value_counts()
+    return df.pred_frequencies
 
 
 def num_unique_objects(df, obj_frequencies):
@@ -412,7 +431,7 @@ simple_add_func.append(num_unique_objects)
 
 def num_matches(df):
     """Total number matches."""
-    return df.noraw.Type.isin(["MATCH"]).sum()
+    return df.type_count("MATCH")
 
 
 simple_add_func.append(num_matches)
@@ -420,7 +439,7 @@ simple_add_func.append(num_matches)
 
 def num_switches(df):
     """Total number of track switches."""
-    return df.noraw.Type.isin(["SWITCH"]).sum()
+    return df.type_count("SWITCH")
 
 
 simple_add_func.append(num_switches)
@@ -428,7 +447,7 @@ simple_add_func.append(num_switches)
 
 def num_transfer(df):
     """Total number of track transfer."""
-    return df.extra.Type.isin(["TRANSFER"]).sum()
+    return df.type_count("TRANSFER", include_extra=True)
 
 
 simple_add_func.append(num_transfer)
@@ -436,7 +455,7 @@ simple_add_func.append(num_transfer)
 
 def num_ascend(df):
     """Total number of track ascend."""
-    return df.extra.Type.isin(["ASCEND"]).sum()
+    return df.type_count("ASCEND", include_extra=True)
 
 
 simple_add_func.append(num_ascend)
@@ -444,7 +463,7 @@ simple_add_func.append(num_ascend)
 
 def num_migrate(df):
     """Total number of track migrate."""
-    return df.extra.Type.isin(["MIGRATE"]).sum()
+    return df.type_count("MIGRATE", include_extra=True)
 
 
 simple_add_func.append(num_migrate)
@@ -452,7 +471,7 @@ simple_add_func.append(num_migrate)
 
 def num_false_positives(df):
     """Total number of false positives (false-alarms)."""
-    return df.noraw.Type.isin(["FP"]).sum()
+    return df.type_count("FP")
 
 
 simple_add_func.append(num_false_positives)
@@ -460,7 +479,7 @@ simple_add_func.append(num_false_positives)
 
 def num_misses(df):
     """Total number of misses."""
-    return df.noraw.Type.isin(["MISS"]).sum()
+    return df.type_count("MISS")
 
 
 simple_add_func.append(num_misses)
@@ -544,19 +563,38 @@ simple_add_func.append(mostly_lost)
 
 def num_fragmentations(df, obj_frequencies):
     """Total number of switches from tracked to not tracked."""
-    fra = 0
-    for o in obj_frequencies.index:
-        # Find first and last time object was not missed (track span). Then count
-        # the number switches from NOT MISS to MISS state.
-        dfo = df.noraw[df.noraw.OId == o]
-        notmiss = dfo[dfo.Type != "MISS"]
-        if len(notmiss) == 0:
-            continue
-        first = notmiss.index[0]
-        last = notmiss.index[-1]
-        diffs = dfo.loc[first:last].Type.apply(lambda x: 1 if x == "MISS" else 0).diff()
-        fra += diffs[diffs == 1].count()
-    return fra
+    del obj_frequencies  # The vectorized implementation derives ids from the events.
+    oid_values = df.noraw["OId"].to_numpy()
+    valid = ~pd.isna(oid_values)
+    if not valid.any():
+        return 0
+
+    oid_codes, unique_oids = pd.factorize(oid_values[valid], sort=False)
+    types = df.noraw_types[valid]
+    missed = types == "MISS"
+    tracked = ~missed
+    if not tracked.any():
+        return 0
+
+    positions = np.arange(len(oid_codes))
+    first_tracked = np.full(len(unique_oids), len(oid_codes), dtype=int)
+    last_tracked = np.full(len(unique_oids), -1, dtype=int)
+    np.minimum.at(first_tracked, oid_codes[tracked], positions[tracked])
+    np.maximum.at(last_tracked, oid_codes[tracked], positions[tracked])
+
+    order = np.argsort(oid_codes, kind="stable")
+    sorted_codes = oid_codes[order]
+    sorted_positions = positions[order]
+    sorted_missed = missed[order]
+    previous_missed = np.zeros_like(sorted_missed)
+    previous_missed[1:] = sorted_missed[:-1]
+    group_starts = np.flatnonzero(sorted_codes[1:] != sorted_codes[:-1]) + 1
+    previous_missed[group_starts] = False
+    within_track_span = (
+        (sorted_positions >= first_tracked[sorted_codes])
+        & (sorted_positions <= last_tracked[sorted_codes])
+    )
+    return int((sorted_missed & ~previous_missed & within_track_span).sum())
 
 
 simple_add_func.append(num_fragmentations)
@@ -624,29 +662,26 @@ def deta_alpha_m(partials, num_detections, num_objects, num_false_positives):
     return math_util.quiet_divide(num_detections, max(1, num_objects + num_false_positives))
 
 
-def assa_alpha(df, num_detections, num_gt_ids, num_dt_ids):
+def assa_alpha(df, num_detections):
     r"""AssA under specific threshold $\alpha$
     Source: https://github.com/JonathonLuiten/TrackEval/blob/12c8791b303e0a0b50f753af204249e622d0281a/trackeval/metrics/hota.py#L107-L108
     """
-    oids = np.sort(df.full["OId"].dropna().unique())
-    hids = np.sort(df.full["HId"].dropna().unique())
-    oids_idx = dict((o, i) for i, o in enumerate(oids))
-    hids_idx = dict((h, i) for i, h in enumerate(hids))
+    oid_values = df.noraw["OId"].to_numpy()
+    hid_values = df.noraw["HId"].to_numpy()
+    oid_codes, oids = pd.factorize(oid_values, sort=True)
+    hid_codes, hids = pd.factorize(hid_values, sort=True)
 
-    max_gt_ids = len(oids)
-    max_dt_ids = len(hids)
-
-    match_count_array = np.zeros((max_gt_ids, max_dt_ids))
-    gt_id_counts = np.zeros((max_gt_ids, 1))
-    tracker_id_counts = np.zeros((1, max_dt_ids))
-    for idx in range(len(df.noraw)):
-        oid, hid = df.noraw.iloc[idx, 1], df.noraw.iloc[idx, 2]
-        if df.noraw.iloc[idx, 0] in ["SWITCH", "MATCH"]:
-            match_count_array[oids_idx[oid], hids_idx[hid]] += 1
-        if oid == oid:  # check non nan
-            gt_id_counts[oids_idx[oid]] += 1
-        if hid == hid:
-            tracker_id_counts[0, hids_idx[hid]] += 1
+    gt_id_counts = np.bincount(oid_codes[oid_codes >= 0], minlength=len(oids))[:, None]
+    tracker_id_counts = np.bincount(
+        hid_codes[hid_codes >= 0], minlength=len(hids)
+    )[None, :]
+    matched = (
+        np.isin(df.noraw_types, ["SWITCH", "MATCH"])
+        & (oid_codes >= 0)
+        & (hid_codes >= 0)
+    )
+    match_count_array = np.zeros((len(oids), len(hids)), dtype=np.int64)
+    np.add.at(match_count_array, (oid_codes[matched], hid_codes[matched]), 1)
 
     ass_a = match_count_array / np.maximum(1, gt_id_counts + tracker_id_counts - match_count_array)
     return math_util.quiet_divide((ass_a * match_count_array).sum(), max(1, num_detections))
@@ -676,17 +711,45 @@ class DataFrameMap:  # pylint: disable=too-few-public-methods
         self.raw: pd.DataFrame= raw
         self.noraw: pd.DataFrame= noraw
         self.extra: pd.DataFrame= extra
+        self.noraw_types = noraw["Type"].to_numpy()
+        self.extra_types = extra["Type"].to_numpy()
+        self._obj_frequencies = None
+        self._pred_frequencies = None
+        self._noraw_type_counts = None
+        self._extra_type_counts = None
+
+    @property
+    def obj_frequencies(self):
+        if self._obj_frequencies is None:
+            self._obj_frequencies = self.noraw["OId"].value_counts()
+        return self._obj_frequencies
+
+    @property
+    def pred_frequencies(self):
+        if self._pred_frequencies is None:
+            self._pred_frequencies = self.noraw["HId"].value_counts()
+        return self._pred_frequencies
+
+    def type_count(self, event_type, include_extra=False):
+        """Count an event type using cached NumPy summaries."""
+        cache_name = "_extra_type_counts" if include_extra else "_noraw_type_counts"
+        counts = getattr(self, cache_name)
+        if counts is None:
+            values = self.extra_types if include_extra else self.noraw_types
+            event_types, event_counts = np.unique(values, return_counts=True)
+            counts = dict(zip(event_types, event_counts))
+            setattr(self, cache_name, counts)
+        return int(counts.get(event_type, 0))
 
 
 def events_to_df_map(df):
-    raw = df[df.Type == "RAW"]
-    noraw = df[
-        (df.Type != "RAW")
-        & (df.Type != "ASCEND")
-        & (df.Type != "TRANSFER")
-        & (df.Type != "MIGRATE")
-    ]
-    extra = df[df.Type != "RAW"]
+    types = df["Type"].to_numpy()
+    raw_mask = types == "RAW"
+    extra_mask = ~raw_mask
+    noraw_mask = extra_mask & ~np.isin(types, ["ASCEND", "TRANSFER", "MIGRATE"])
+    raw = df[raw_mask]
+    noraw = df[noraw_mask]
+    extra = df[extra_mask]
     df_map = DataFrameMap(full=df, raw=raw, noraw=noraw, extra=extra)
     return df_map
 

@@ -15,6 +15,7 @@ import os
 
 import numpy as np
 import pandas as pd
+import pytest
 from pytest import approx
 
 import motmetrics as mm
@@ -279,6 +280,112 @@ def test_benchmark_extract_counts(benchmark):
         hyps_per_frame=40,
     )
     benchmark(_extract_counts, acc)
+
+
+def _assa_alpha_reference(df, num_detections):
+    """Reference implementation matching the original row-wise calculation."""
+    oids = np.sort(df.full["OId"].dropna().unique())
+    hids = np.sort(df.full["HId"].dropna().unique())
+    oids_idx = {oid: index for index, oid in enumerate(oids)}
+    hids_idx = {hid: index for index, hid in enumerate(hids)}
+    match_counts = np.zeros((len(oids), len(hids)))
+    gt_counts = np.zeros((len(oids), 1))
+    tracker_counts = np.zeros((1, len(hids)))
+    for event_type, oid, hid in df.noraw[["Type", "OId", "HId"]].itertuples(index=False):
+        if event_type in ["SWITCH", "MATCH"]:
+            match_counts[oids_idx[oid], hids_idx[hid]] += 1
+        if not pd.isna(oid):
+            gt_counts[oids_idx[oid]] += 1
+        if not pd.isna(hid):
+            tracker_counts[0, hids_idx[hid]] += 1
+    association = match_counts / np.maximum(1, gt_counts + tracker_counts - match_counts)
+    return (association * match_counts).sum() / max(1, num_detections)
+
+
+def test_vectorized_assa_alpha_matches_reference_with_nonconsecutive_ids():
+    acc = mm.MOTAccumulator(auto_id=True)
+    acc.update([101, 907], [42, 314], [[0.1, np.nan], [np.nan, 0.2]])
+    acc.update([101, 907], [42], [[np.nan], [0.1]])
+    acc.update([101], [314, 2718], [[0.1, np.nan]])
+    df_map = mm.metrics.events_to_df_map(acc.events)
+    num_detections = int(np.isin(df_map.noraw_types, ["MATCH", "SWITCH"]).sum())
+
+    actual = mm.metrics.assa_alpha(df_map, num_detections)
+    expected = _assa_alpha_reference(df_map, num_detections)
+
+    assert actual == approx(expected, abs=1e-15)
+
+
+def test_vectorized_fragmentations_match_reference():
+    acc = mm.MOTAccumulator(auto_id=True)
+    acc.update([101, 907], [42, 314], [[0.1, np.nan], [np.nan, 0.1]])
+    acc.update([101, 907], [314], [[np.nan], [0.1]])
+    acc.update([101, 907], [42, 314], [[0.1, np.nan], [np.nan, 0.1]])
+    acc.update([101, 907], [314], [[np.nan], [0.1]])
+    acc.update([101, 907], [314], [[np.nan], [0.1]])
+    acc.update([101, 907], [42, 314], [[0.1, np.nan], [np.nan, 0.1]])
+    df_map = mm.metrics.events_to_df_map(acc.events)
+
+    assert mm.metrics.num_fragmentations(df_map, df_map.obj_frequencies) == 2
+
+
+def test_compute_many_parallel_matches_serial():
+    rand = np.random.RandomState(1)
+    accumulators = [
+        _accum_random_uniform(
+            rand,
+            seq_len=20,
+            num_objs=10,
+            num_hyps=20,
+            objs_per_frame=5,
+            hyps_per_frame=8,
+        )
+        for _ in range(3)
+    ]
+    host = mm.metrics.create()
+    kwargs = {
+        "metrics": mm.metrics.motchallenge_metrics,
+        "names": ["a", "b", "c"],
+        "generate_overall": True,
+    }
+
+    serial = host.compute_many(accumulators, **kwargs)
+    parallel = host.compute_many(accumulators, n_jobs=2, **kwargs)
+
+    pd.testing.assert_frame_equal(parallel, serial)
+    with pytest.raises(ValueError, match="n_jobs"):
+        host.compute_many(accumulators, n_jobs=0, **kwargs)
+
+
+def test_benchmark_assa_alpha(benchmark):
+    rand = np.random.RandomState(2)
+    acc = _accum_random_uniform(
+        rand,
+        seq_len=100,
+        num_objs=50,
+        num_hyps=5000,
+        objs_per_frame=20,
+        hyps_per_frame=40,
+    )
+    df_map = mm.metrics.events_to_df_map(acc.events)
+    num_detections = int(np.isin(df_map.noraw_types, ["MATCH", "SWITCH"]).sum())
+
+    benchmark(mm.metrics.assa_alpha, df_map, num_detections)
+
+
+def test_benchmark_hota_accumulation(benchmark):
+    sequence_dir = os.path.join(DATA_DIR, "TUD-Campus")
+    ground_truth = mm.io.loadtxt(os.path.join(sequence_dir, "gt.txt"))
+    tracker = mm.io.loadtxt(os.path.join(sequence_dir, "test.txt"))
+    thresholds = np.arange(0.05, 0.99, 0.05)
+
+    benchmark(
+        mm.utils.compare_to_groundtruth_reweighting,
+        ground_truth,
+        tracker,
+        "iou",
+        distth=thresholds,
+    )
 
 
 def _accum_random_uniform(

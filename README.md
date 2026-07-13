@@ -384,6 +384,7 @@ def compute_hota(sequence_dirs):
             metrics=metrics,
             names=sequence_dirs,
             generate_overall=True,
+            n_jobs=min(4, len(sequence_dirs)),
         )
         alpha_results.append(summary.loc["OVERALL"])
 
@@ -408,6 +409,9 @@ print(mm.io.render_summary(
 ```
 
 When multiple sequences are supplied, `OVERALL` follows TrackEval's combination rules: detection counts are summed for DetA, AssA is weighted by detections, and HOTA is recomputed as `sqrt(DetA * AssA)` at each alpha before the final threshold average. This avoids incorrectly averaging per-sequence HOTA values.
+
+`compute_many` accepts `n_jobs` for parallel metric aggregation across independent
+sequences. Its default is `1`; use a larger value when evaluating multiple sequences.
 
 The CI pipeline also runs py-motmetrics and TrackEval 1.3.0 over the bundled
 `TUD-Campus` and `TUD-Stadtmitte` sequences. It checks per-sequence and combined

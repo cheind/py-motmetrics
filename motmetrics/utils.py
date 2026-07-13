@@ -12,6 +12,7 @@ from __future__ import absolute_import, division, print_function
 import numpy as np
 
 from motmetrics.distances import iou_matrix, norm2squared_matrix
+from motmetrics.lap import linear_sum_assignment
 from motmetrics.mot import MOTAccumulator
 from motmetrics.preprocess import preprocessResult
 
@@ -153,8 +154,19 @@ def compare_to_groundtruth_reweighting(gt, dt, dist="iou", distfields=None, dist
             weighted_dists = (
                 dists * global_alignment_score[gt_ids[:, np.newaxis], dt_ids[np.newaxis, :]]
             )
+        matching_costs = 1 - weighted_dists
+        assignment = linear_sum_assignment(matching_costs)
         for acc, th in zip(acc_list, distth):
-            acc.update(oids, hids, 1 - weighted_dists, frameid=fid, similartiy_matrix=dists, th=th)
+            acc.update(
+                oids,
+                hids,
+                matching_costs,
+                frameid=fid,
+                similartiy_matrix=dists,
+                th=th,
+                assignment=assignment,
+                record_raw_events=False,
+            )
     return acc_list[0] if return_single else acc_list
 
 

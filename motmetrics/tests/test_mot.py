@@ -77,6 +77,36 @@ def test_events():
     pd.testing.assert_frame_equal(acc.events, expect)
 
 
+def test_precomputed_assignment_and_compact_raw_events_preserve_mot_events():
+    frames = [
+        ([1, 2], [10, 20], np.array([[0.1, np.nan], [np.nan, 0.2]])),
+        ([1, 2], [10, 30], np.array([[0.2, np.nan], [np.nan, 0.1]])),
+        ([1], [30], np.array([[0.3]])),
+    ]
+    regular = mm.MOTAccumulator(auto_id=True)
+    precomputed = mm.MOTAccumulator(auto_id=True)
+    compact = mm.MOTAccumulator(auto_id=True)
+
+    for oids, hids, distances in frames:
+        assignment = mm.lap.linear_sum_assignment(distances)
+        regular.update(oids, hids, distances)
+        precomputed.update(oids, hids, distances, assignment=assignment)
+        compact.update(
+            oids,
+            hids,
+            distances,
+            assignment=assignment,
+            record_raw_events=False,
+        )
+
+    pd.testing.assert_frame_equal(precomputed.events, regular.events)
+    pd.testing.assert_frame_equal(
+        compact.mot_events.reset_index(drop=True),
+        regular.mot_events.reset_index(drop=True),
+    )
+    assert compact.events.Type.value_counts()["RAW"] == len(frames)
+
+
 def test_max_switch_time():
     """Tests max_switch_time option."""
     acc = mm.MOTAccumulator(max_switch_time=1)
