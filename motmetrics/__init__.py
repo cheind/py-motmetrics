@@ -19,6 +19,7 @@ from importlib.metadata import version as _distribution_version
 
 __all__ = [
     "distances",
+    "evaluator",
     "io",
     "lap",
     "metrics",
@@ -27,6 +28,7 @@ __all__ = [
 ]
 
 from motmetrics import distances
+from motmetrics import evaluator
 from motmetrics import io
 from motmetrics import lap
 from motmetrics import metrics

@@ -12,6 +12,7 @@ from __future__ import absolute_import, division, print_function
 import numpy as np
 
 from motmetrics.distances import iou_matrix, norm2squared_matrix
+from motmetrics.evaluator import compute_clear_identity, compute_hota, prepare_sequence
 from motmetrics.lap import linear_sum_assignment
 from motmetrics.mot import MOTAccumulator
 from motmetrics.preprocess import preprocessResult
@@ -141,6 +142,12 @@ def compare_to_groundtruth_reweighting(gt, dt, dist="iou", distfields=None, dist
     return_single = np.isscalar(distth)
     thresholds = np.atleast_1d(np.asarray(distth, dtype=float))
 
+    if dist.upper() == "IOU":
+        prepared = prepare_sequence(gt, dt, box_columns=distfields)
+        result = compute_hota(prepared, thresholds)
+        accumulators = result.to_accumulators()
+        return accumulators[0] if return_single else accumulators
+
     gt_ids = gt.index.get_level_values("Id").unique()
     tracker_ids = dt.index.get_level_values("Id").unique()
     gt_id_map = {oid: index for index, oid in enumerate(gt_ids)}
@@ -261,6 +268,10 @@ def compare_to_groundtruth(gt, dt, dist='iou', distfields=None, distth=0.5):
     # pylint: disable=too-many-locals
     if distfields is None:
         distfields = ['X', 'Y', 'Width', 'Height']
+
+    if dist.upper() == "IOU":
+        prepared = prepare_sequence(gt, dt, box_columns=distfields)
+        return compute_clear_identity(prepared, distth).accumulator
 
     def compute_iou(a, b):
         return iou_matrix(a, b, max_iou=distth)

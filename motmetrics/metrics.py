@@ -37,15 +37,17 @@ class MetricsHost:
     def __init__(self):
         self.metrics = OrderedDict()
 
-    def _cached_hota_stats(self, accumulator, metrics):
-        stats = accumulator._hota_stats
-        if stats is None or not set(metrics).issubset(stats):
-            return None
-        for metric_name in stats:
-            registered = self.metrics.get(metric_name)
-            if registered is None or registered["fnc"] is not globals().get(metric_name):
-                return None
-        return stats
+    def _cached_accumulator_stats(self, accumulator, metrics):
+        for stats in (accumulator._metric_stats, accumulator._hota_stats):
+            if stats is None or not set(metrics).issubset(stats):
+                continue
+            for metric_name in stats:
+                registered = self.metrics.get(metric_name)
+                if registered is None or registered["fnc"] is not globals().get(metric_name):
+                    break
+            else:
+                return stats
+        return None
 
     def register(
         self,
@@ -207,12 +209,12 @@ class MetricsHost:
             metrics = [metrics]
 
         if isinstance(df, MOTAccumulator):
-            hota_stats = self._cached_hota_stats(df, metrics)
-            if hota_stats is not None:
+            cached_stats = self._cached_accumulator_stats(df, metrics)
+            if cached_stats is not None:
                 if name is None:
                     name = 0
-                data = OrderedDict(hota_stats.items()) if return_cached else OrderedDict(
-                    (metric, hota_stats[metric]) for metric in metrics
+                data = OrderedDict(cached_stats.items()) if return_cached else OrderedDict(
+                    (metric, cached_stats[metric]) for metric in metrics
                 )
                 return pd.DataFrame(data, index=[name]) if return_dataframe else data
             df = df.events
@@ -359,12 +361,12 @@ class MetricsHost:
             )
 
         inputs = list(zip(dfs, anas, names))
-        cached_hota = all(
+        cached_stats = all(
             isinstance(acc, MOTAccumulator)
-            and self._cached_hota_stats(acc, metrics) is not None
+            and self._cached_accumulator_stats(acc, metrics) is not None
             for acc, _, _ in inputs
         )
-        if n_jobs == 1 or len(inputs) < 2 or cached_hota:
+        if n_jobs == 1 or len(inputs) < 2 or cached_stats:
             partials = [compute_partial(values) for values in inputs]
         else:
             with ThreadPoolExecutor(max_workers=n_jobs) as executor:
@@ -791,19 +793,41 @@ def extract_counts_from_df_map(df):
         tps: Dict from (object id, hypothesis id) to true-positive count.
         The ids are arbitrary, they might NOT be consecutive integers from 0.
     """
-    oids = df.full["OId"].dropna().unique()
-    hids = df.full["HId"].dropna().unique()
+    raw_oids = df.raw["OId"].to_numpy()
+    raw_hids = df.raw["HId"].to_numpy()
+    raw_distances = df.raw["D"].to_numpy(dtype=float)
+    frame_values = df.raw.index.get_level_values("FrameId").to_numpy()
+    oid_codes, oids = pd.factorize(raw_oids, sort=False)
+    hid_codes, hids = pd.factorize(raw_hids, sort=False)
+    frame_codes, frames = pd.factorize(frame_values, sort=False)
 
-    flat = df.raw.reset_index()
-    # Exclude events that do not belong to either set.
-    flat = flat[flat["OId"].isin(oids) | flat["HId"].isin(hids)]
-    # Count number of frames where each (non-empty) OId and HId appears.
-    ocs = flat.set_index("OId")["FrameId"].groupby("OId").nunique().to_dict()
-    hcs = flat.set_index("HId")["FrameId"].groupby("HId").nunique().to_dict()
-    # Select three columns of interest and index by ('OId', 'HId').
-    dists = flat[["OId", "HId", "D"]].set_index(["OId", "HId"]).dropna()
-    # Count events with non-empty distance for each pair.
-    tps = dists.groupby(["OId", "HId"])["D"].count().to_dict()
+    def occurrence_counts(id_codes, ids):
+        valid = id_codes >= 0
+        if not valid.any():
+            return {}
+        keys = id_codes[valid] * len(frames) + frame_codes[valid]
+        unique_keys = np.unique(keys)
+        counts = np.bincount(
+            unique_keys // len(frames),
+            minlength=len(ids),
+        )
+        return {identity: int(count) for identity, count in zip(ids, counts)}
+
+    ocs = occurrence_counts(oid_codes, oids)
+    hcs = occurrence_counts(hid_codes, hids)
+    valid_pairs = (oid_codes >= 0) & (hid_codes >= 0) & np.isfinite(raw_distances)
+    if valid_pairs.any():
+        pair_keys = oid_codes[valid_pairs] * len(hids) + hid_codes[valid_pairs]
+        pair_counts = np.bincount(pair_keys, minlength=len(oids) * len(hids))
+        nonzero_pairs = np.flatnonzero(pair_counts)
+        tps = {
+            (oids[pair_index // len(hids)], hids[pair_index % len(hids)]): int(
+                pair_counts[pair_index]
+            )
+            for pair_index in nonzero_pairs
+        }
+    else:
+        tps = {}
     return ocs, hcs, tps
 
 

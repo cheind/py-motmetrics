@@ -269,7 +269,7 @@ def test_extract_pandas_series_issue():
 
 
 def test_benchmark_extract_counts(benchmark):
-    """Benchmarks events_to_df_map() and extract_counts_from_df_map()."""
+    """Benchmarks vectorized Identity occurrence and pair counting."""
     rand = np.random.RandomState(0)
     acc = _accum_random_uniform(
         rand,
@@ -279,7 +279,8 @@ def test_benchmark_extract_counts(benchmark):
         objs_per_frame=20,
         hyps_per_frame=40,
     )
-    benchmark(_extract_counts, acc)
+    df_map = mm.metrics.events_to_df_map(acc.events)
+    benchmark(mm.metrics.extract_counts_from_df_map, df_map)
 
 
 def _assa_alpha_reference(df, num_detections):

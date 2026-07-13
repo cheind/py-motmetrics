@@ -351,7 +351,43 @@ OVERALL 80.0% 80.0% 80.0% 80.0% 80.0%  4  2  2  0  2  2   1   1 50.0% 0.275
 
 #### Computing HOTA metrics
 
-HOTA cannot use `MOTAccumulator` directly because it requires a reweighting matrix computed from all frames. The example below computes HOTA over the standard alpha thresholds for one or more MOTChallenge sequences:
+For new sequence-level evaluations, use the batch evaluator. It prepares each
+sequence once, shares the resulting frame arrays and IoU matrices across CLEAR,
+Identity, and HOTA, and returns compact results without constructing pandas event
+tables:
+
+```python
+from pathlib import Path
+
+import motmetrics as mm
+
+data_dir = Path("motmetrics/data")
+sequences = {
+    name: (
+        mm.io.loadtxt(data_dir / name / "gt.txt"),
+        mm.io.loadtxt(data_dir / name / "test.txt"),
+    )
+    for name in ("TUD-Campus", "TUD-Stadtmitte")
+}
+
+batch = mm.evaluator.evaluate_many(sequences)
+for name, result in batch.sequences.items():
+    print(name, result.clear_identity.stats["mota"], result.hota.hota.mean())
+
+print("OVERALL", batch.overall_clear_identity["mota"], batch.overall_hota.hota.mean())
+```
+
+`prepare_sequence` and `prepare_many` expose the reusable `PreparedSequence`
+representation when preparation and metric-kernel timing need to be separated.
+`HOTAResult` stores the per-alpha HOTA, DetA, AssA, and detection-count arrays and
+combines sequences using TrackEval's count-weighted rules. Complete sequences are
+parallelized as single worker tasks; by default, the evaluator uses
+`min(number_of_sequences, max(1, (os.cpu_count() or 1) - 2))` workers. Pass
+`n_jobs=1` for deterministic serial execution.
+
+The legacy-compatible helper below computes HOTA over the standard alpha thresholds
+and returns threshold-specific `MOTAccumulator` objects. Their event tables are
+materialized only if the `events` property is accessed:
 
 ```python
 import os
@@ -409,13 +445,13 @@ print(mm.io.render_summary(
 
 When multiple sequences are supplied, `OVERALL` follows TrackEval's combination rules: detection counts are summed for DetA, AssA is weighted by detections, and HOTA is recomputed as `sqrt(DetA * AssA)` at each alpha before the final threshold average. This avoids incorrectly averaging per-sequence HOTA values.
 
-HOTA accumulation keeps compact NumPy statistics for all alpha thresholds and
-materializes detailed event DataFrames only when an accumulator's `events` property
-is accessed. Metric computation therefore avoids building and scanning a separate
-event table for every threshold while preserving the accumulator event interface.
+Both HOTA and IoU-based CLEAR/Identity accumulation keep compact NumPy statistics
+and materialize detailed event DataFrames only when an accumulator's `events`
+property is accessed. Metric computation therefore avoids building and scanning
+event tables while preserving the accumulator event interface.
 
-`compute_many` accepts `n_jobs` for parallel metric aggregation across independent
-sequences. By default, it uses
+The legacy `compute_many` API also accepts `n_jobs` for parallel metric aggregation
+across independent sequences. By default, it uses
 `min(number_of_sequences, max(1, (os.cpu_count() or 1) - 2))` workers. Pass
 `n_jobs=1` to force serial execution or another positive integer to choose the
 worker count explicitly.
@@ -424,9 +460,10 @@ The CI pipeline also runs py-motmetrics and TrackEval 1.3.0 over the bundled
 `TUD-Campus` and `TUD-Stadtmitte` sequences. It checks per-sequence and combined
 HOTA, CLEAR, and Identity results, including all standard HOTA alpha thresholds.
 The job prints both implementations' values and their maximum absolute difference
-to the log and GitHub job summary. It also reports individual and median execution
-times from three warmed runs. Metric parity fails if any difference exceeds `1e-6`;
-the timing comparison is informational.
+to the log and GitHub job summary. It reports three warmed runs for both end-to-end
+execution (starting from the same MOT DataFrames) and the metric kernels (starting
+from each implementation's prepared arrays). Metric parity fails if any difference
+exceeds `1e-6`; the timing comparison is informational.
 To run this comparison locally:
 
 ```bash
