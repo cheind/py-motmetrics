@@ -412,6 +412,8 @@ When multiple sequences are supplied, `OVERALL` follows TrackEval's combination 
 The CI pipeline also runs py-motmetrics and TrackEval 1.3.0 over the bundled
 `TUD-Campus` and `TUD-Stadtmitte` sequences. It checks per-sequence and combined
 HOTA, CLEAR, and Identity results, including all standard HOTA alpha thresholds.
+The job prints both implementations' values and their maximum absolute difference
+to the log and GitHub job summary. It fails if any difference exceeds `1e-6`.
 To run this comparison locally:
 
 ```bash

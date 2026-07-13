@@ -65,4 +65,4 @@ jobs:
                   uv pip install trackeval==1.3.0
             - name: Compare py-motmetrics with TrackEval
               run: |
-                  uv run --no-project pytest -q motmetrics/tests/test_trackeval_parity.py
+                  uv run --no-project pytest -q -s motmetrics/tests/test_trackeval_parity.py
