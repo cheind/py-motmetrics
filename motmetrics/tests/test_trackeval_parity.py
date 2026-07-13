@@ -1,4 +1,6 @@
 import os
+import statistics
+import time
 from pathlib import Path
 
 import numpy as np
@@ -17,6 +19,7 @@ SEQUENCE_NAMES = ("TUD-Campus", "TUD-Stadtmitte")
 HOTA_ALPHAS = np.arange(0.05, 0.99, 0.05)
 BOX_COLUMNS = ["X", "Y", "Width", "Height"]
 PARITY_TOLERANCE = 1e-6
+TIMING_REPEATS = 3
 
 CLEAR_FIELD_MAP = {
     "MOTA": "mota",
@@ -166,13 +169,13 @@ def _compute_trackeval(sequences):
         "CLEAR": trackeval.metrics.CLEAR({"THRESHOLD": 0.5, "PRINT_CONFIG": False}),
         "Identity": trackeval.metrics.Identity({"THRESHOLD": 0.5, "PRINT_CONFIG": False}),
     }
-    sequence_results = {
-        name: {
-            metric_name: metric.eval_sequence(_to_trackeval_data(ground_truth, tracker))
+    sequence_results = {}
+    for name, (ground_truth, tracker) in sequences.items():
+        sequence_data = _to_trackeval_data(ground_truth, tracker)
+        sequence_results[name] = {
+            metric_name: metric.eval_sequence(sequence_data)
             for metric_name, metric in metrics.items()
         }
-        for name, (ground_truth, tracker) in sequences.items()
-    }
 
     results = {}
     for name, family_results in sequence_results.items():
@@ -188,6 +191,72 @@ def _compute_trackeval(sequences):
         )
         results["OVERALL"].update(combined)
     return results
+
+
+def _measure_execution_times(sequences):
+    evaluators = {
+        "py-motmetrics": _compute_py_motmetrics,
+        "TrackEval": _compute_trackeval,
+    }
+
+    # Warm both implementations before measuring so imports, solver setup, and
+    # allocator initialization do not dominate these small bundled sequences.
+    for evaluator in evaluators.values():
+        evaluator(sequences)
+
+    results = {}
+    timings = {name: [] for name in evaluators}
+    evaluator_names = list(evaluators)
+    for repeat_index in range(TIMING_REPEATS):
+        # Alternate order to reduce systematic first/second-run bias.
+        run_order = evaluator_names if repeat_index % 2 == 0 else list(reversed(evaluator_names))
+        for name in run_order:
+            start_time = time.perf_counter()
+            results[name] = evaluators[name](sequences)
+            timings[name].append(time.perf_counter() - start_time)
+
+    return results["py-motmetrics"], results["TrackEval"], timings
+
+
+def _relative_time_summary(timings):
+    py_motmetrics_median = statistics.median(timings["py-motmetrics"])
+    trackeval_median = statistics.median(timings["TrackEval"])
+    if py_motmetrics_median <= trackeval_median:
+        factor = trackeval_median / py_motmetrics_median
+        return f"py-motmetrics was {factor:.2f}x faster than TrackEval"
+
+    factor = py_motmetrics_median / trackeval_median
+    return f"TrackEval was {factor:.2f}x faster than py-motmetrics"
+
+
+def _render_execution_time_table(timings):
+    headers = ("Evaluator", *[f"Run {index}" for index in range(1, TIMING_REPEATS + 1)], "Median")
+    rows = [
+        (
+            name,
+            *[f"{elapsed:.6f}s" for elapsed in samples],
+            f"{statistics.median(samples):.6f}s",
+        )
+        for name, samples in timings.items()
+    ]
+    widths = [
+        max(len(headers[index]), *(len(row[index]) for row in rows))
+        for index in range(len(headers))
+    ]
+
+    def render_row(row):
+        return " | ".join(value.ljust(width) for value, width in zip(row, widths))
+
+    separator = "-+-".join("-" * width for width in widths)
+    return "\n".join(
+        [
+            f"Execution time comparison ({TIMING_REPEATS} warmed runs; lower is better)",
+            render_row(headers),
+            separator,
+            *(render_row(row) for row in rows),
+            _relative_time_summary(timings),
+        ]
+    )
 
 
 def _metric_comparison(py_motmetrics_value, trackeval_value):
@@ -245,7 +314,7 @@ def _render_comparison_table(rows):
     )
 
 
-def _write_github_summary(rows):
+def _write_github_summary(rows, timings):
     summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
     if not summary_path:
         return
@@ -265,14 +334,31 @@ def _write_github_summary(rows):
             f"| {sequence_name} | {field} | {py_motmetrics_value:.12g} | "
             f"{trackeval_value:.12g} | {max_difference:.3e} | {status} |"
         )
+    lines.extend(
+        [
+            "",
+            "## Execution time comparison",
+            "",
+            f"Median of {TIMING_REPEATS} warmed runs on the same in-memory sequences. "
+            "This comparison is informational and does not gate CI.",
+            "",
+            "| Evaluator | Run 1 (s) | Run 2 (s) | Run 3 (s) | Median (s) |",
+            "|---|---:|---:|---:|---:|",
+        ]
+    )
+    for name, samples in timings.items():
+        rendered_samples = " | ".join(f"{elapsed:.6f}" for elapsed in samples)
+        lines.append(
+            f"| {name} | {rendered_samples} | {statistics.median(samples):.6f} |"
+        )
+    lines.extend(["", f"**{_relative_time_summary(timings)}.**"])
     with Path(summary_path).open("a", encoding="utf-8") as summary_file:
         summary_file.write("\n".join(lines) + "\n")
 
 
 def test_metrics_match_trackeval_on_bundled_tud_sequences():
     sequences = {name: _load_sequence(name) for name in SEQUENCE_NAMES}
-    py_motmetrics_results = _compute_py_motmetrics(sequences)
-    trackeval_results = _compute_trackeval(sequences)
+    py_motmetrics_results, trackeval_results, timings = _measure_execution_times(sequences)
 
     fields = [
         "HOTA",
@@ -309,7 +395,8 @@ def test_metrics_match_trackeval_on_bundled_tud_sequences():
             )
 
     print("\n" + _render_comparison_table(rows))
-    _write_github_summary(rows)
+    print("\n" + _render_execution_time_table(timings))
+    _write_github_summary(rows, timings)
 
     failures = [
         f"{sequence_name}: {field} ({max_difference:.3e})"
