@@ -47,3 +47,22 @@ jobs:
             - name: Test with pytest
               run: |
                   uv run --no-project pytest
+
+    trackeval-parity:
+        name: TrackEval parity
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v6
+            - name: Set up Python 3.11
+              uses: actions/setup-python@v6
+              with:
+                  python-version: "3.11"
+            - uses: astral-sh/setup-uv@v7
+            - name: Install dependencies
+              run: |
+                  uv venv --python 3.11
+                  uv pip install --group dev
+                  uv pip install trackeval==1.3.0
+            - name: Compare py-motmetrics with TrackEval
+              run: |
+                  uv run --no-project pytest -q motmetrics/tests/test_trackeval_parity.py
