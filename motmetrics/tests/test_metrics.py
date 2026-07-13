@@ -329,6 +329,75 @@ def test_vectorized_fragmentations_match_reference():
     assert mm.metrics.num_fragmentations(df_map, df_map.obj_frequencies) == 2
 
 
+def test_compact_hota_stats_match_materialized_events():
+    columns = ["X", "Y", "Width", "Height"]
+    ground_truth = pd.DataFrame(
+        [[0, 0, 10, 10], [0, 0, 10, 10]],
+        index=pd.MultiIndex.from_tuples(
+            [(1, 101), (2, 101)], names=["FrameId", "Id"]
+        ),
+        columns=columns,
+    )
+    tracker = pd.DataFrame(
+        [[0, 0, 10, 10], [0, 0, 10, 10]],
+        index=pd.MultiIndex.from_tuples(
+            [(1, 907), (3, 907)], names=["FrameId", "Id"]
+        ),
+        columns=columns,
+    )
+    accumulator = mm.utils.compare_to_groundtruth_reweighting(
+        ground_truth,
+        tracker,
+        "iou",
+        distth=0.5,
+    )
+    host = mm.metrics.create()
+    hota_metrics = ["hota_alpha", "deta_alpha", "assa_alpha"]
+
+    compact = host.compute(accumulator, metrics=hota_metrics)
+    assert accumulator._deferred_hota_updates is not None
+    assert compact.loc[0, "deta_alpha"] == approx(1 / 3)
+    assert compact.loc[0, "assa_alpha"] == approx(1 / 3)
+    assert compact.loc[0, "hota_alpha"] == approx(1 / 3)
+
+    frames, threshold = accumulator._deferred_hota_updates
+    eager = mm.MOTAccumulator()
+    for oids, hids, frameid, similarity, assignment in frames:
+        eager.update(
+            oids,
+            hids,
+            similarity,
+            frameid=frameid,
+            similartiy_matrix=similarity,
+            th=threshold,
+            assignment=assignment,
+            record_raw_events=False,
+        )
+
+    pd.testing.assert_frame_equal(accumulator.events, eager.events)
+    assert accumulator._deferred_hota_updates is None
+    assert accumulator._hota_stats is None
+    materialized = host.compute(accumulator, metrics=hota_metrics)
+    pd.testing.assert_frame_equal(compact, materialized)
+
+    accumulator.reset()
+    assert accumulator._deferred_hota_updates is None
+    assert accumulator._hota_stats is None
+    assert accumulator.events.empty
+
+    custom_accumulator = mm.utils.compare_to_groundtruth_reweighting(
+        ground_truth,
+        tracker,
+        "iou",
+        distth=0.5,
+    )
+    custom_host = mm.metrics.create()
+    custom_host.register(lambda df: 42, deps=[], name="hota_alpha")
+    custom = custom_host.compute(custom_accumulator, metrics=["hota_alpha"])
+    assert custom.loc[0, "hota_alpha"] == 42
+    assert custom_accumulator._deferred_hota_updates is None
+
+
 @pytest.mark.parametrize(
     ("cpu_count", "num_sequences", "expected_n_jobs"),
     [

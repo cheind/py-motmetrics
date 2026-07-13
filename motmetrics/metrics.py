@@ -37,6 +37,16 @@ class MetricsHost:
     def __init__(self):
         self.metrics = OrderedDict()
 
+    def _cached_hota_stats(self, accumulator, metrics):
+        stats = accumulator._hota_stats
+        if stats is None or not set(metrics).issubset(stats):
+            return None
+        for metric_name in stats:
+            registered = self.metrics.get(metric_name)
+            if registered is None or registered["fnc"] is not globals().get(metric_name):
+                return None
+        return stats
+
     def register(
         self,
         fnc,
@@ -191,13 +201,21 @@ class MetricsHost:
             the computed metric values.
         """
 
-        if isinstance(df, MOTAccumulator):
-            df = df.events
-
         if metrics is None:
             metrics = motchallenge_metrics
         elif isinstance(metrics, str):
             metrics = [metrics]
+
+        if isinstance(df, MOTAccumulator):
+            hota_stats = self._cached_hota_stats(df, metrics)
+            if hota_stats is not None:
+                if name is None:
+                    name = 0
+                data = OrderedDict(hota_stats.items()) if return_cached else OrderedDict(
+                    (metric, hota_stats[metric]) for metric in metrics
+                )
+                return pd.DataFrame(data, index=[name]) if return_dataframe else data
+            df = df.events
 
         df_map = events_to_df_map(df)
 
@@ -341,7 +359,12 @@ class MetricsHost:
             )
 
         inputs = list(zip(dfs, anas, names))
-        if n_jobs == 1 or len(inputs) < 2:
+        cached_hota = all(
+            isinstance(acc, MOTAccumulator)
+            and self._cached_hota_stats(acc, metrics) is not None
+            for acc, _, _ in inputs
+        )
+        if n_jobs == 1 or len(inputs) < 2 or cached_hota:
             partials = [compute_partial(values) for values in inputs]
         else:
             with ThreadPoolExecutor(max_workers=n_jobs) as executor:

@@ -107,6 +107,9 @@ class MOTAccumulator(object):
         self.dirty_events = None
         self.cached_events_df = None
         self.last_update_frameid = None
+        self._deferred_hota_updates = None
+        self._materializing_deferred_updates = False
+        self._hota_stats = None
 
         self.reset()
 
@@ -123,6 +126,9 @@ class MOTAccumulator(object):
         self.dirty_events = True
         self.cached_events_df = None
         self.last_update_frameid = None
+        self._deferred_hota_updates = None
+        self._materializing_deferred_updates = False
+        self._hota_stats = None
 
     def _append_to_indices(self, frameid, eid):
         self._indices['FrameId'].append(frameid)
@@ -156,6 +162,37 @@ class MOTAccumulator(object):
         self._events['HId'].extend(values(hids))
         self._events['D'].extend(values(distances))
         return start_eid + count
+
+    def _defer_hota_event_updates(self, frames, threshold, stats):
+        """Store HOTA frames until detailed accumulator events are requested."""
+        if self._indices['FrameId'] or self._deferred_hota_updates is not None:
+            raise RuntimeError("HOTA updates can only be deferred on an empty accumulator")
+        self._deferred_hota_updates = (frames, threshold)
+        self._hota_stats = stats
+        self.dirty_events = True
+
+    def _materialize_deferred_hota_updates(self):
+        deferred = self._deferred_hota_updates
+        if deferred is None:
+            return
+
+        frames, threshold = deferred
+        self._deferred_hota_updates = None
+        self._materializing_deferred_updates = True
+        try:
+            for oids, hids, frameid, similarity, assignment in frames:
+                self.update(
+                    oids,
+                    hids,
+                    similarity,
+                    frameid=frameid,
+                    similartiy_matrix=similarity,
+                    th=threshold,
+                    assignment=assignment,
+                    record_raw_events=False,
+                )
+        finally:
+            self._materializing_deferred_updates = False
 
     def update(
         self,
@@ -214,6 +251,11 @@ class MOTAccumulator(object):
         EURASIP Journal on Image and Video Processing 2008.1 (2008): 1-10.
         """
         # pylint: disable=too-many-locals, too-many-statements
+
+        if self._deferred_hota_updates is not None:
+            self._materialize_deferred_hota_updates()
+        if not self._materializing_deferred_updates:
+            self._hota_stats = None
 
         self.dirty_events = True
         oids = np.asarray(oids)
@@ -391,9 +433,13 @@ class MOTAccumulator(object):
 
     @property
     def events(self):
+        self._materialize_deferred_hota_updates()
         if self.dirty_events:
             self.cached_events_df = MOTAccumulator.new_event_dataframe_with_data(self._indices, self._events)
             self.dirty_events = False
+        # The returned DataFrame is mutable, so cached statistics must not
+        # outlive access to the detailed event representation.
+        self._hota_stats = None
         return self.cached_events_df
 
     @property

@@ -409,6 +409,11 @@ print(mm.io.render_summary(
 
 When multiple sequences are supplied, `OVERALL` follows TrackEval's combination rules: detection counts are summed for DetA, AssA is weighted by detections, and HOTA is recomputed as `sqrt(DetA * AssA)` at each alpha before the final threshold average. This avoids incorrectly averaging per-sequence HOTA values.
 
+HOTA accumulation keeps compact NumPy statistics for all alpha thresholds and
+materializes detailed event DataFrames only when an accumulator's `events` property
+is accessed. Metric computation therefore avoids building and scanning a separate
+event table for every threshold while preserving the accumulator event interface.
+
 `compute_many` accepts `n_jobs` for parallel metric aggregation across independent
 sequences. By default, it uses
 `min(number_of_sequences, max(1, (os.cpu_count() or 1) - 2))` workers. Pass

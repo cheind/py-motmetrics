@@ -18,41 +18,67 @@ from motmetrics.preprocess import preprocessResult
 
 
 def compute_global_aligment_score(
-    allframeids, fid_to_fgt, fid_to_fdt, num_gt_id, num_det_id, dist_func
+    allframeids,
+    fid_to_fgt,
+    fid_to_fdt,
+    num_gt_id,
+    num_det_id,
+    dist_func,
+    return_details=False,
+    gt_id_map=None,
+    tracker_id_map=None,
 ):
-    """Taken from https://github.com/JonathonLuiten/TrackEval/blob/12c8791b303e0a0b50f753af204249e622d0281a/trackeval/metrics/hota.py"""
+    """Compute HOTA global alignment and optionally retain reusable frame data.
+
+    Adapted from TrackEval's HOTA implementation:
+    https://github.com/JonathonLuiten/TrackEval/blob/12c8791b303e0a0b50f753af204249e622d0281a/trackeval/metrics/hota.py
+    """
     potential_matches_count = np.zeros((num_gt_id, num_det_id))
-    gt_id_count = np.zeros((num_gt_id, 1))
-    tracker_id_count = np.zeros((1, num_det_id))
+    gt_id_count = np.zeros(num_gt_id, dtype=int)
+    tracker_id_count = np.zeros(num_det_id, dtype=int)
+    frame_data = []
 
     for fid in allframeids:
-        oids = np.empty(0)
-        hids = np.empty(0)
-        if fid in fid_to_fgt:
-            fgt = fid_to_fgt[fid]
-            oids = fgt.index.get_level_values("Id")
-        if fid in fid_to_fdt:
-            fdt = fid_to_fdt[fid]
-            hids = fdt.index.get_level_values("Id")
+        oids = np.empty(0, dtype=int)
+        hids = np.empty(0, dtype=int)
+        fgt = fid_to_fgt.get(fid)
+        fdt = fid_to_fdt.get(fid)
+        if fgt is not None:
+            oids = fgt.index.get_level_values("Id").to_numpy()
+        if fdt is not None:
+            hids = fdt.index.get_level_values("Id").to_numpy()
+        if gt_id_map is None:
+            gt_ids = np.asarray(oids, dtype=int) - 1
+        else:
+            gt_ids = np.fromiter((gt_id_map[oid] for oid in oids), dtype=int)
+        if tracker_id_map is None:
+            dt_ids = np.asarray(hids, dtype=int) - 1
+        else:
+            dt_ids = np.fromiter((tracker_id_map[hid] for hid in hids), dtype=int)
+        np.add.at(gt_id_count, gt_ids, 1)
+        np.add.at(tracker_id_count, dt_ids, 1)
+
+        similarity = np.empty((len(oids), len(hids)), dtype=float)
         if len(oids) > 0 and len(hids) > 0:
-            gt_ids = np.array(oids.values) - 1
-            dt_ids = np.array(hids.values) - 1
             similarity = dist_func(fgt.values, fdt.values, return_dist=False)
 
             sim_iou_denom = (
                 similarity.sum(0)[np.newaxis, :] + similarity.sum(1)[:, np.newaxis] - similarity
             )
             sim_iou = np.zeros_like(similarity)
-            sim_iou_mask = sim_iou_denom > 0 + np.finfo("float").eps
+            sim_iou_mask = sim_iou_denom > np.finfo("float").eps
             sim_iou[sim_iou_mask] = similarity[sim_iou_mask] / sim_iou_denom[sim_iou_mask]
             potential_matches_count[gt_ids[:, np.newaxis], dt_ids[np.newaxis, :]] += sim_iou
 
-            # Calculate the total number of dets for each gt_id and tracker_id.
-            gt_id_count[gt_ids] += 1
-            tracker_id_count[0, dt_ids] += 1
-    global_alignment_score = potential_matches_count / (
-        np.maximum(1, gt_id_count + tracker_id_count - potential_matches_count)
+        if return_details:
+            frame_data.append((fid, oids, hids, gt_ids, dt_ids, similarity))
+
+    global_alignment_score = potential_matches_count / np.maximum(
+        1,
+        gt_id_count[:, np.newaxis] + tracker_id_count[np.newaxis, :] - potential_matches_count,
     )
+    if return_details:
+        return global_alignment_score, frame_data, gt_id_count, tracker_id_count
     return global_alignment_score
 
 
@@ -112,15 +138,15 @@ def compare_to_groundtruth_reweighting(gt, dt, dist="iou", distfields=None, dist
     else:
         raise f'Unknown distance metric {dist}. Use "IOU", "EUCLIDEAN",  or "SEUC"'
 
-    return_single = False
-    if isinstance(distth, float):
-        distth = [distth]
-        return_single = True
+    return_single = np.isscalar(distth)
+    thresholds = np.atleast_1d(np.asarray(distth, dtype=float))
 
-    acc_list = [MOTAccumulator() for _ in range(len(distth))]
-
-    num_gt_id = gt.index.get_level_values("Id").max()  if not gt.empty else 0 
-    num_det_id = dt.index.get_level_values("Id").max() if not dt.empty else 0
+    gt_ids = gt.index.get_level_values("Id").unique()
+    tracker_ids = dt.index.get_level_values("Id").unique()
+    gt_id_map = {oid: index for index, oid in enumerate(gt_ids)}
+    tracker_id_map = {hid: index for index, hid in enumerate(tracker_ids)}
+    num_gt_id = len(gt_id_map)
+    num_det_id = len(tracker_id_map)
 
     # We need to account for all frames reported either by ground truth or
     # detector. In case a frame is missing in GT this will lead to FPs, in
@@ -132,41 +158,77 @@ def compare_to_groundtruth_reweighting(gt, dt, dist="iou", distfields=None, dist
     fid_to_fgt = dict(iter(gt.groupby("FrameId")))
     fid_to_fdt = dict(iter(dt.groupby("FrameId")))
 
-    global_alignment_score = compute_global_aligment_score(
-        allframeids, fid_to_fgt, fid_to_fdt, num_gt_id, num_det_id, compute_dist
+    global_alignment_score, frame_data, gt_id_count, tracker_id_count = compute_global_aligment_score(
+        allframeids,
+        fid_to_fgt,
+        fid_to_fdt,
+        num_gt_id,
+        num_det_id,
+        compute_dist,
+        return_details=True,
+        gt_id_map=gt_id_map,
+        tracker_id_map=tracker_id_map,
     )
+    match_counts = np.zeros(
+        (len(thresholds), num_gt_id, num_det_id),
+        dtype=np.int64,
+    )
+    num_detections = np.zeros(len(thresholds), dtype=np.int64)
+    deferred_frames = []
+    threshold_epsilon = np.finfo("float").eps
 
-    for fid in allframeids:
-        oids = np.empty(0)
-        hids = np.empty(0)
-        dists = np.empty((0, 0))
-        weighted_dists = np.empty((0, 0))
-        if fid in fid_to_fgt:
-            fgt = fid_to_fgt[fid]
-            oids = fgt.index.get_level_values("Id")
-        if fid in fid_to_fdt:
-            fdt = fid_to_fdt[fid]
-            hids = fdt.index.get_level_values("Id")
+    for fid, oids, hids, gt_ids, dt_ids, similarity in frame_data:
+        weighted_similarity = np.empty_like(similarity)
         if len(oids) > 0 and len(hids) > 0:
-            gt_ids = np.array(oids.values) - 1
-            dt_ids = np.array(hids.values) - 1
-            dists = compute_dist(fgt.values, fdt.values, return_dist=False)
-            weighted_dists = (
-                dists * global_alignment_score[gt_ids[:, np.newaxis], dt_ids[np.newaxis, :]]
+            weighted_similarity = (
+                similarity
+                * global_alignment_score[gt_ids[:, np.newaxis], dt_ids[np.newaxis, :]]
             )
-        matching_costs = 1 - weighted_dists
+        matching_costs = 1 - weighted_similarity
         assignment = linear_sum_assignment(matching_costs)
-        for acc, th in zip(acc_list, distth):
-            acc.update(
-                oids,
-                hids,
-                matching_costs,
-                frameid=fid,
-                similartiy_matrix=dists,
-                th=th,
-                assignment=assignment,
-                record_raw_events=False,
-            )
+        deferred_frames.append((oids, hids, fid, similarity, assignment))
+
+        rows, columns = assignment
+        if not rows.size:
+            continue
+        assigned_similarity = similarity[rows, columns]
+        valid_threshold, valid_match = np.where(
+            assigned_similarity[np.newaxis, :]
+            >= thresholds[:, np.newaxis] - threshold_epsilon
+        )
+        matched_gt_ids = gt_ids[rows[valid_match]]
+        matched_dt_ids = dt_ids[columns[valid_match]]
+        np.add.at(
+            match_counts,
+            (valid_threshold, matched_gt_ids, matched_dt_ids),
+            1,
+        )
+        num_detections += np.bincount(valid_threshold, minlength=len(thresholds))
+
+    num_objects = int(gt_id_count.sum())
+    num_predictions = int(tracker_id_count.sum())
+    acc_list = []
+    for threshold_index, threshold in enumerate(thresholds):
+        detections = int(num_detections[threshold_index])
+        false_positives = num_predictions - detections
+        counts = match_counts[threshold_index]
+        association = counts / np.maximum(
+            1,
+            gt_id_count[:, np.newaxis] + tracker_id_count[np.newaxis, :] - counts,
+        )
+        assa = (association * counts).sum() / max(1, detections)
+        deta = detections / max(1, num_objects + false_positives)
+        stats = {
+            "num_detections": detections,
+            "num_objects": num_objects,
+            "num_false_positives": false_positives,
+            "deta_alpha": deta,
+            "assa_alpha": assa,
+            "hota_alpha": (deta * assa) ** 0.5,
+        }
+        accumulator = MOTAccumulator()
+        accumulator._defer_hota_event_updates(deferred_frames, threshold, stats)
+        acc_list.append(accumulator)
     return acc_list[0] if return_single else acc_list
 
 
