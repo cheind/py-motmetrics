@@ -329,7 +329,36 @@ def test_vectorized_fragmentations_match_reference():
     assert mm.metrics.num_fragmentations(df_map, df_map.obj_frequencies) == 2
 
 
-def test_compute_many_parallel_matches_serial():
+@pytest.mark.parametrize(
+    ("cpu_count", "num_sequences", "expected_n_jobs"),
+    [
+        (8, 3, 3),
+        (8, 10, 6),
+        (2, 10, 1),
+        (None, 10, 1),
+    ],
+)
+def test_compute_many_automatic_worker_count(monkeypatch, cpu_count, num_sequences, expected_n_jobs):
+    observed_n_jobs = []
+    real_executor = mm.metrics.ThreadPoolExecutor
+
+    def recording_executor(*args, **kwargs):
+        observed_n_jobs.append(kwargs["max_workers"])
+        return real_executor(*args, **kwargs)
+
+    monkeypatch.setattr(mm.metrics.os, "cpu_count", lambda: cpu_count)
+    monkeypatch.setattr(mm.metrics, "ThreadPoolExecutor", recording_executor)
+    accumulators = [mm.MOTAccumulator(auto_id=True) for _ in range(num_sequences)]
+
+    mm.metrics.create().compute_many(accumulators, metrics=["num_frames"])
+
+    if expected_n_jobs == 1:
+        assert observed_n_jobs == []
+    else:
+        assert observed_n_jobs == [expected_n_jobs]
+
+
+def test_compute_many_parallel_matches_serial(monkeypatch):
     rand = np.random.RandomState(1)
     accumulators = [
         _accum_random_uniform(
@@ -349,9 +378,12 @@ def test_compute_many_parallel_matches_serial():
         "generate_overall": True,
     }
 
-    serial = host.compute_many(accumulators, **kwargs)
+    monkeypatch.setattr(mm.metrics.os, "cpu_count", lambda: 4)
+    serial = host.compute_many(accumulators, n_jobs=1, **kwargs)
+    automatic = host.compute_many(accumulators, **kwargs)
     parallel = host.compute_many(accumulators, n_jobs=2, **kwargs)
 
+    pd.testing.assert_frame_equal(automatic, serial)
     pd.testing.assert_frame_equal(parallel, serial)
     with pytest.raises(ValueError, match="n_jobs"):
         host.compute_many(accumulators, n_jobs=0, **kwargs)

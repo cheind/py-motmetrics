@@ -13,6 +13,7 @@ from __future__ import absolute_import, division, print_function
 
 import inspect
 import logging
+import os
 import time
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
@@ -277,7 +278,7 @@ class MetricsHost:
         metrics=None,
         names=None,
         generate_overall=False,
-        n_jobs=1,
+        n_jobs=None,
     ):
         """Compute metrics on multiple dataframe / accumulators.
 
@@ -301,9 +302,10 @@ class MetricsHost:
             using the same metrics over an accumulator that is the concatentation of
             all input containers. In creating this temporary accumulator, care is taken
             to offset frame indices avoid object id collisions.
-        n_jobs : int, optional
-            Number of worker threads used to compute independent sequences. Defaults
-            to one, preserving serial execution.
+        n_jobs : int or None, optional
+            Number of worker threads used to compute independent sequences. By default,
+            uses up to two fewer than the available CPUs, capped by the sequence count.
+            Pass one to force serial execution.
 
         Returns
         -------
@@ -321,7 +323,10 @@ class MetricsHost:
             names = list(range(len(dfs)))
         if anas is None:
             anas = [None] * len(dfs)
-        if n_jobs < 1:
+        if n_jobs is None:
+            available_cpus = max(1, (os.cpu_count() or 1) - 2)
+            n_jobs = min(len(dfs), available_cpus)
+        elif n_jobs < 1:
             raise ValueError("n_jobs must be at least 1")
 
         def compute_partial(values):

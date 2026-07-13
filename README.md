@@ -384,7 +384,6 @@ def compute_hota(sequence_dirs):
             metrics=metrics,
             names=sequence_dirs,
             generate_overall=True,
-            n_jobs=min(4, len(sequence_dirs)),
         )
         alpha_results.append(summary.loc["OVERALL"])
 
@@ -411,13 +410,18 @@ print(mm.io.render_summary(
 When multiple sequences are supplied, `OVERALL` follows TrackEval's combination rules: detection counts are summed for DetA, AssA is weighted by detections, and HOTA is recomputed as `sqrt(DetA * AssA)` at each alpha before the final threshold average. This avoids incorrectly averaging per-sequence HOTA values.
 
 `compute_many` accepts `n_jobs` for parallel metric aggregation across independent
-sequences. Its default is `1`; use a larger value when evaluating multiple sequences.
+sequences. By default, it uses
+`min(number_of_sequences, max(1, (os.cpu_count() or 1) - 2))` workers. Pass
+`n_jobs=1` to force serial execution or another positive integer to choose the
+worker count explicitly.
 
 The CI pipeline also runs py-motmetrics and TrackEval 1.3.0 over the bundled
 `TUD-Campus` and `TUD-Stadtmitte` sequences. It checks per-sequence and combined
 HOTA, CLEAR, and Identity results, including all standard HOTA alpha thresholds.
 The job prints both implementations' values and their maximum absolute difference
-to the log and GitHub job summary. It fails if any difference exceeds `1e-6`.
+to the log and GitHub job summary. It also reports individual and median execution
+times from three warmed runs. Metric parity fails if any difference exceeds `1e-6`;
+the timing comparison is informational.
 To run this comparison locally:
 
 ```bash
