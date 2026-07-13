@@ -1,20 +1,18 @@
 # Release procedure
 
 Releases are built on demand from the current `develop` branch by GitHub
-Actions. A maintainer chooses the version bump and package repository. Testing,
-building, publishing, committing the production version, tagging, and creating
-the GitHub release are automated.
+Actions. A maintainer chooses the version bump. Building, publishing, committing
+the production version, tagging, and creating the GitHub release are automated.
 
 The current version is stored only in `[project].version` in `pyproject.toml`.
 The workflow reads that value and calculates the selected patch, minor, or major
 bump.
 
-PyPI and TestPyPI use Trusted Publishing, so no package index tokens are stored
-in GitHub.
+PyPI uses Trusted Publishing, so no package index token is stored in GitHub.
 
 ## One-time repository setup
 
-1. Create GitHub environments named `pypi` and `testpypi`.
+1. Create a GitHub environment named `pypi`.
 2. In the PyPI settings for `motmetrics`, add a GitHub Trusted Publisher with:
 
    - owner: `cheind`
@@ -22,28 +20,36 @@ in GitHub.
    - workflow: `publish-to-pypi.yml`
    - environment: `pypi`
 
-3. In the TestPyPI settings for `motmetrics`, add the same publisher using the
-   `testpypi` environment.
-4. Require maintainer approval on the `pypi` environment. The `testpypi`
-   environment can remain unprotected for convenient release-candidate tests.
-5. Add a `RELEASE_PAT` repository secret with Contents read/write access and
-   permission to push the version commit to `develop`. The workflow falls back
-   to `GITHUB_TOKEN` when repository rules permit that token to push.
+3. Restrict the environment to deployments from `develop` and require
+   maintainer approval.
+4. Add `RELEASE_PAT` as a secret on the protected `pypi` environment. Use a
+   fine-grained token limited to this repository with Contents read/write
+   access. A repository secret also works, but has broader workflow scope.
+5. Ensure the token owner can push the version commit directly to `develop`
+   and create `v*` tags. If branch or tag rulesets are enabled, add that identity
+   to their bypass lists. The workflow falls back to `GITHUB_TOKEN` when
+   repository rules permit that token to push.
 
 ## Normal release
 
-1. Open **Actions > Publish to PyPI > Run workflow**.
-2. Select `patch`, `minor`, or `major` and choose `testpypi` or `pypi`.
-3. The workflow checks out `develop`, runs the complete Python matrix, builds
-   and checks the wheel and source distribution, and smoke-tests both artifacts.
-4. For TestPyPI, the candidate is published without changing `develop`.
-5. For PyPI, approve the protected `pypi` environment deployment. The workflow
+1. Open **Actions > Publish to PyPI > Run workflow** and select `develop` in
+   the branch selector.
+2. Select `patch`, `minor`, or `major`.
+3. The workflow checks out `develop`, builds and checks the wheel and source
+   distribution, and smoke-tests both artifacts. The regular Python package CI
+   workflow remains responsible for pytest coverage.
+4. Approve the protected `pypi` environment deployment. The workflow
    commits the selected version to `develop`, publishes the tested artifacts,
    creates the `vX.Y.Z` tag and GitHub release, and attaches both distributions.
 
 If `develop` changes while the release is being tested, production publishing
 stops before committing or uploading anything. Start a new workflow run from
 the updated branch.
+
+If the version commit succeeds but publishing or release creation later fails,
+rerun the failed job. The workflow recognizes its existing version-only commit,
+skips package files already accepted by the index, and resumes tag and release
+creation.
 
 ## Verify a release
 

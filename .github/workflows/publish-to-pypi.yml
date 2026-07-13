@@ -1,18 +1,10 @@
 name: Publish to PyPI
 
-run-name: Build and publish ${{ inputs.repository }} from develop
+run-name: Build and publish to PyPI from develop
 
 on:
     workflow_dispatch:
         inputs:
-            repository:
-                description: Target package repository
-                required: true
-                type: choice
-                default: testpypi
-                options:
-                    - testpypi
-                    - pypi
             bump_type:
                 description: Version bump type
                 required: true
@@ -37,8 +29,6 @@ jobs:
         outputs:
             base_sha: ${{ steps.release.outputs.base_sha }}
             project_url: ${{ steps.release.outputs.project_url }}
-            repository: ${{ steps.release.outputs.repository }}
-            repository_url: ${{ steps.release.outputs.repository_url }}
             tag: ${{ steps.release.outputs.tag }}
             version: ${{ steps.release.outputs.version }}
         steps:
@@ -54,7 +44,6 @@ jobs:
               id: release
               env:
                   BUMP_TYPE: ${{ inputs.bump_type }}
-                  TARGET_REPOSITORY: ${{ inputs.repository }}
               run: |
                   python - <<'PY'
                   import os
@@ -76,27 +65,10 @@ jobs:
                   for reset_index in range(index + 1, len(version)):
                       version[reset_index] = 0
 
-                  repository = os.environ["TARGET_REPOSITORY"]
-                  urls = {
-                      "pypi": (
-                          "https://upload.pypi.org/legacy/",
-                          "https://pypi.org/project/motmetrics/{version}/",
-                      ),
-                      "testpypi": (
-                          "https://test.pypi.org/legacy/",
-                          "https://test.pypi.org/project/motmetrics/{version}/",
-                      ),
-                  }
-                  if repository not in urls:
-                      raise SystemExit(f"Unsupported package repository: {repository}")
-
                   new_version = ".".join(str(part) for part in version)
-                  repository_url, project_url = urls[repository]
                   values = {
                       "base_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
-                      "project_url": project_url.format(version=new_version),
-                      "repository": repository,
-                      "repository_url": repository_url,
+                      "project_url": f"https://pypi.org/project/motmetrics/{new_version}/",
                       "tag": f"v{new_version}",
                       "version": new_version,
                   }
@@ -104,52 +76,6 @@ jobs:
                       for name, value in values.items():
                           output.write(f"{name}={value}\n")
                   PY
-
-    test:
-        name: Test on Python ${{ matrix.python-version }}
-        needs: metadata
-        runs-on: ubuntu-latest
-        strategy:
-            fail-fast: false
-            matrix:
-                python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
-        steps:
-            - uses: actions/checkout@v6
-              with:
-                  ref: ${{ needs.metadata.outputs.base_sha }}
-                  persist-credentials: false
-            - uses: actions/setup-python@v6
-              with:
-                  python-version: ${{ matrix.python-version }}
-            - uses: astral-sh/setup-uv@v7
-            - name: Set release version
-              env:
-                  RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
-              run: |
-                  python - <<'PY'
-                  import os
-                  import re
-                  from pathlib import Path
-
-                  path = Path("pyproject.toml")
-                  content = path.read_text(encoding="utf-8")
-                  updated, count = re.subn(
-                      r'^version = "\d+\.\d+\.\d+"$',
-                      f'version = "{os.environ["RELEASE_VERSION"]}"',
-                      content,
-                      count=1,
-                      flags=re.MULTILINE,
-                  )
-                  if count != 1:
-                      raise SystemExit("Could not update project.version")
-                  path.write_text(updated, encoding="utf-8")
-                  PY
-            - name: Install and test
-              run: |
-                  uv venv --python ${{ matrix.python-version }}
-                  uv pip install --group dev
-                  uv pip install --editable .
-                  uv run --no-project pytest
 
     build:
         name: Build and validate distributions
@@ -234,11 +160,11 @@ jobs:
                   retention-days: 7
 
     publish:
-        name: Publish distribution to ${{ needs.metadata.outputs.repository }}
-        needs: [metadata, test, build]
+        name: Publish distribution to PyPI
+        needs: [metadata, build]
         runs-on: ubuntu-latest
         environment:
-            name: ${{ needs.metadata.outputs.repository }}
+            name: pypi
             url: ${{ needs.metadata.outputs.project_url }}
         permissions:
             contents: write
@@ -277,13 +203,7 @@ jobs:
               env:
                   BASE_SHA: ${{ needs.metadata.outputs.base_sha }}
                   RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
-                  TARGET_REPOSITORY: ${{ needs.metadata.outputs.repository }}
               run: |
-                  if [ "$TARGET_REPOSITORY" != "pypi" ]; then
-                      echo "release_sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
-                      exit 0
-                  fi
-
                   git fetch --no-tags origin develop
                   remote_sha=$(git rev-parse refs/remotes/origin/develop)
                   if [ "$remote_sha" = "$BASE_SHA" ]; then
@@ -315,10 +235,8 @@ jobs:
                   path: dist/
             - uses: pypa/gh-action-pypi-publish@release/v1
               with:
-                  repository-url: ${{ needs.metadata.outputs.repository_url }}
                   skip-existing: true
             - name: Create tag and GitHub release
-              if: needs.metadata.outputs.repository == 'pypi'
               env:
                   GH_TOKEN: ${{ github.token }}
                   RELEASE_SHA: ${{ steps.source.outputs.release_sha }}
