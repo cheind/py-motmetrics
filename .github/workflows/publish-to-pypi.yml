@@ -1,77 +1,263 @@
 name: Publish to PyPI
 
+run-name: Build and publish to PyPI from develop
+
 on:
-    push:
-        tags: ["v*"]
+    workflow_dispatch:
+        inputs:
+            bump_type:
+                description: Version bump type
+                required: true
+                type: choice
+                default: patch
+                options:
+                    - patch
+                    - minor
+                    - major
 
 permissions:
     contents: read
 
-jobs:
-    test:
-        name: Test on Python ${{ matrix.python-version }}
-        runs-on: ubuntu-latest
-        strategy:
-            fail-fast: false
-            matrix:
-                python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
-        steps:
-            - uses: actions/checkout@v6
-              with:
-                  persist-credentials: false
-            - uses: actions/setup-python@v6
-              with:
-                  python-version: ${{ matrix.python-version }}
-            - uses: astral-sh/setup-uv@v7
-            - name: Install and test
-              run: |
-                  uv venv --python ${{ matrix.python-version }}
-                  uv pip install --group dev
-                  uv run --no-project pytest
+concurrency:
+    group: publish-from-develop
+    cancel-in-progress: false
 
-    build:
-        name: Build and validate distributions
+jobs:
+    metadata:
+        name: Resolve release metadata
         runs-on: ubuntu-latest
+        outputs:
+            base_sha: ${{ steps.release.outputs.base_sha }}
+            project_url: ${{ steps.release.outputs.project_url }}
+            tag: ${{ steps.release.outputs.tag }}
+            version: ${{ steps.release.outputs.version }}
         steps:
             - uses: actions/checkout@v6
               with:
+                  ref: develop
+                  fetch-depth: 0
                   persist-credentials: false
             - uses: actions/setup-python@v6
               with:
                   python-version: "3.x"
+            - name: Calculate release version
+              id: release
+              env:
+                  BUMP_TYPE: ${{ inputs.bump_type }}
+              run: |
+                  python - <<'PY'
+                  import os
+                  import re
+                  import subprocess
+                  import tomllib
+                  from pathlib import Path
+
+                  with Path("pyproject.toml").open("rb") as pyproject:
+                      current_version = tomllib.load(pyproject)["project"]["version"]
+                  match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", current_version)
+                  if match is None:
+                      raise SystemExit("project.version must be a stable X.Y.Z version")
+
+                  version = [int(part) for part in match.groups()]
+                  bump_type = os.environ["BUMP_TYPE"]
+                  index = {"major": 0, "minor": 1, "patch": 2}[bump_type]
+                  version[index] += 1
+                  for reset_index in range(index + 1, len(version)):
+                      version[reset_index] = 0
+
+                  new_version = ".".join(str(part) for part in version)
+                  values = {
+                      "base_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+                      "project_url": f"https://pypi.org/project/motmetrics/{new_version}/",
+                      "tag": f"v{new_version}",
+                      "version": new_version,
+                  }
+                  with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
+                      for name, value in values.items():
+                          output.write(f"{name}={value}\n")
+                  PY
+
+    build:
+        name: Build and validate distributions
+        needs: metadata
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  ref: ${{ needs.metadata.outputs.base_sha }}
+                  persist-credentials: false
+            - uses: actions/setup-python@v6
+              with:
+                  python-version: "3.x"
+            - name: Set release version
+              env:
+                  RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
+              run: |
+                  python - <<'PY'
+                  import os
+                  import re
+                  from pathlib import Path
+
+                  path = Path("pyproject.toml")
+                  content = path.read_text(encoding="utf-8")
+                  updated, count = re.subn(
+                      r'^version = "\d+\.\d+\.\d+"$',
+                      f'version = "{os.environ["RELEASE_VERSION"]}"',
+                      content,
+                      count=1,
+                      flags=re.MULTILINE,
+                  )
+                  if count != 1:
+                      raise SystemExit("Could not update project.version")
+                  path.write_text(updated, encoding="utf-8")
+                  PY
             - name: Build wheel and source distribution
               run: |
-                  python -m pip install --upgrade build twine
+                  python -m pip install --upgrade build packaging twine
                   python -m build
                   python -m twine check dist/*
-            - name: Verify version matches tag
+            - name: Verify distribution versions
               env:
-                  RELEASE_TAG: ${{ github.ref_name }}
+                  RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
               run: |
-                  python -c "import os, pathlib, sys; from packaging.utils import parse_sdist_filename, parse_wheel_filename; from packaging.version import Version; expected=Version(os.environ['RELEASE_TAG'].removeprefix('v')); files=list(pathlib.Path('dist').iterdir()); versions=[parse_wheel_filename(p.name)[1] if p.suffix == '.whl' else parse_sdist_filename(p.name)[1] for p in files]; sys.exit(0 if files and all(v == expected for v in versions) else f'artifact versions {versions} do not match tag {expected}')"
-            - name: Smoke-test the wheel
+                  python - <<'PY'
+                  import os
+                  from pathlib import Path
+                  from packaging.utils import parse_sdist_filename, parse_wheel_filename
+                  from packaging.version import Version
+
+                  expected = Version(os.environ["RELEASE_VERSION"])
+                  dist = Path("dist")
+                  files = list(dist.iterdir())
+                  wheels = list(dist.glob("*.whl"))
+                  sdists = list(dist.glob("*.tar.gz"))
+                  if len(files) != 2 or len(wheels) != 1 or len(sdists) != 1:
+                      raise SystemExit(
+                          f"Expected one wheel and one sdist; found {[path.name for path in files]}"
+                      )
+                  versions = [
+                      parse_wheel_filename(wheels[0].name)[1],
+                      parse_sdist_filename(sdists[0].name)[1],
+                  ]
+                  if any(version != expected for version in versions):
+                      raise SystemExit(f"Artifact versions {versions} do not match {expected}")
+                  PY
+            - name: Smoke-test the wheel and source distribution
+              env:
+                  RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
               run: |
                   python -m venv /tmp/motmetrics-wheel-test
                   /tmp/motmetrics-wheel-test/bin/python -m pip install dist/*.whl
-                  /tmp/motmetrics-wheel-test/bin/python -c "import motmetrics; print(motmetrics.__version__)"
+                  /tmp/motmetrics-wheel-test/bin/python -c "import motmetrics, os; assert motmetrics.__version__ == os.environ['RELEASE_VERSION']"
+                  python -m venv /tmp/motmetrics-sdist-test
+                  /tmp/motmetrics-sdist-test/bin/python -m pip install dist/*.tar.gz
+                  /tmp/motmetrics-sdist-test/bin/python -c "import motmetrics, os; assert motmetrics.__version__ == os.environ['RELEASE_VERSION']"
             - uses: actions/upload-artifact@v5
               with:
                   name: python-package-distributions
                   path: dist/
                   if-no-files-found: error
+                  retention-days: 7
 
     publish:
         name: Publish distribution to PyPI
-        needs: [test, build]
+        needs: [metadata, build]
         runs-on: ubuntu-latest
         environment:
             name: pypi
-            url: https://pypi.org/p/motmetrics
+            url: ${{ needs.metadata.outputs.project_url }}
         permissions:
+            contents: write
             id-token: write
         steps:
+            - uses: actions/checkout@v6
+              with:
+                  ref: ${{ needs.metadata.outputs.base_sha }}
+                  fetch-depth: 0
+                  persist-credentials: true
+                  token: ${{ secrets.RELEASE_PAT || github.token }}
+            - name: Set release version
+              env:
+                  RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
+              run: |
+                  python - <<'PY'
+                  import os
+                  import re
+                  from pathlib import Path
+
+                  path = Path("pyproject.toml")
+                  content = path.read_text(encoding="utf-8")
+                  updated, count = re.subn(
+                      r'^version = "\d+\.\d+\.\d+"$',
+                      f'version = "{os.environ["RELEASE_VERSION"]}"',
+                      content,
+                      count=1,
+                      flags=re.MULTILINE,
+                  )
+                  if count != 1:
+                      raise SystemExit("Could not update project.version")
+                  path.write_text(updated, encoding="utf-8")
+                  PY
+            - name: Commit production version
+              id: source
+              env:
+                  BASE_SHA: ${{ needs.metadata.outputs.base_sha }}
+                  RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
+              run: |
+                  git fetch --no-tags origin develop
+                  remote_sha=$(git rev-parse refs/remotes/origin/develop)
+                  if [ "$remote_sha" = "$BASE_SHA" ]; then
+                      git config user.name "github-actions[bot]"
+                      git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+                      git add pyproject.toml
+                      git commit -m "release: prepare ${RELEASE_VERSION}"
+                      git push origin HEAD:develop
+                      release_sha=$(git rev-parse HEAD)
+                  else
+                      parent_sha=$(git rev-parse "${remote_sha}^")
+                      changed_files=$(git diff --name-only "$parent_sha" "$remote_sha")
+                      if [ "$parent_sha" != "$BASE_SHA" ] || [ "$changed_files" != "pyproject.toml" ]; then
+                          echo "develop moved after this release started; run the workflow again"
+                          exit 1
+                      fi
+                      expected_line="version = \"${RELEASE_VERSION}\""
+                      if ! git show "${remote_sha}:pyproject.toml" | grep --fixed-strings --line-regexp --quiet "$expected_line"; then
+                          echo "develop contains a different release version; run the workflow again"
+                          exit 1
+                      fi
+                      git checkout --detach "$remote_sha"
+                      release_sha=$remote_sha
+                  fi
+                  echo "release_sha=$release_sha" >> "$GITHUB_OUTPUT"
             - uses: actions/download-artifact@v6
               with:
                   name: python-package-distributions
                   path: dist/
             - uses: pypa/gh-action-pypi-publish@release/v1
+              with:
+                  skip-existing: true
+            - name: Create tag and GitHub release
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  RELEASE_SHA: ${{ steps.source.outputs.release_sha }}
+                  RELEASE_TAG: ${{ needs.metadata.outputs.tag }}
+                  RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
+              run: |
+                  git checkout --detach "$RELEASE_SHA"
+                  if git rev-parse --verify --quiet "refs/tags/${RELEASE_TAG}"; then
+                      tagged_commit=$(git rev-list -n 1 "${RELEASE_TAG}")
+                      if [ "$tagged_commit" != "$RELEASE_SHA" ]; then
+                          echo "${RELEASE_TAG} already points to ${tagged_commit}, not ${RELEASE_SHA}"
+                          exit 1
+                      fi
+                  else
+                      git tag --annotate "${RELEASE_TAG}" --message "motmetrics ${RELEASE_VERSION}"
+                      git push origin "${RELEASE_TAG}"
+                  fi
+                  if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+                      gh release upload "${RELEASE_TAG}" dist/* --clobber
+                  else
+                      gh release create "${RELEASE_TAG}" dist/* \
+                          --verify-tag \
+                          --title "motmetrics ${RELEASE_VERSION}" \
+                          --generate-notes

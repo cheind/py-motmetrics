@@ -409,6 +409,18 @@ print(mm.io.render_summary(
 
 When multiple sequences are supplied, `OVERALL` follows TrackEval's combination rules: detection counts are summed for DetA, AssA is weighted by detections, and HOTA is recomputed as `sqrt(DetA * AssA)` at each alpha before the final threshold average. This avoids incorrectly averaging per-sequence HOTA values.
 
+The CI pipeline also runs py-motmetrics and TrackEval 1.3.0 over the bundled
+`TUD-Campus` and `TUD-Stadtmitte` sequences. It checks per-sequence and combined
+HOTA, CLEAR, and Identity results, including all standard HOTA alpha thresholds.
+The job prints both implementations' values and their maximum absolute difference
+to the log and GitHub job summary. It fails if any difference exceeds `1e-6`.
+To run this comparison locally:
+
+```bash
+uv pip install trackeval==1.3.0
+uv run --no-project pytest -q motmetrics/tests/test_trackeval_parity.py
+```
+
 ### Computing distances
 
 Up until this point we assumed the pairwise object/hypothesis distances to be known. Usually this is not the case. You are mostly given either rectangles or points (centroids) of related objects. To compute a distance matrix from them you can use `motmetrics.distance` module as shown below.
