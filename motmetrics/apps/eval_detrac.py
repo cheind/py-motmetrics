@@ -19,6 +19,7 @@ import os
 from pathlib import Path
 
 import motmetrics as mm
+from motmetrics.utils import is_in_region
 
 
 def parse_args():
@@ -67,6 +68,16 @@ string.""", formatter_class=argparse.RawTextHelpFormatter)
     return parser.parse_args()
 
 
+def filter_dets_by_zone(gt_df, test_df):
+    ig_region = gt_df[['X_reg', 'Y_reg', 'W_reg', 'H_reg']].dropna().values
+    dets = test_df[['X', 'Y', 'Width', 'Height']]
+    for idx, row in dets.iterrows():
+        bbox = [dets.at[idx, 'X'], dets.at[idx, 'Y'], dets.at[idx, 'Width'], dets.at[idx, 'Height']]
+        for reg in ig_region:
+            if is_in_region(bbox, reg):
+                test_df.drop([idx], axis=0, inplace=True)
+                break
+
 def compare_dataframes(gts, ts):
     """Builds accumulator for each sequence."""
     accs = []
@@ -74,6 +85,7 @@ def compare_dataframes(gts, ts):
     for k, tsacc in ts.items():
         if k in gts:
             logging.info('Comparing %s...', k)
+            filter_dets_by_zone(gts[k], tsacc)
             accs.append(mm.utils.compare_to_groundtruth(gts[k], tsacc, 'iou', distth=0.5))
             names.append(k)
         else:
