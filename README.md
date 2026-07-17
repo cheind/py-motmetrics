@@ -10,7 +10,7 @@
 pip install motmetrics
 ```
 
-Python 3.8 through 3.14 is supported. NumPy, pandas, SciPy, and xmltodict are installed as dependencies.
+Python 3.8 through 3.14 is supported.
 
 For development:
 

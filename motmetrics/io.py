@@ -11,6 +11,7 @@ from __future__ import absolute_import, division, print_function
 
 import io
 import shlex
+import xml.etree.ElementTree
 from enum import Enum
 from pathlib import Path
 
@@ -269,27 +270,27 @@ def load_detrac_xml(fname, **kwargs):
             'X', 'Y', 'Width', 'Height', 'Confidence', 'ClassId', 'Visibility'
         The dataframe is indexed by ('FrameId', 'Id')
     """
-    import xmltodict
-
-    with io.open(fname) as fd:
-        doc = xmltodict.parse(fd.read())
-    frame_list = doc['sequence']['frame']
+    root = xml.etree.ElementTree.parse(fname).getroot()
+    frame_list = root.findall('frame')
 
     parsed_gt = []
-    for f in frame_list:
-        fid = int(f['@num'])
-        target_list = f['target_list']['target']
-        if not isinstance(target_list, list):
-            target_list = [target_list]
+    for frame in frame_list:
+        fid = int(frame.attrib['num'])
+        target_list = frame.find('target_list')
+        if target_list is None:
+            continue
 
-        for t in target_list:
+        for target in target_list.findall('target'):
+            box = target.find('box')
+            if box is None:
+                continue
             row = []
             row.append(fid)
-            row.append(int(t['@id']))
-            row.append(float(t['box']['@left']))
-            row.append(float(t['box']['@top']))
-            row.append(float(t['box']['@width']))
-            row.append(float(t['box']['@height']))
+            row.append(int(target.attrib['id']))
+            row.append(float(box.attrib['left']))
+            row.append(float(box.attrib['top']))
+            row.append(float(box.attrib['width']))
+            row.append(float(box.attrib['height']))
             row.append(1)
             row.append(-1)
             row.append(-1)
