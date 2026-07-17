@@ -19,6 +19,7 @@ import pandas as pd
 
 from motmetrics import io, lap, utils
 from motmetrics import metrics as metrics_module
+from motmetrics.distances import iou_matrix
 
 HOTA_ALPHAS = np.arange(0.05, 0.99, 0.05)
 HOTA_ALPHA_METRICS = ["hota_alpha", "deta_alpha", "assa_alpha"]
@@ -249,44 +250,144 @@ def _append_hota_summary(summary, gts, tests, names, metric_host, dist, distfiel
 
 
 def _compute_hota_summary(gts, tests, names, metric_host, dist, distfields, hota_alphas, generate_overall, n_jobs, index):
-    hota_accumulators = _compare_hota_dataframes(gts, tests, names, dist, distfields, hota_alphas, n_jobs)
-    per_alpha_summaries = []
-
-    for alpha_index in range(len(hota_alphas)):
-        per_alpha_summaries.append(
-            metric_host.compute_many(
-                [hota_accumulators[name][alpha_index] for name in names],
-                metrics=HOTA_ALPHA_METRICS,
-                names=names,
-                generate_overall=generate_overall,
-                n_jobs=n_jobs,
-            )
-        )
+    del metric_host, dist, n_jobs  # HOTA is validated as IoU-only by the caller.
+    hota_alphas = np.asarray(hota_alphas, dtype=float)
+    sequence_summaries = OrderedDict(
+        (name, _compute_hota_sequence_summary(gts[name], tests[name], distfields, hota_alphas)) for name in names
+    )
+    if generate_overall:
+        sequence_summaries["OVERALL"] = _combine_hota_sequence_summaries(sequence_summaries.values())
 
     rows = []
     for row_name in index:
         row = OrderedDict()
         for alpha_metric, summary_metric in HOTA_SUMMARY_METRICS.items():
-            row[summary_metric] = np.mean([summary.loc[row_name, alpha_metric] for summary in per_alpha_summaries])
+            row[summary_metric] = np.mean(sequence_summaries[row_name][alpha_metric])
         rows.append(row)
     return pd.DataFrame(rows, index=index)
 
 
-def _compare_hota_dataframes(gts, tests, names, dist, distfields, hota_alphas, n_jobs):
-    tasks = [(name, gts[name], tests[name]) for name in names]
-    if n_jobs == 1 or len(tasks) < 2:
-        results = [_compare_hota_dataframe_task(task, dist, distfields, hota_alphas) for task in tasks]
-    else:
-        with ThreadPoolExecutor(max_workers=n_jobs) as executor:
-            results = list(executor.map(lambda task: _compare_hota_dataframe_task(task, dist, distfields, hota_alphas), tasks))
-    return OrderedDict(results)
+def _compute_hota_sequence_summary(gt, test, distfields, hota_alphas):
+    if distfields is None:
+        distfields = ["X", "Y", "Width", "Height"]
+
+    gt = gt[distfields]
+    test = test[distfields]
+    frame_data, gt_id_counts, tracker_id_counts, alignment_scores = _prepare_hota_sequence_data(gt, test)
+    num_alphas = len(hota_alphas)
+    num_gt_ids = len(gt_id_counts)
+    num_tracker_ids = len(tracker_id_counts)
+    true_positives = np.zeros(num_alphas)
+    match_counts = np.zeros((num_alphas, num_gt_ids, num_tracker_ids))
+
+    for gt_indices, tracker_indices, similarities in frame_data:
+        if similarities.size == 0:
+            continue
+        weighted_similarities = similarities * alignment_scores[np.ix_(gt_indices, tracker_indices)]
+        row_indices, col_indices = lap.linear_sum_assignment(1 - weighted_similarities)
+        for row_index, col_index in zip(row_indices, col_indices):
+            valid_alphas = similarities[row_index, col_index] >= hota_alphas - np.finfo("float").eps
+            if not valid_alphas.any():
+                continue
+            gt_index = gt_indices[row_index]
+            tracker_index = tracker_indices[col_index]
+            true_positives[valid_alphas] += 1
+            match_counts[valid_alphas, gt_index, tracker_index] += 1
+
+    num_objects = len(gt)
+    num_predictions = len(test)
+    false_positives = num_predictions - true_positives
+    deta = _quiet_divide(true_positives, np.maximum(1, num_objects + false_positives))
+    assa = _compute_hota_assa(match_counts, gt_id_counts, tracker_id_counts, true_positives)
+    hota = np.sqrt(deta * assa)
+    return {
+        "hota_alpha": hota,
+        "deta_alpha": deta,
+        "assa_alpha": assa,
+        "num_detections": true_positives,
+        "num_objects": num_objects,
+        "num_false_positives": false_positives,
+    }
 
 
-def _compare_hota_dataframe_task(task, dist, distfields, hota_alphas):
-    name, gt, test = task
-    logging.info("Comparing %s for HOTA...", name)
-    accs = utils.compare_to_groundtruth_reweighting(gt, test, dist, distfields=distfields, distth=hota_alphas)
-    return name, accs
+def _prepare_hota_sequence_data(gt, test):
+    gt_ids = pd.Index(np.sort(gt.index.get_level_values("Id").unique()))
+    tracker_ids = pd.Index(np.sort(test.index.get_level_values("Id").unique()))
+    gt_groups = dict(iter(gt.groupby("FrameId", sort=False)))
+    test_groups = dict(iter(test.groupby("FrameId", sort=False)))
+    frame_ids = pd.Index(gt.index.get_level_values("FrameId").unique()).union(
+        pd.Index(test.index.get_level_values("FrameId").unique())
+    ).sort_values()
+
+    gt_id_counts = np.zeros(len(gt_ids))
+    tracker_id_counts = np.zeros(len(tracker_ids))
+    potential_matches = np.zeros((len(gt_ids), len(tracker_ids)))
+    frame_data = []
+
+    for frame_id in frame_ids:
+        frame_gt = gt_groups.get(frame_id)
+        frame_test = test_groups.get(frame_id)
+        frame_gt_indices, frame_gt_values = _hota_frame_arrays(frame_gt, gt_ids)
+        frame_tracker_indices, frame_tracker_values = _hota_frame_arrays(frame_test, tracker_ids)
+        gt_id_counts[frame_gt_indices] += 1
+        tracker_id_counts[frame_tracker_indices] += 1
+        similarities = iou_matrix(frame_gt_values, frame_tracker_values, return_dist=False)
+        frame_data.append((frame_gt_indices, frame_tracker_indices, similarities))
+        if similarities.size == 0:
+            continue
+
+        similarity_denominator = similarities.sum(0)[np.newaxis, :] + similarities.sum(1)[:, np.newaxis] - similarities
+        similarity_iou = np.zeros_like(similarities)
+        similarity_mask = similarity_denominator > 0 + np.finfo("float").eps
+        similarity_iou[similarity_mask] = similarities[similarity_mask] / similarity_denominator[similarity_mask]
+        potential_matches[np.ix_(frame_gt_indices, frame_tracker_indices)] += similarity_iou
+
+    alignment_scores = _quiet_divide(
+        potential_matches,
+        np.maximum(1, gt_id_counts[:, np.newaxis] + tracker_id_counts[np.newaxis, :] - potential_matches),
+    )
+    return frame_data, gt_id_counts, tracker_id_counts, alignment_scores
+
+
+def _hota_frame_arrays(frame, id_index):
+    if frame is None:
+        return np.empty(0, dtype=int), np.empty((0, 4), dtype=float)
+    ids = id_index.get_indexer(frame.index.get_level_values("Id"))
+    return ids, frame.to_numpy(dtype=float)
+
+
+def _compute_hota_assa(match_counts, gt_id_counts, tracker_id_counts, true_positives):
+    if match_counts.shape[1] == 0 or match_counts.shape[2] == 0:
+        return _quiet_divide(np.zeros_like(true_positives), np.maximum(1, true_positives))
+    assa_denominator = gt_id_counts[np.newaxis, :, np.newaxis] + tracker_id_counts[np.newaxis, np.newaxis, :] - match_counts
+    assa_per_pair = _quiet_divide(match_counts, np.maximum(1, assa_denominator))
+    return _quiet_divide((assa_per_pair * match_counts).sum(axis=(1, 2)), np.maximum(1, true_positives))
+
+
+def _combine_hota_sequence_summaries(summaries):
+    summaries = list(summaries)
+    true_positives = np.sum([summary["num_detections"] for summary in summaries], axis=0)
+    num_objects = sum(summary["num_objects"] for summary in summaries)
+    false_positives = np.sum([summary["num_false_positives"] for summary in summaries], axis=0)
+    deta = _quiet_divide(true_positives, np.maximum(1, num_objects + false_positives))
+    assa = _quiet_divide(
+        np.sum([summary["assa_alpha"] * summary["num_detections"] for summary in summaries], axis=0),
+        np.maximum(1, true_positives),
+    )
+    hota = np.sqrt(deta * assa)
+    return {
+        "hota_alpha": hota,
+        "deta_alpha": deta,
+        "assa_alpha": assa,
+        "num_detections": true_positives,
+        "num_objects": num_objects,
+        "num_false_positives": false_positives,
+    }
+
+
+def _quiet_divide(numerator, denominator):
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return np.true_divide(numerator, denominator)
 
 
 def _compare_dataframe_task(task, dist, distfields, distth):

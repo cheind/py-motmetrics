@@ -36,7 +36,7 @@ class MetricsHost:
     def __init__(self):
         self.metrics = OrderedDict()
 
-    def register(
+    def register(  # noqa: C901
         self,
         fnc,
         deps="auto",
@@ -640,10 +640,9 @@ def assa_alpha(df, num_detections, num_gt_ids, num_dt_ids):
     r"""AssA under specific threshold $\alpha$
     Source: https://github.com/JonathonLuiten/TrackEval/blob/12c8791b303e0a0b50f753af204249e622d0281a/trackeval/metrics/hota.py#L107-L108
     """
-    oids = np.sort(df.full["OId"].dropna().unique())
-    hids = np.sort(df.full["HId"].dropna().unique())
-    oids_idx = dict((o, i) for i, o in enumerate(oids))
-    hids_idx = dict((h, i) for i, h in enumerate(hids))
+    del num_gt_ids, num_dt_ids  # unused
+    oids = pd.Index(np.sort(df.full["OId"].dropna().unique()))
+    hids = pd.Index(np.sort(df.full["HId"].dropna().unique()))
 
     max_gt_ids = len(oids)
     max_dt_ids = len(hids)
@@ -651,14 +650,24 @@ def assa_alpha(df, num_detections, num_gt_ids, num_dt_ids):
     match_count_array = np.zeros((max_gt_ids, max_dt_ids))
     gt_id_counts = np.zeros((max_gt_ids, 1))
     tracker_id_counts = np.zeros((1, max_dt_ids))
-    for idx in range(len(df.noraw)):
-        oid, hid = df.noraw.iloc[idx, 1], df.noraw.iloc[idx, 2]
-        if df.noraw.iloc[idx, 0] in ["SWITCH", "MATCH"]:
-            match_count_array[oids_idx[oid], hids_idx[hid]] += 1
-        if oid == oid:  # check non nan
-            gt_id_counts[oids_idx[oid]] += 1
-        if hid == hid:
-            tracker_id_counts[0, hids_idx[hid]] += 1
+    if max_gt_ids == 0 or max_dt_ids == 0:
+        return math_util.quiet_divide(0, max(1, num_detections))
+
+    noraw = df.noraw
+    match_rows = noraw[noraw["Type"].isin(["SWITCH", "MATCH"])]
+    if not match_rows.empty:
+        match_counts = match_rows.groupby(["OId", "HId"], sort=False).size()
+        match_oids = oids.get_indexer(match_counts.index.get_level_values("OId"))
+        match_hids = hids.get_indexer(match_counts.index.get_level_values("HId"))
+        np.add.at(match_count_array, (match_oids, match_hids), match_counts.to_numpy())
+
+    oid_counts = noraw["OId"].dropna().value_counts(sort=False)
+    oid_positions = oids.get_indexer(oid_counts.index)
+    gt_id_counts[oid_positions, 0] = oid_counts.to_numpy()
+
+    hid_counts = noraw["HId"].dropna().value_counts(sort=False)
+    hid_positions = hids.get_indexer(hid_counts.index)
+    tracker_id_counts[0, hid_positions] = hid_counts.to_numpy()
 
     ass_a = match_count_array / np.maximum(1, gt_id_counts + tracker_id_counts - match_count_array)
     return math_util.quiet_divide((ass_a * match_count_array).sum(), max(1, num_detections))
@@ -839,16 +848,16 @@ def idf1_m(partials, idtp, num_objects, num_predictions):
 for one in simple_add_func:
     name = one.__name__
 
-    def getSimpleAdd(nm):
-        def simpleAddHolder(partials):
+    def get_simple_add(nm):
+        def simple_add_holder(partials):
             res = 0
             for v in partials:
                 res += v[nm]
             return res
 
-        return simpleAddHolder
+        return simple_add_holder
 
-    locals()[name + "_m"] = getSimpleAdd(name)
+    locals()[name + "_m"] = get_simple_add(name)
 
 
 def create():

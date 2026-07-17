@@ -2,6 +2,7 @@ from pathlib import Path
 from shutil import copyfile
 
 import pandas as pd
+from pytest import approx
 
 import motmetrics as mm
 
@@ -23,6 +24,9 @@ def test_evaluate_motchallenge_files_returns_rich_summary():
     assert summary["mota"].equals(summary.df["mota"])
     assert summary.mota.equals(summary.df["mota"])
     assert summary.hota.equals(summary.df["hota"])
+    assert summary.df.loc["TUD-Campus", "hota"] == approx(0.3913974378451139)
+    assert summary.df.loc["TUD-Campus", "deta"] == approx(0.418047030142763)
+    assert summary.df.loc["TUD-Campus", "assa"] == approx(0.36912068120832836)
     assert summary.loc["TUD-Campus", "mota"] == summary.df.loc["TUD-Campus", "mota"]
     assert str(summary) == summary.text
     assert "MOTA" in summary.text
@@ -45,6 +49,9 @@ def test_evaluate_motchallenge_folders_returns_overall_summary(tmp_path):
 
     assert list(summary.df.index) == ["TUD-Campus", "TUD-Stadtmitte", "OVERALL"]
     assert set(["hota", "deta", "assa"]).issubset(summary.df.columns)
+    assert summary.df.loc["OVERALL", "hota"] == approx(0.3999570912884786)
+    assert summary.df.loc["OVERALL", "deta"] == approx(0.3976832912424188)
+    assert summary.df.loc["OVERALL", "assa"] == approx(0.4124495298453543)
     assert "IDF1" in summary.text
     assert "HOTA" in summary.text
     assert summary.to_csv().startswith(",idf1")

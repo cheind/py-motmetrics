@@ -7,12 +7,10 @@
 
 """Accumulate tracking events frame by frame."""
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+from __future__ import absolute_import, division, print_function
 
-from collections import OrderedDict
 import itertools
+from collections import OrderedDict
 
 import numpy as np
 import pandas as pd
@@ -134,7 +132,7 @@ class MOTAccumulator(object):
         self._events['HId'].append(hid)
         self._events['D'].append(distance)
 
-    def update(self, oids, hids, dists, frameid=None, vf='', similartiy_matrix=None, th=None):
+    def update(self, oids, hids, dists, frameid=None, vf='', similartiy_matrix=None, th=None):  # noqa: C901
         """Updates the accumulator with frame specific objects/detections.
 
         This method generates events based on the following algorithm [1]:
@@ -217,10 +215,12 @@ class MOTAccumulator(object):
             self._append_to_events('RAW', oids[i], hids[j], dist_ij)
         # Add a RAW event for objects and hypotheses that were present but did
         # not overlap with anything.
-        used_i = np.unique(valid_i)
-        used_j = np.unique(valid_j)
-        unused_i = np.setdiff1d(np.arange(no), used_i)
-        unused_j = np.setdiff1d(np.arange(nh), used_j)
+        used_i = np.zeros(no, dtype=np.bool_)
+        used_j = np.zeros(nh, dtype=np.bool_)
+        used_i[valid_i] = True
+        used_j[valid_j] = True
+        unused_i = np.flatnonzero(~used_i)
+        unused_j = np.flatnonzero(~used_j)
         for oid in oids[unused_i]:
             self._append_to_indices(frameid, next(eid))
             self._append_to_events('RAW', oid, np.nan, np.nan)
