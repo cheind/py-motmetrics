@@ -79,27 +79,6 @@ The default MOTChallenge summary includes the commonly reported CLEAR, Identity,
 
 ## Advanced Use
 
-Use the accumulator API when your data is not in MOTChallenge format, distances are already available, or you need custom matching behavior:
-
-```python
-import motmetrics as mm
-import numpy as np
-
-acc = mm.MOTAccumulator(auto_id=True)
-acc.update(
-    [1, 2],
-    [1, 2, 3],
-    np.array([
-        [0.1, np.nan, 0.3],
-        [0.5, 0.2, 0.3],
-    ]),
-)
-
-mh = mm.metrics.create()
-summary = mh.compute(acc, metrics=["num_frames", "mota", "motp"], name="acc")
-print(summary)
-```
-
 Useful lower-level pieces:
 
 - `mm.MOTAccumulator` stores frame-level matching events.
