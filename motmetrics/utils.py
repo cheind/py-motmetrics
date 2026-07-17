@@ -17,7 +17,7 @@ from motmetrics.preprocess import preprocessResult
 
 
 def compute_global_aligment_score(
-    allframeids, fid_to_fgt, fid_to_fdt, num_gt_id, num_det_id, dist_func
+    allframeids, fid_to_fgt, fid_to_fdt, num_gt_id, num_det_id, dist_func, gt_id_map=None, det_id_map=None
 ):
     """Taken from https://github.com/JonathonLuiten/TrackEval/blob/12c8791b303e0a0b50f753af204249e622d0281a/trackeval/metrics/hota.py"""
     potential_matches_count = np.zeros((num_gt_id, num_det_id))
@@ -34,8 +34,14 @@ def compute_global_aligment_score(
             fdt = fid_to_fdt[fid]
             hids = fdt.index.get_level_values("Id")
         if len(oids) > 0 and len(hids) > 0:
-            gt_ids = np.array(oids.values) - 1
-            dt_ids = np.array(hids.values) - 1
+            if gt_id_map is None:
+                gt_ids = np.array(oids.values) - 1
+            else:
+                gt_ids = np.asarray([gt_id_map[value] for value in oids.values], dtype=int)
+            if det_id_map is None:
+                dt_ids = np.array(hids.values) - 1
+            else:
+                dt_ids = np.asarray([det_id_map[value] for value in hids.values], dtype=int)
             similarity = dist_func(fgt.values, fdt.values, return_dist=False)
 
             sim_iou_denom = (
@@ -55,7 +61,7 @@ def compute_global_aligment_score(
     return global_alignment_score
 
 
-def compare_to_groundtruth_reweighting(gt, dt, dist="iou", distfields=None, distth=(0.5)):
+def compare_to_groundtruth_reweighting(gt, dt, dist="iou", distfields=None, distth=(0.5)):  # noqa: C901
     """Compare groundtruth and detector results with global alignment score.
 
     This method assumes both results are given in terms of DataFrames with at least the following fields
@@ -118,8 +124,14 @@ def compare_to_groundtruth_reweighting(gt, dt, dist="iou", distfields=None, dist
 
     acc_list = [MOTAccumulator() for _ in range(len(distth))]
 
-    num_gt_id = gt.index.get_level_values("Id").max()  if not gt.empty else 0 
-    num_det_id = dt.index.get_level_values("Id").max() if not dt.empty else 0
+    gt_id_map = {
+        value: index for index, value in enumerate(sorted(gt.index.get_level_values("Id").unique()))
+    }
+    det_id_map = {
+        value: index for index, value in enumerate(sorted(dt.index.get_level_values("Id").unique()))
+    }
+    num_gt_id = len(gt_id_map)
+    num_det_id = len(det_id_map)
 
     # We need to account for all frames reported either by ground truth or
     # detector. In case a frame is missing in GT this will lead to FPs, in
@@ -132,7 +144,7 @@ def compare_to_groundtruth_reweighting(gt, dt, dist="iou", distfields=None, dist
     fid_to_fdt = dict(iter(dt.groupby("FrameId")))
 
     global_alignment_score = compute_global_aligment_score(
-        allframeids, fid_to_fgt, fid_to_fdt, num_gt_id, num_det_id, compute_dist
+        allframeids, fid_to_fgt, fid_to_fdt, num_gt_id, num_det_id, compute_dist, gt_id_map, det_id_map
     )
 
     for fid in allframeids:
@@ -147,8 +159,8 @@ def compare_to_groundtruth_reweighting(gt, dt, dist="iou", distfields=None, dist
             fdt = fid_to_fdt[fid]
             hids = fdt.index.get_level_values("Id")
         if len(oids) > 0 and len(hids) > 0:
-            gt_ids = np.array(oids.values) - 1
-            dt_ids = np.array(hids.values) - 1
+            gt_ids = np.asarray([gt_id_map[value] for value in oids.values], dtype=int)
+            dt_ids = np.asarray([det_id_map[value] for value in hids.values], dtype=int)
             dists = compute_dist(fgt.values, fdt.values, return_dist=False)
             weighted_dists = (
                 dists * global_alignment_score[gt_ids[:, np.newaxis], dt_ids[np.newaxis, :]]
@@ -158,7 +170,7 @@ def compare_to_groundtruth_reweighting(gt, dt, dist="iou", distfields=None, dist
     return acc_list[0] if return_single else acc_list
 
 
-def compare_to_groundtruth(gt, dt, dist='iou', distfields=None, distth=0.5):
+def compare_to_groundtruth(gt, dt, dist='iou', distfields=None, distth=0.5):  # noqa: C901
     """Compare groundtruth and detector results.
 
     This method assumes both results are given in terms of DataFrames with at least the following fields
@@ -239,7 +251,7 @@ def compare_to_groundtruth(gt, dt, dist='iou', distfields=None, distth=0.5):
     return acc
 
 
-def CLEAR_MOT_M(gt, dt, inifile, dist='iou', distfields=None, distth=0.5, include_all=False, vflag=''):
+def CLEAR_MOT_M(gt, dt, inifile, dist='iou', distfields=None, distth=0.5, include_all=False, vflag=''):  # noqa: C901, N802
     """Compare groundtruth and detector results.
 
     This method assumes both results are given in terms of DataFrames with at least the following fields

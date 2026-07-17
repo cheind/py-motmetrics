@@ -87,7 +87,7 @@ def test_evaluate_motchallenge_rejects_mixed_file_and_folder_inputs():
         raise AssertionError("Expected mixed file/folder inputs to fail.")
 
 
-def test_direct_hota_matches_legacy_with_zero_tracker_id():
+def test_direct_hota_matches_accumulator_with_zero_tracker_id():
     hota_alphas = np.array([0.25, 0.5, 0.75])
     gt = _mot_dataframe([
         [1, 1, 24, 36, 10, 10],
@@ -124,9 +124,9 @@ def test_direct_hota_matches_legacy_with_zero_tracker_id():
         [7, 2, 33.467693823950185, -3.0529934174098985, 10, 10],
     ])
 
-    legacy_accs = utils.compare_to_groundtruth_reweighting(gt, test, "iou", distth=hota_alphas)
-    legacy = metrics.create().compute_many(
-        legacy_accs,
+    accumulator_accs = utils.compare_to_groundtruth_reweighting(gt, test, "iou", distth=hota_alphas)
+    accumulator = metrics.create().compute_many(
+        accumulator_accs,
         metrics=evaluation.HOTA_ALPHA_METRICS,
         names=list(range(len(hota_alphas))),
         generate_overall=False,
@@ -134,7 +134,7 @@ def test_direct_hota_matches_legacy_with_zero_tracker_id():
     direct = evaluation._compute_hota_sequence_summary(gt, test, None, hota_alphas)
 
     for metric in evaluation.HOTA_ALPHA_METRICS:
-        np.testing.assert_allclose(legacy[metric].to_numpy(), direct[metric], rtol=1e-12, atol=1e-12)
+        np.testing.assert_allclose(accumulator[metric].to_numpy(), direct[metric], rtol=1e-12, atol=1e-12)
 
 
 def _mot_dataframe(rows):

@@ -258,6 +258,8 @@ class MOTAccumulator(object):
             # 2. Try to remaining objects/hypotheses
             dists[oids_masked, :] = np.nan
             dists[:, hids_masked] = np.nan
+            cost_for_matching[oids_masked, :] = np.nan
+            cost_for_matching[:, hids_masked] = np.nan
 
             rids, cids = linear_sum_assignment(cost_for_matching)
 

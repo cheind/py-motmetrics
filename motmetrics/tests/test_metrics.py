@@ -435,6 +435,26 @@ def test_correct_average():
     assert metr["mota"] == approx(0.2)
 
 
+def test_track_quality_boundary_matches_trackeval():
+    acc = mm.MOTAccumulator(auto_id=True)
+
+    acc.update([1], [1], [0])
+    acc.update([1], [1], [0])
+    acc.update([1], [1], [0])
+    acc.update([1], [1], [0])
+    acc.update([1], [], [])
+
+    mh = mm.metrics.create()
+    metr = mh.compute(
+        acc,
+        metrics=["mostly_tracked", "partially_tracked", "mostly_lost"],
+        return_dataframe=False,
+    )
+    assert metr["mostly_tracked"] == 0
+    assert metr["partially_tracked"] == 1
+    assert metr["mostly_lost"] == 0
+
+
 def test_motchallenge_files():
     """Tests metrics for sequences TUD-Campus and TUD-Stadtmitte."""
     dnames = [
