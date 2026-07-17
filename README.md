@@ -39,6 +39,12 @@ summary.hota
 summary.df.to_csv("metrics.csv")
 ```
 
+By default, `evaluate_motchallenge` uses `fmt="auto"`. It detects MOTChallenge text, VATIC text, and UA-DETRAC `.mat`/`.xml` files. For ambiguous text files, pass the format explicitly:
+
+```python
+summary = mm.evaluate_motchallenge(gt, pred, fmt=mm.io.Format.MOT16)
+```
+
 Folder evaluation uses the same function:
 
 ```python
