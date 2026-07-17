@@ -556,19 +556,16 @@ simple_add_func.append(mostly_lost)
 
 def num_fragmentations(df, obj_frequencies):
     """Total number of switches from tracked to not tracked."""
-    fra = 0
-    for o in obj_frequencies.index:
-        # Find first and last time object was not missed (track span). Then count
-        # the number switches from NOT MISS to MISS state.
-        dfo = df.noraw[df.noraw.OId == o]
-        notmiss = dfo[dfo.Type != "MISS"]
-        if len(notmiss) == 0:
-            continue
-        first = notmiss.index[0]
-        last = notmiss.index[-1]
-        diffs = dfo.loc[first:last].Type.apply(lambda x: 1 if x == "MISS" else 0).diff()
-        fra += diffs[diffs == 1].count()
-    return fra
+    del obj_frequencies  # unused
+    object_events = df.noraw[df.noraw.OId.notna()]
+    if object_events.empty:
+        return 0
+
+    tracked = object_events.Type != "MISS"
+    previous_tracked = tracked.groupby(object_events.OId, sort=False).shift(fill_value=False)
+    track_starts = tracked & ~previous_tracked
+    track_segments = track_starts.groupby(object_events.OId, sort=False).sum()
+    return int(np.maximum(track_segments - 1, 0).sum())
 
 
 simple_add_func.append(num_fragmentations)

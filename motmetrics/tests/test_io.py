@@ -10,6 +10,7 @@
 from __future__ import absolute_import, division, print_function
 
 import os
+from io import StringIO
 
 import pandas as pd
 
@@ -69,6 +70,25 @@ def test_load_motchallenge():
     ])
 
     assert (df.reset_index().values == expected.values).all()
+
+
+def test_load_motchallenge_infers_whitespace_separator(tmp_path):
+    """Tests fast loading of whitespace-delimited MOTChallenge data."""
+    path = tmp_path / 'motchallenge.txt'
+    path.write_text('1 7 11 21 30 40 1 -1 -1 -1\n', encoding='utf-8')
+
+    df = mm.io.load_motchallenge(path)
+
+    assert df.loc[(1, 7), ['X', 'Y', 'Width', 'Height']].tolist() == [10, 20, 30, 40]
+
+
+def test_load_motchallenge_infers_separator_for_file_object():
+    """Tests separator inference without consuming a caller-owned stream."""
+    source = StringIO('1,7,11,21,30,40,1,-1,-1,-1\n')
+
+    df = mm.io.load_motchallenge(source)
+
+    assert df.loc[(1, 7), ['X', 'Y', 'Width', 'Height']].tolist() == [10, 20, 30, 40]
 
 
 def test_load_detrac_mat():

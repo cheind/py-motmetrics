@@ -74,16 +74,17 @@ def load_motchallenge(fname, **kwargs):
         The dataframe is indexed by ('FrameId', 'Id')
     """
 
-    sep = kwargs.pop('sep', r'\s+|\t+|,')
+    sep = kwargs.pop('sep', None)
     min_confidence = kwargs.pop('min_confidence', -1)
+    read_sep, engine = _motchallenge_read_options(fname, sep)
     df = pd.read_csv(
         fname,
-        sep=sep,
+        sep=read_sep,
         index_col=[0, 1],
         skipinitialspace=True,
         header=None,
         names=['FrameId', 'Id', 'X', 'Y', 'Width', 'Height', 'Confidence', 'ClassId', 'Visibility', 'unused'],
-        engine='python'
+        engine=engine,
     )
 
     # Account for matlab convention.
@@ -94,6 +95,27 @@ def load_motchallenge(fname, **kwargs):
 
     # Remove all rows without sufficient confidence
     return df[df['Confidence'] >= min_confidence]
+
+
+def _motchallenge_read_options(fname, sep):
+    if sep is None:
+        return (_infer_motchallenge_separator(fname), 'c')
+    if sep in (',', r'\s+'):
+        return (sep, 'c')
+    return (sep, 'python')
+
+
+def _infer_motchallenge_separator(fname):
+    if hasattr(fname, 'read'):
+        position = fname.tell()
+        first_line = next((line for line in fname if line.strip()), '')
+        fname.seek(position)
+    else:
+        with io.open(fname, encoding='utf-8', errors='ignore') as file:
+            first_line = next((line for line in file if line.strip()), '')
+    if isinstance(first_line, bytes):
+        first_line = first_line.decode('utf-8', errors='ignore')
+    return ',' if ',' in first_line else r'\s+'
 
 
 def load_vatictxt(fname, **kwargs):

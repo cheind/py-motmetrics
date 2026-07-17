@@ -279,20 +279,34 @@ def _compute_hota_sequence_summary(gt, test, distfields, hota_alphas):
     num_tracker_ids = len(tracker_id_counts)
     true_positives = np.zeros(num_alphas)
     match_counts = np.zeros((num_alphas, num_gt_ids, num_tracker_ids))
+    matched_gt_indices = []
+    matched_tracker_indices = []
+    matched_similarities = []
 
     for gt_indices, tracker_indices, similarities in frame_data:
         if similarities.size == 0:
             continue
         weighted_similarities = similarities * alignment_scores[np.ix_(gt_indices, tracker_indices)]
         row_indices, col_indices = lap.linear_sum_assignment(1 - weighted_similarities)
-        for row_index, col_index in zip(row_indices, col_indices):
-            valid_alphas = similarities[row_index, col_index] >= hota_alphas - np.finfo("float").eps
-            if not valid_alphas.any():
-                continue
-            gt_index = gt_indices[row_index]
-            tracker_index = tracker_indices[col_index]
-            true_positives[valid_alphas] += 1
-            match_counts[valid_alphas, gt_index, tracker_index] += 1
+        if len(row_indices) == 0:
+            continue
+        matched_gt_indices.append(gt_indices[row_indices])
+        matched_tracker_indices.append(tracker_indices[col_indices])
+        matched_similarities.append(similarities[row_indices, col_indices])
+
+    if matched_similarities:
+        matched_gt_indices = np.concatenate(matched_gt_indices)
+        matched_tracker_indices = np.concatenate(matched_tracker_indices)
+        matched_similarities = np.concatenate(matched_similarities)
+        valid_matches = matched_similarities[:, np.newaxis] >= hota_alphas - np.finfo("float").eps
+        true_positives = valid_matches.sum(axis=0, dtype=float)
+        pair_indices = matched_gt_indices * num_tracker_ids + matched_tracker_indices
+        num_id_pairs = num_gt_ids * num_tracker_ids
+        for alpha_index in range(num_alphas):
+            match_counts[alpha_index] = np.bincount(
+                pair_indices[valid_matches[:, alpha_index]],
+                minlength=num_id_pairs,
+            ).reshape(num_gt_ids, num_tracker_ids)
 
     num_objects = len(gt)
     num_predictions = len(test)

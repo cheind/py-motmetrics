@@ -575,6 +575,19 @@ def test_paper_metrics():
     print(summary)
 
 
+def test_num_fragmentations_ignores_leading_and_trailing_misses():
+    acc = mm.MOTAccumulator(auto_id=True)
+    acc.update([1, 2], [], [])
+    acc.update([1, 2], [1], [[0.1], [np.nan]])
+    acc.update([1, 2], [], [])
+    acc.update([1, 2], [1], [[0.1], [np.nan]])
+    acc.update([1, 2], [], [])
+
+    summary = mm.metrics.create().compute(acc, metrics=['num_fragmentations'])
+
+    assert summary['num_fragmentations'].iloc[0] == 1
+
+
 def test_hota():
     tud_golden_ans = {  # From TrackEval
         "TUD-Campus": {"hota": 0.3913974378451139, "deta": 0.418047030142763, "assa": 0.36912068120832836},
