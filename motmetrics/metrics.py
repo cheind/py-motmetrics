@@ -201,7 +201,10 @@ class MetricsHost:
         df_map = events_to_df_map(df)
 
         cache = {}
-        options = {"ana": ana}
+        if ana is None:
+            options = {}
+        else:
+            options = {"ana": ana}
         for mname in metrics:
             cache[mname] = self._compute(
                 df_map, mname, cache, options, parent="summarize"
