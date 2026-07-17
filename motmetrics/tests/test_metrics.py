@@ -7,9 +7,7 @@
 
 """Tests computation of metrics from accumulator."""
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+from __future__ import absolute_import, division, print_function
 
 import os
 
@@ -20,6 +18,24 @@ from pytest import approx
 import motmetrics as mm
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "../data")
+
+
+def test_package_level_list_metrics():
+    """Tests listing registered metrics from the package root."""
+    metric_list = mm.list_metrics()
+
+    assert isinstance(metric_list, pd.DataFrame)
+    assert list(metric_list.columns) == ["Name", "Description"]
+    assert "mota" in metric_list["Name"].values
+
+
+def test_package_level_list_metrics_markdown():
+    """Tests markdown listing from the package root."""
+    markdown = mm.list_metrics_markdown()
+
+    assert isinstance(markdown, str)
+    assert "Name|Description" in markdown
+    assert "mota" in markdown
 
 
 def test_metricscontainer_1():
@@ -540,17 +556,17 @@ def test_paper_metrics():
 
 
 def test_hota():
-    TUD_golden_ans = {  # From TrackEval
+    tud_golden_ans = {  # From TrackEval
         "TUD-Campus": {"hota": 0.3913974378451139, "deta": 0.418047030142763, "assa": 0.36912068120832836},
         "TUD-Stadtmitte": {"hota": 0.3978490169927877, "deta": 0.3922675723693166, "assa": 0.4088407518112996}
     }
-    TUD_combined_golden_ans = {  # TrackEval combine_sequences over both TUD sequences.
+    tud_combined_golden_ans = {  # TrackEval combine_sequences over both TUD sequences.
         "hota": 0.3999570912884786,
         "deta": 0.3976832912424188,
         "assa": 0.4124495298453543,
     }
 
-    DATA_DIR = "motmetrics/data"
+    data_dir = "motmetrics/data"
 
     def compute_motchallenge(dname):
         df_gt = mm.io.loadtxt(os.path.join(dname, "gt.txt"))
@@ -559,10 +575,10 @@ def test_hota():
         res_list = mm.utils.compare_to_groundtruth_reweighting(df_gt, df_test, "iou", distth=th_list)
         return res_list
 
-    accs = [compute_motchallenge(os.path.join(DATA_DIR, d)) for d in TUD_golden_ans.keys()]
+    accs = [compute_motchallenge(os.path.join(data_dir, d)) for d in tud_golden_ans.keys()]
     mh = mm.metrics.create()
 
-    for dataset_idx, dname in enumerate(TUD_golden_ans.keys()):
+    for dataset_idx, dname in enumerate(tud_golden_ans.keys()):
         deta = []
         assa = []
         hota = []
@@ -585,9 +601,9 @@ def test_hota():
         assa = sum(assa) / len(assa)
         hota = sum(hota) / len(hota)
 
-        assert deta == approx(TUD_golden_ans[dname]["deta"])
-        assert assa == approx(TUD_golden_ans[dname]["assa"])
-        assert hota == approx(TUD_golden_ans[dname]["hota"])
+        assert deta == approx(tud_golden_ans[dname]["deta"])
+        assert assa == approx(tud_golden_ans[dname]["assa"])
+        assert hota == approx(tud_golden_ans[dname]["hota"])
 
     deta = []
     assa = []
@@ -600,13 +616,13 @@ def test_hota():
                 "assa_alpha",
                 "hota_alpha",
             ],
-            names=list(TUD_golden_ans),
+            names=list(tud_golden_ans),
             generate_overall=True,
         )
         deta.append(float(summary.loc["OVERALL", "deta_alpha"]))
         assa.append(float(summary.loc["OVERALL", "assa_alpha"]))
         hota.append(float(summary.loc["OVERALL", "hota_alpha"]))
 
-    assert sum(deta) / len(deta) == approx(TUD_combined_golden_ans["deta"])
-    assert sum(assa) / len(assa) == approx(TUD_combined_golden_ans["assa"])
-    assert sum(hota) / len(hota) == approx(TUD_combined_golden_ans["hota"])
+    assert sum(deta) / len(deta) == approx(tud_combined_golden_ans["deta"])
+    assert sum(assa) / len(assa) == approx(tud_combined_golden_ans["assa"])
+    assert sum(hota) / len(hota) == approx(tud_combined_golden_ans["hota"])

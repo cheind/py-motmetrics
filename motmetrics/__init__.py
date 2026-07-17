@@ -23,6 +23,8 @@ __all__ = [
     "metrics",
     "utils",
     "evaluate_motchallenge",
+    "list_metrics",
+    "list_metrics_markdown",
     "MOTChallengeSummary",
     "MOTAccumulator",
 ]
@@ -32,3 +34,13 @@ from motmetrics.evaluation import MOTChallengeSummary, evaluate_motchallenge
 from motmetrics.mot import MOTAccumulator
 
 __version__ = _distribution_version("motmetrics")
+
+
+def list_metrics(include_deps=False):
+    """Return all registered metrics as a pandas DataFrame."""
+    return metrics.create().list_metrics(include_deps=include_deps)
+
+
+def list_metrics_markdown(include_deps=False):
+    """Return all registered metrics as a markdown table."""
+    return metrics.create().list_metrics_markdown(include_deps=include_deps)

@@ -72,8 +72,7 @@ List all registered metrics:
 ```python
 import motmetrics as mm
 
-mh = mm.metrics.create()
-print(mh.list_metrics_markdown())
+print(mm.list_metrics_markdown())
 ```
 
 The default MOTChallenge summary includes the commonly reported CLEAR, Identity, and HOTA metrics.
