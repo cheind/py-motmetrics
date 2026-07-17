@@ -62,7 +62,7 @@ motmetrics = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["motmetrics*"]
+include = ["motmetrics"]
 
 [tool.ruff]
 line-length = 127

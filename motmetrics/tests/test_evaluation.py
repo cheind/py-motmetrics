@@ -6,10 +6,17 @@ import pandas as pd
 from pytest import approx
 
 import motmetrics as mm
-from motmetrics import evaluation, metrics, utils
+import motmetrics._evaluation as evaluation
 
 DATA_DIR = Path(__file__).parents[1] / "data"
 SEQUENCE_NAMES = ("TUD-Campus", "TUD-Stadtmitte")
+
+
+def test_package_has_one_supported_metrics_entrypoint():
+    assert mm.__all__ == ["evaluate_motchallenge"]
+    assert {name for name in vars(mm) if not name.startswith("_")} == {
+        "evaluate_motchallenge"
+    }
 
 
 def test_evaluate_motchallenge_files_returns_rich_summary():
@@ -19,17 +26,12 @@ def test_evaluate_motchallenge_files_returns_rich_summary():
     )
 
     assert isinstance(summary.df, pd.DataFrame)
-    assert summary.dataframe is summary.df
     assert list(summary.df.index) == ["TUD-Campus"]
-    assert "mota" in summary
-    assert "hota" in summary
-    assert summary["mota"].equals(summary.df["mota"])
-    assert summary.mota.equals(summary.df["mota"])
-    assert summary.hota.equals(summary.df["hota"])
+    assert "mota" in summary.df
+    assert "hota" in summary.df
     assert summary.df.loc["TUD-Campus", "hota"] == approx(0.3913974378451139)
     assert summary.df.loc["TUD-Campus", "deta"] == approx(0.418047030142763)
     assert summary.df.loc["TUD-Campus", "assa"] == approx(0.36912068120832836)
-    assert summary.loc["TUD-Campus", "mota"] == summary.df.loc["TUD-Campus", "mota"]
     assert str(summary) == summary.text
     assert "MOTA" in summary.text
     assert "HOTA" in summary.text
@@ -57,7 +59,7 @@ def test_evaluate_motchallenge_folders_returns_overall_summary(tmp_path):
     assert summary.df.loc["OVERALL", "assa"] == approx(0.4124495298453543)
     assert "IDF1" in summary.text
     assert "HOTA" in summary.text
-    assert summary.to_csv().startswith(",idf1")
+    assert summary.df.to_csv().startswith(",idf1")
 
 
 def test_evaluate_motchallenge_can_skip_hota():
@@ -71,28 +73,28 @@ def test_evaluate_motchallenge_can_skip_hota():
     assert "HOTA" not in summary.text
 
 
-def test_shared_iou_path_matches_legacy_clear_identity_metrics():
-    ground_truth = mm.io.loadtxt(DATA_DIR / "TUD-Campus" / "gt.txt")
-    tracker = mm.io.loadtxt(DATA_DIR / "TUD-Campus" / "test.txt")
-    shared = mm.evaluate_motchallenge(
-        DATA_DIR / "TUD-Campus" / "gt.txt",
-        DATA_DIR / "TUD-Campus" / "test.txt",
-    ).df.loc["TUD-Campus", metrics.motchallenge_metrics]
-
-    legacy_accumulator = utils.compare_to_groundtruth(ground_truth, tracker, "iou", distth=0.5)
-    legacy = metrics.create().compute(
-        legacy_accumulator,
-        metrics=metrics.motchallenge_metrics,
-        name="TUD-Campus",
-    ).loc["TUD-Campus"]
-
-    np.testing.assert_allclose(shared.to_numpy(dtype=float), legacy.to_numpy(dtype=float), rtol=0, atol=1e-12)
-
-
 def test_evaluate_motchallenge_sequence_folders():
     summary = mm.evaluate_motchallenge(DATA_DIR / "TUD-Campus", DATA_DIR / "TUD-Campus")
 
     assert list(summary.df.index) == ["TUD-Campus", "OVERALL"]
+
+
+def test_parallel_file_evaluation_matches_serial_results():
+    serial = mm.evaluate_motchallenge(DATA_DIR, DATA_DIR, n_jobs=1).df
+    parallel = mm.evaluate_motchallenge(DATA_DIR, DATA_DIR, n_jobs=2).df
+
+    pd.testing.assert_frame_equal(parallel, serial)
+
+
+def test_parallel_progress_renders_one_terminal_row_per_sequence(capsys):
+    mm.evaluate_motchallenge(DATA_DIR, DATA_DIR, n_jobs=2, progress=True)
+
+    terminal_output = capsys.readouterr().err
+    final_render = terminal_output.rsplit("\x1b[2A", 1)[1]
+    assert final_render.count("\x1b[2K") == len(SEQUENCE_NAMES)
+    assert final_render.count("done") == len(SEQUENCE_NAMES)
+    assert all(sequence_name in final_render for sequence_name in SEQUENCE_NAMES)
+    assert terminal_output.endswith("\x1b[?25h")
 
 
 def test_evaluate_motchallenge_rejects_mixed_file_and_folder_inputs():
@@ -106,7 +108,7 @@ def test_evaluate_motchallenge_rejects_mixed_file_and_folder_inputs():
         raise AssertionError("Expected mixed file/folder inputs to fail.")
 
 
-def test_direct_hota_matches_accumulator_with_zero_tracker_id():
+def test_hota_is_invariant_to_zero_tracker_id():
     hota_alphas = np.array([0.25, 0.5, 0.75])
     gt = _mot_dataframe([
         [1, 1, 24, 36, 10, 10],
@@ -143,20 +145,23 @@ def test_direct_hota_matches_accumulator_with_zero_tracker_id():
         [7, 2, 33.467693823950185, -3.0529934174098985, 10, 10],
     ])
 
-    accumulator_accs = utils.compare_to_groundtruth_reweighting(gt, test, "iou", distth=hota_alphas)
-    accumulator = metrics.create().compute_many(
-        accumulator_accs,
-        metrics=evaluation.HOTA_ALPHA_METRICS,
-        names=list(range(len(hota_alphas))),
-        generate_overall=False,
+    shifted_test = test.reset_index()
+    shifted_test["Id"] += 100
+    shifted_test = shifted_test.set_index(["FrameId", "Id"]).sort_index()
+
+    original = evaluation._compute_prepared_hota_sequence_summary(
+        evaluation._prepare_iou_sequence_data(gt, test),
+        hota_alphas,
     )
-    direct = evaluation._compute_hota_sequence_summary(gt, test, None, hota_alphas)
+    shifted = evaluation._compute_prepared_hota_sequence_summary(
+        evaluation._prepare_iou_sequence_data(gt, shifted_test),
+        hota_alphas,
+    )
+    for metric in ("hota_alpha", "deta_alpha", "assa_alpha"):
+        np.testing.assert_allclose(original[metric], shifted[metric], rtol=0, atol=0)
 
-    for metric in evaluation.HOTA_ALPHA_METRICS:
-        np.testing.assert_allclose(accumulator[metric].to_numpy(), direct[metric], rtol=1e-12, atol=1e-12)
 
-
-def test_frame_array_grouping_preserves_legacy_duplicate_id_counts():
+def test_frame_array_grouping_handles_duplicate_id_counts():
     tracker = _mot_dataframe([
         [1, -1, 0, 0, 10, 10],
         [1, -1, 20, 20, 10, 10],
@@ -167,7 +172,7 @@ def test_frame_array_grouping_preserves_legacy_duplicate_id_counts():
     groups, counts = evaluation._group_frame_arrays(tracker, pd.Index([-1]))
 
     assert len(groups) == 2
-    np.testing.assert_array_equal(counts, [2])
+    np.testing.assert_array_equal(counts, [4])
 
 
 def _mot_dataframe(rows):

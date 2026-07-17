@@ -7,31 +7,57 @@
 
 """High-level helpers for common tracker evaluation workflows."""
 
-from __future__ import absolute_import, division, print_function
-
-import logging
+import multiprocessing
+import os
+import shutil
+import sys
+import threading
 from collections import OrderedDict
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from motmetrics import io, lap, utils
-from motmetrics import metrics as metrics_module
-from motmetrics.distances import iou_matrix
-from motmetrics.mot import MOTAccumulator
+import motmetrics._io as io
+import motmetrics._metrics as metrics_module
+from motmetrics._accumulator import _Accumulator
+from motmetrics._assignment import _linear_sum_assignment
+from motmetrics._distances import iou_matrix
 
 HOTA_ALPHAS = np.arange(0.05, 0.99, 0.05)
-HOTA_ALPHA_METRICS = ["hota_alpha", "deta_alpha", "assa_alpha"]
 HOTA_SUMMARY_METRICS = OrderedDict([
     ("hota_alpha", "hota"),
     ("deta_alpha", "deta"),
     ("assa_alpha", "assa"),
 ])
 
+_WORKER_PROGRESS_CURRENT = None
+_WORKER_PROGRESS_TOTAL = None
+_WORKER_PROGRESS_STAGE = None
 
-class MOTChallengeSummary(object):
+_PROGRESS_WAITING = 0
+_PROGRESS_LOADING = 1
+_PROGRESS_IOU = 2
+_PROGRESS_CLEAR = 3
+_PROGRESS_METRICS = 4
+_PROGRESS_HOTA = 5
+_PROGRESS_DONE = 6
+_PROGRESS_FAILED = 7
+_PROGRESS_STAGE_NAMES = (
+    "waiting",
+    "loading",
+    "IoU",
+    "CLEAR",
+    "metrics",
+    "HOTA",
+    "done",
+    "failed",
+)
+_PROGRESS_FLUSH_FRAMES = 32
+
+
+class _MOTChallengeSummary(object):
     """MOTChallenge metric results with both dataframe and rendered views."""
 
     def __init__(self, df, formatters=None, namemap=None):
@@ -40,39 +66,15 @@ class MOTChallengeSummary(object):
         self.namemap = namemap
 
     @property
-    def dataframe(self):
-        """Alias for the raw pandas DataFrame."""
-        return self.df
-
-    @property
     def text(self):
         """Human-readable MOTChallenge-style table."""
         return io.render_summary(self.df, formatters=self.formatters, namemap=self.namemap)
-
-    def render(self):
-        """Return the human-readable MOTChallenge-style table."""
-        return self.text
 
     def __str__(self):
         return self.text
 
     def __repr__(self):
         return self.text
-
-    def __len__(self):
-        return len(self.df)
-
-    def __iter__(self):
-        return iter(self.df)
-
-    def __contains__(self, key):
-        return key in self.df
-
-    def __getitem__(self, key):
-        return self.df[key]
-
-    def __getattr__(self, name):
-        return getattr(self.df, name)
 
 
 class _PreparedIoUSequence(object):
@@ -91,19 +93,17 @@ def evaluate_motchallenge(
     groundtruths,
     tests,
     fmt=io.Format.AUTO,
-    dist="iou",
     distfields=None,
     distth=0.5,
     metrics=None,
     name=None,
     generate_overall=True,
     gt_min_confidence=1,
-    solver=None,
-    id_solver=None,
     exclude_id=False,
     include_hota=True,
     hota_alphas=None,
     n_jobs=1,
+    progress=None,
 ):
     """Evaluate MOTChallenge files or folders and return a rich summary.
 
@@ -119,10 +119,17 @@ def evaluate_motchallenge(
         If true, append HOTA, DetA, and AssA averaged over ``hota_alphas``.
     hota_alphas : array-like, optional
         HOTA alpha thresholds. Defaults to the TrackEval thresholds from 0.05 to 0.95.
+    n_jobs : int, optional
+        Number of sequence worker processes used for folder-based IoU
+        evaluation. A single file is evaluated in the calling process. Defaults
+        to 1.
+    progress : bool, optional
+        Display one progress row per sequence. By default this is enabled for
+        interactive folder evaluation and disabled when stderr is redirected.
 
     Returns
     -------
-    MOTChallengeSummary
+    _MOTChallengeSummary
         Wrapper around the raw pandas DataFrame. ``print(summary)`` displays a
         MOTChallenge-style table, while ``summary.df`` exposes the dataframe.
     """
@@ -130,239 +137,327 @@ def evaluate_motchallenge(
     test_path = Path(tests)
     _validate_paths(gt_path, test_path)
     _validate_n_jobs(n_jobs)
-
-    if solver:
-        lap.default_solver = solver
+    progress_enabled = _progress_is_enabled(progress)
 
     metric_names = _prepare_metrics(metrics, exclude_id)
-    metric_host = metrics_module.create()
+    metric_host = metrics_module._METRIC_HOST
     if hota_alphas is None:
         hota_alphas = HOTA_ALPHAS
-    if include_hota and dist.upper() != "IOU":
-        raise ValueError("HOTA is only supported with dist='iou'. Pass include_hota=False to skip HOTA metrics.")
+    summary = _evaluate_iou_paths(
+        gt_path,
+        test_path,
+        name,
+        fmt,
+        gt_min_confidence,
+        distfields,
+        distth,
+        metric_names,
+        include_hota,
+        hota_alphas,
+        generate_overall and not gt_path.is_file(),
+        n_jobs,
+        metric_host,
+        progress_enabled,
+    )
 
-    if gt_path.is_file() and test_path.is_file():
-        sequence_name = name or _default_sequence_name(test_path)
-        gt = io.loadtxt(gt_path, fmt=fmt, min_confidence=gt_min_confidence)
-        test = io.loadtxt(test_path, fmt=fmt)
-        acc, prepared = _compare_single_sequence(gt, test, dist, distfields, distth, include_hota)
-        prepared_sequences = OrderedDict([(sequence_name, prepared)]) if prepared is not None else None
-
-        if id_solver:
-            lap.default_solver = id_solver
-        summary = metric_host.compute(acc, metrics=metric_names, name=sequence_name)
-        if include_hota:
-            summary = _append_hota_summary(
-                summary,
-                OrderedDict([(sequence_name, gt)]),
-                OrderedDict([(sequence_name, test)]),
-                [sequence_name],
-                metric_host,
-                dist,
-                distfields,
-                hota_alphas,
-                False,
-                n_jobs,
-                prepared_sequences=prepared_sequences,
-            )
-    else:
-        gt = load_motchallenge_groundtruths(gt_path, fmt=fmt, min_confidence=gt_min_confidence)
-        test = load_motchallenge_tests(test_path, fmt=fmt, names=gt)
-        accs, names, prepared_sequences = _compare_multiple_sequences(
-            gt,
-            test,
-            dist,
-            distfields,
-            distth,
-            include_hota,
-            n_jobs,
-        )
-        if not accs:
-            raise ValueError("No matching ground-truth and tracker result files found.")
-
-        if id_solver:
-            lap.default_solver = id_solver
-        summary = metric_host.compute_many(
-            accs,
-            names=names,
-            metrics=metric_names,
-            generate_overall=generate_overall,
-            n_jobs=n_jobs,
-        )
-        if include_hota:
-            summary = _append_hota_summary(
-                summary,
-                gt,
-                test,
-                names,
-                metric_host,
-                dist,
-                distfields,
-                hota_alphas,
-                generate_overall,
-                n_jobs,
-                prepared_sequences=prepared_sequences,
-            )
-
-    return MOTChallengeSummary(
+    return _MOTChallengeSummary(
         summary,
         formatters=_summary_formatters(metric_host, include_hota),
         namemap=_summary_namemap(include_hota),
     )
 
 
-def load_motchallenge_groundtruths(root, fmt=io.Format.AUTO, min_confidence=1):
-    """Load MOTChallenge ground-truth dataframes from a file or folder."""
-    root = Path(root)
-    if root.is_file():
-        return OrderedDict([(_default_sequence_name(root), io.loadtxt(root, fmt=fmt, min_confidence=min_confidence))])
-
-    files = _find_groundtruth_files(root)
-    if not files:
-        raise ValueError("No ground-truth files found below {}.".format(root))
-    logging.info("Found %d groundtruth files.", len(files))
-    return OrderedDict((name, io.loadtxt(path, fmt=fmt, min_confidence=min_confidence)) for name, path in files.items())
-
-
-def load_motchallenge_tests(root, fmt=io.Format.AUTO, names=None):
-    """Load MOTChallenge tracker result dataframes from a file or folder."""
-    root = Path(root)
-    if root.is_file():
-        return OrderedDict([(_default_sequence_name(root), io.loadtxt(root, fmt=fmt))])
-
-    files = _find_test_files(root)
-    if names is not None:
-        files = OrderedDict((name, path) for name, path in files.items() if name in names)
-    if not files:
-        raise ValueError("No tracker result files found below {}.".format(root))
-    logging.info("Found %d test files.", len(files))
-    return OrderedDict((name, io.loadtxt(path, fmt=fmt)) for name, path in files.items())
-
-
-def compare_dataframes(gts, tests, dist="iou", distfields=None, distth=0.5, n_jobs=1):
-    """Build accumulators for matching ground-truth and tracker dataframes."""
-    _validate_n_jobs(n_jobs)
-    tasks = []
-    for name, test in tests.items():
-        if name in gts:
-            tasks.append((name, gts[name], test))
-        else:
-            logging.warning("No ground truth for %s, skipping.", name)
-
-    names = [name for name, _, _ in tasks]
-    if n_jobs == 1 or len(tasks) < 2:
-        accs = [_compare_dataframe_task(task, dist, distfields, distth) for task in tasks]
-    else:
-        with ThreadPoolExecutor(max_workers=n_jobs) as executor:
-            accs = list(executor.map(lambda task: _compare_dataframe_task(task, dist, distfields, distth), tasks))
-
-    return accs, names
-
-
-def _compare_single_sequence(gt, test, dist, distfields, distth, include_hota):
-    if not include_hota:
-        return utils.compare_to_groundtruth(gt, test, dist, distfields=distfields, distth=distth), None
-    prepared = _prepare_iou_sequence_data(gt, test, distfields)
-    return _compare_prepared_iou(prepared, distth), prepared
-
-
-def _compare_multiple_sequences(gts, tests, dist, distfields, distth, include_hota, n_jobs):
-    if include_hota:
-        return _compare_iou_dataframes(gts, tests, distfields=distfields, distth=distth, n_jobs=n_jobs)
-    accumulators, names = compare_dataframes(
-        gts,
-        tests,
-        dist=dist,
-        distfields=distfields,
-        distth=distth,
-        n_jobs=n_jobs,
-    )
-    return accumulators, names, None
-
-
-def _compare_iou_dataframes(gts, tests, distfields=None, distth=0.5, n_jobs=1):
-    """Prepare shared IoU data and build CLEAR accumulators."""
-    _validate_n_jobs(n_jobs)
-    tasks = []
-    for name, test in tests.items():
-        if name in gts:
-            tasks.append((name, gts[name], test))
-        else:
-            logging.warning("No ground truth for %s, skipping.", name)
-
-    def prepare_and_compare(task):
-        name, ground_truth, tracker = task
-        logging.info("Comparing %s...", name)
-        prepared = _prepare_iou_sequence_data(ground_truth, tracker, distfields)
-        return prepared, _compare_prepared_iou(prepared, distth)
-
-    if n_jobs == 1 or len(tasks) < 2:
-        results = [prepare_and_compare(task) for task in tasks]
-    else:
-        with ThreadPoolExecutor(max_workers=n_jobs) as executor:
-            results = list(executor.map(prepare_and_compare, tasks))
-
-    names = [name for name, _, _ in tasks]
-    prepared_sequences = OrderedDict((name, result[0]) for name, result in zip(names, results))
-    accumulators = [result[1] for result in results]
-    return accumulators, names, prepared_sequences
-
-
-def _append_hota_summary(
-    summary,
-    gts,
-    tests,
-    names,
-    metric_host,
-    dist,
+def _evaluate_iou_paths(
+    gt_root,
+    test_root,
+    sequence_name,
+    fmt,
+    gt_min_confidence,
     distfields,
+    distth,
+    metric_names,
+    include_hota,
     hota_alphas,
     generate_overall,
     n_jobs,
-    prepared_sequences=None,
-):
-    hota_summary = _compute_hota_summary(
-        gts,
-        tests,
-        names,
-        metric_host,
-        dist,
-        distfields,
-        hota_alphas,
-        generate_overall,
-        n_jobs,
-        summary.index,
-        prepared_sequences=prepared_sequences,
-    )
-    return pd.concat([summary, hota_summary], axis=1)
-
-
-def _compute_hota_summary(
-    gts,
-    tests,
-    names,
     metric_host,
-    dist,
-    distfields,
-    hota_alphas,
-    generate_overall,
-    n_jobs,
-    index,
-    prepared_sequences=None,
+    progress,
 ):
-    del metric_host, dist, n_jobs  # HOTA is validated as IoU-only by the caller.
-    hota_alphas = np.asarray(hota_alphas, dtype=float)
-    if prepared_sequences is None:
-        sequence_summaries = OrderedDict(
-            (name, _compute_hota_sequence_summary(gts[name], tests[name], distfields, hota_alphas)) for name in names
-        )
+    """Evaluate every input through the canonical state-only IoU engine."""
+    if gt_root.is_file():
+        matched_files = [(sequence_name or _default_sequence_name(test_root), gt_root, test_root)]
     else:
-        sequence_summaries = OrderedDict(
-            (name, _compute_prepared_hota_sequence_summary(prepared_sequences[name], hota_alphas)) for name in names
+        gt_files = _find_groundtruth_files(gt_root)
+        test_files = _find_test_files(test_root)
+        matched_files = [
+            (name, gt_files[name], test_path)
+            for name, test_path in test_files.items()
+            if name in gt_files
+        ]
+    tasks = [
+        (
+            task_index,
+            name,
+            gt_path,
+            test_path,
+            fmt,
+            gt_min_confidence,
+            distfields,
+            distth,
+            metric_names,
+            include_hota,
+            np.asarray(hota_alphas, dtype=float),
         )
+        for task_index, (name, gt_path, test_path) in enumerate(matched_files)
+    ]
+    if not tasks:
+        raise ValueError("No matching ground-truth and tracker result files found.")
+
+    workers = min(n_jobs, len(tasks))
+    context = _fast_process_context()
+    progress_arrays = _create_progress_arrays(context, len(tasks)) if progress else (None, None, None)
+    _initialize_evaluation_worker(*progress_arrays)
+    progress_names = [task[1] for task in tasks]
+    display = _SequenceProgressDisplay(progress_names, progress_arrays, enabled=progress)
+    if workers == 1:
+        with display:
+            results = [_evaluate_iou_sequence_file(task) for task in tasks]
+    else:
+        with ProcessPoolExecutor(
+            max_workers=workers,
+            mp_context=context,
+            initializer=_initialize_evaluation_worker,
+            initargs=progress_arrays,
+        ) as executor:
+            # Submitting before the renderer thread starts ensures POSIX workers
+            # are forked from a single-threaded parent.
+            futures = [executor.submit(_evaluate_iou_sequence_file, task) for task in tasks]
+            with display:
+                results = [future.result() for future in futures]
+
+    names = [result[0] for result in results]
+    partials = [result[1] for result in results]
+    rows = [OrderedDict((metric, partial[metric]) for metric in metric_names) for partial in partials]
+    result_names = list(names)
     if generate_overall:
-        sequence_summaries["OVERALL"] = _combine_hota_sequence_summaries(sequence_summaries.values())
+        rows.append(
+            metric_host.compute_overall(
+                partials,
+                metrics=metric_names,
+            )
+        )
+        result_names.append("OVERALL")
+    summary = pd.DataFrame(rows, index=result_names, columns=metric_names)
 
+    if include_hota:
+        sequence_summaries = OrderedDict((result[0], result[2]) for result in results)
+        if generate_overall:
+            sequence_summaries["OVERALL"] = _combine_hota_sequence_summaries(
+                sequence_summaries.values()
+            )
+        summary = pd.concat(
+            [summary, _hota_summary_frame(sequence_summaries, summary.index)],
+            axis=1,
+        )
+    return summary
+
+
+def _evaluate_iou_sequence_file(task):
+    """Load, match, and summarize one sequence inside a worker process."""
+    (
+        task_index,
+        name,
+        gt_path,
+        test_path,
+        fmt,
+        gt_min_confidence,
+        distfields,
+        distth,
+        metric_names,
+        include_hota,
+        hota_alphas,
+    ) = task
+    sequence_progress = _WorkerSequenceProgress(task_index, include_hota) if _WORKER_PROGRESS_STAGE is not None else None
+    if sequence_progress is not None:
+        sequence_progress.stage(_PROGRESS_LOADING)
+    try:
+        ground_truth = io.loadtxt(gt_path, fmt=fmt, min_confidence=gt_min_confidence)
+        tracker = io.loadtxt(test_path, fmt=fmt)
+        prepared = _prepare_iou_sequence_data(ground_truth, tracker, distfields, progress=sequence_progress)
+        if sequence_progress is not None:
+            sequence_progress.stage(_PROGRESS_CLEAR)
+        accumulator = _compare_prepared_iou(prepared, distth, progress=sequence_progress)
+
+        if sequence_progress is not None:
+            sequence_progress.stage(_PROGRESS_METRICS)
+        partial = metrics_module._METRIC_HOST.compute(
+            accumulator,
+            metrics=metric_names,
+        )
+        if include_hota:
+            if sequence_progress is not None:
+                sequence_progress.stage(_PROGRESS_HOTA)
+            hota_summary = _compute_prepared_hota_sequence_summary(
+                prepared,
+                hota_alphas,
+                progress=sequence_progress,
+            )
+        else:
+            hota_summary = None
+        if sequence_progress is not None:
+            sequence_progress.finish()
+        return name, partial, hota_summary
+    except BaseException:
+        if sequence_progress is not None:
+            sequence_progress.fail()
+        raise
+
+
+def _initialize_evaluation_worker(
+    progress_current=None,
+    progress_total=None,
+    progress_stage=None,
+):
+    """Connect each sequence process to the shared progress arrays."""
+    global _WORKER_PROGRESS_CURRENT, _WORKER_PROGRESS_TOTAL, _WORKER_PROGRESS_STAGE  # pylint: disable=global-statement
+    _WORKER_PROGRESS_CURRENT = progress_current
+    _WORKER_PROGRESS_TOTAL = progress_total
+    _WORKER_PROGRESS_STAGE = progress_stage
+
+
+class _WorkerSequenceProgress(object):
+    """Publish batched frame counters from one sequence worker."""
+
+    def __init__(self, index, include_hota):
+        self.index = index
+        self.passes = 3 if include_hota else 2
+        self.current = 0
+        self.total = 0
+
+    def begin(self, frame_count):
+        """Set the frame-derived total and enter the IoU pass."""
+        self.total = frame_count * self.passes
+        _WORKER_PROGRESS_TOTAL[self.index] = self.total
+        self.stage(_PROGRESS_IOU)
+
+    def advance(self):
+        """Advance locally, publishing only occasional cache-friendly writes."""
+        self.current += 1
+        if self.current % _PROGRESS_FLUSH_FRAMES == 0:
+            _WORKER_PROGRESS_CURRENT[self.index] = self.current
+
+    def stage(self, stage):
+        """Flush the counter and publish a new processing stage."""
+        _WORKER_PROGRESS_CURRENT[self.index] = self.current
+        _WORKER_PROGRESS_STAGE[self.index] = stage
+
+    def finish(self):
+        """Mark the sequence complete."""
+        self.current = self.total
+        self.stage(_PROGRESS_DONE)
+
+    def fail(self):
+        """Mark the sequence failed before propagating its exception."""
+        self.stage(_PROGRESS_FAILED)
+
+
+class _SequenceProgressDisplay(object):
+    """Render all worker counters from one parent-owned terminal thread."""
+
+    def __init__(self, names, arrays, enabled, stream=None):
+        self.names = names
+        self.current, self.total, self.stage = arrays
+        self.enabled = enabled
+        self.stream = stream or sys.stderr
+        self.stop_event = threading.Event()
+        self.thread = None
+        self.name_width = min(30, max(len(name) for name in names))
+        columns = shutil.get_terminal_size(fallback=(80, 24)).columns
+        self.bar_width = max(8, min(30, columns - self.name_width - 22))
+
+    def __enter__(self):
+        if not self.enabled:
+            return self
+        self.stream.write("\x1b[?25l" + "\n" * len(self.names))
+        self._render()
+        self.thread = threading.Thread(target=self._run, name="motmetrics-progress", daemon=True)
+        self.thread.start()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        if not self.enabled:
+            return False
+        self.stop_event.set()
+        self.thread.join()
+        self._render()
+        self.stream.write("\x1b[?25h")
+        self.stream.flush()
+        return False
+
+    def _run(self):
+        while not self.stop_event.wait(0.1):
+            self._render()
+
+    def _render(self):
+        lines = [
+            _format_progress_line(
+                name,
+                self.current[index],
+                self.total[index],
+                self.stage[index],
+                self.name_width,
+                self.bar_width,
+            )
+            for index, name in enumerate(self.names)
+        ]
+        output = "\x1b[{}A".format(len(lines))
+        output += "".join("\r\x1b[2K{}\n".format(line) for line in lines)
+        self.stream.write(output)
+        self.stream.flush()
+
+
+def _format_progress_line(name, current, total, stage, name_width, bar_width):
+    """Format a fixed-width sequence progress row."""
+    if len(name) > name_width:
+        name = name[: max(0, name_width - 1)] + "…"
+    label = name.ljust(name_width)
+    if stage == _PROGRESS_DONE:
+        fraction = 1.0
+    elif total:
+        fraction = min(1.0, current / total)
+    else:
+        fraction = 0.0
+    filled = int(bar_width * fraction)
+    bar = "█" * filled + "·" * (bar_width - filled)
+    percent = "{:3.0f}%".format(fraction * 100) if total or stage == _PROGRESS_DONE else " --%"
+    stage_name = _PROGRESS_STAGE_NAMES[stage]
+    return "{} [{}] {} {}".format(label, bar, percent, stage_name)
+
+
+def _create_progress_arrays(context, count):
+    """Allocate lock-free counters inherited by all sequence workers."""
+    return context.RawArray("q", count), context.RawArray("q", count), context.RawArray("b", count)
+
+
+def _progress_is_enabled(progress):
+    """Resolve automatic terminal progress without polluting redirected logs."""
+    if progress is not None and not isinstance(progress, (bool, np.bool_)):
+        raise TypeError("progress must be True, False, or None.")
+    if progress is not None:
+        return bool(progress)
+    is_terminal = callable(getattr(sys.stderr, "isatty", None)) and sys.stderr.isatty()
+    return is_terminal and os.environ.get("TERM") != "dumb"
+
+
+def _fast_process_context():
+    """Prefer copy-on-write workers on POSIX to avoid dataframe serialization."""
+    if os.name == "posix" and "fork" in multiprocessing.get_all_start_methods():
+        return multiprocessing.get_context("fork")
+    return multiprocessing.get_context()
+
+
+def _hota_summary_frame(sequence_summaries, index):
+    """Convert per-alpha sequence results into displayed scalar means."""
     rows = []
     for row_name in index:
         row = OrderedDict()
@@ -372,12 +467,7 @@ def _compute_hota_summary(
     return pd.DataFrame(rows, index=index)
 
 
-def _compute_hota_sequence_summary(gt, test, distfields, hota_alphas):
-    prepared = _prepare_iou_sequence_data(gt, test, distfields)
-    return _compute_prepared_hota_sequence_summary(prepared, hota_alphas)
-
-
-def _compute_prepared_hota_sequence_summary(prepared, hota_alphas):
+def _compute_prepared_hota_sequence_summary(prepared, hota_alphas, progress=None):
     frame_data = prepared.frame_data
     gt_id_counts = prepared.gt_id_counts
     tracker_id_counts = prepared.tracker_id_counts
@@ -394,10 +484,12 @@ def _compute_prepared_hota_sequence_summary(prepared, hota_alphas):
     matched_similarities = []
 
     for _, gt_indices, tracker_indices, similarities in frame_data:
+        if progress is not None:
+            progress.advance()
         if similarities.size == 0:
             continue
         weighted_similarities = similarities * alignment_scores[np.ix_(gt_indices, tracker_indices)]
-        row_indices, col_indices = lap.linear_sum_assignment(1 - weighted_similarities)
+        row_indices, col_indices = _linear_sum_assignment(1 - weighted_similarities)
         if len(row_indices) == 0:
             continue
         matched_gt_indices.append(gt_indices[row_indices])
@@ -432,7 +524,7 @@ def _compute_prepared_hota_sequence_summary(prepared, hota_alphas):
     }
 
 
-def _prepare_iou_sequence_data(gt, test, distfields=None):
+def _prepare_iou_sequence_data(gt, test, distfields=None, progress=None):
     if distfields is None:
         distfields = ["X", "Y", "Width", "Height"]
 
@@ -448,8 +540,12 @@ def _prepare_iou_sequence_data(gt, test, distfields=None):
     frame_data = []
     empty_indices = np.empty(0, dtype=int)
     empty_values = np.empty((0, len(distfields)), dtype=float)
+    if progress is not None:
+        progress.begin(len(frame_ids))
 
     for frame_id in frame_ids:
+        if progress is not None:
+            progress.advance()
         frame_gt_indices, frame_gt_values = gt_groups.get(frame_id, (empty_indices, empty_values))
         frame_tracker_indices, frame_tracker_values = test_groups.get(frame_id, (empty_indices, empty_values))
         similarities = iou_matrix(frame_gt_values, frame_tracker_values, return_dist=False)
@@ -499,15 +595,15 @@ def _group_frame_arrays(dataframe, id_index):
     for start, end in zip(starts, ends):
         frame_id_codes = id_codes[start:end]
         groups[frame_ids[start]] = (frame_id_codes, values[start:end])
-        # Preserve the legacy advanced-index behavior for invalid inputs that
-        # repeat an identity within one frame.
-        id_counts[frame_id_codes] += 1
+        np.add.at(id_counts, frame_id_codes, 1)
     return groups, id_counts
 
 
-def _compare_prepared_iou(prepared, distth):
-    accumulator = MOTAccumulator()
+def _compare_prepared_iou(prepared, distth, progress=None):
+    accumulator = _Accumulator()
     for frame_id, gt_indices, tracker_indices, similarities in prepared.frame_data:
+        if progress is not None:
+            progress.advance()
         distances = 1 - similarities
         distances = np.where(distances > distth, np.nan, distances)
         accumulator.update(gt_indices, tracker_indices, distances, frameid=frame_id)
@@ -546,12 +642,6 @@ def _combine_hota_sequence_summaries(summaries):
 def _quiet_divide(numerator, denominator):
     with np.errstate(divide="ignore", invalid="ignore"):
         return np.true_divide(numerator, denominator)
-
-
-def _compare_dataframe_task(task, dist, distfields, distth):
-    name, gt, test = task
-    logging.info("Comparing %s...", name)
-    return utils.compare_to_groundtruth(gt, test, dist, distfields=distfields, distth=distth)
 
 
 def _prepare_metrics(metric_names, exclude_id):

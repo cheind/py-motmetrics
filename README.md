@@ -33,24 +33,38 @@ print(summary)
 `summary` displays as a MOTChallenge-style table and keeps the raw pandas data available:
 
 ```python
-summary.mota
-summary.idf1
-summary.hota
+summary.df["mota"]
+summary.df["idf1"]
+summary.df["hota"]
 summary.df.to_csv("metrics.csv")
 ```
 
 By default, `evaluate_motchallenge` uses `fmt="auto"`. It detects MOTChallenge text, VATIC text, and UA-DETRAC `.mat`/`.xml` files. For ambiguous text files, pass the format explicitly:
 
 ```python
-summary = mm.evaluate_motchallenge(gt, pred, fmt=mm.io.Format.MOT16)
+summary = mm.evaluate_motchallenge(gt, pred, fmt="mot16")
 ```
 
 Folder evaluation uses the same function:
 
 ```python
-summary = mm.evaluate_motchallenge("path/to/gt_root", "path/to/preds_root")
+summary = mm.evaluate_motchallenge(
+    "path/to/gt_root",
+    "path/to/preds_root",
+    n_jobs=4,
+)
 print(summary)
 ```
+
+For folder-based IoU evaluation, `n_jobs > 1` runs complete sequences in
+separate processes, including file loading, CLEAR/Identity metrics, and HOTA.
+Use at most the number of sequences and benchmark against the number of
+physical CPU cores; extra processes can be slower once process overhead or
+memory bandwidth becomes the bottleneck.
+
+Interactive terminals automatically show one progress row per sequence. Pass
+`progress=False` to suppress it, or `progress=True` to force it when stderr is
+not detected as an interactive terminal.
 
 Expected folder layout:
 
@@ -59,34 +73,14 @@ gt_root/<SEQUENCE>/gt/gt.txt
 preds_root/<SEQUENCE>.txt
 ```
 
-The command-line evaluator is still available:
-
-```bash
-python -m motmetrics.apps.eval_motchallenge path/to/gt_root path/to/preds_root
-```
-
 ## Metrics
-
-List all registered metrics:
-
-```python
-import motmetrics as mm
-
-print(mm.list_metrics_markdown())
-```
 
 The default MOTChallenge summary includes the commonly reported CLEAR, Identity, and HOTA metrics.
 
-## Advanced Use
-
-Useful lower-level pieces:
-
-- `mm.MOTAccumulator` stores frame-level matching events.
-- `mm.distances` contains distance helpers such as IoU and Euclidean matrices.
-- `mm.io.loadtxt(..., fmt="auto")` detects MOTChallenge text, VATIC text, and UA-DETRAC MAT/XML files.
-- `mm.metrics.create()` returns a `MetricsHost` for custom metric selection.
-- `mm.utils.compare_to_groundtruth` compares loaded dataframes directly.
-- `mm.utils.compare_to_groundtruth_reweighting` supports custom HOTA-style multi-threshold workflows.
+`motmetrics.evaluate_motchallenge` is the only supported metrics entrypoint.
+The accumulator, matching, dependency resolution, and per-sequence process
+workers are internal implementation details so every invocation follows the
+same optimized computational path.
 
 For the full HOTA/CLEAR/Identity parity check against TrackEval, see [motmetrics/tests/test_trackeval_parity.py](motmetrics/tests/test_trackeval_parity.py).
 

@@ -4,7 +4,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-import motmetrics as mm
+import motmetrics._distances as distances
+import motmetrics._evaluation as evaluation
+import motmetrics._io as io
+import motmetrics._metrics as metrics
 
 trackeval = pytest.importorskip(
     "trackeval",
@@ -44,8 +47,8 @@ IDENTITY_FIELD_MAP = {
 def _load_sequence(sequence_name):
     sequence_dir = DATA_DIR / sequence_name
     return (
-        mm.io.loadtxt(sequence_dir / "gt.txt"),
-        mm.io.loadtxt(sequence_dir / "test.txt"),
+        io.loadtxt(sequence_dir / "gt.txt"),
+        io.loadtxt(sequence_dir / "test.txt"),
     )
 
 
@@ -83,7 +86,7 @@ def _to_trackeval_data(ground_truth, tracker):
         gt_ids.append(gt_ids_t)
         tracker_ids_by_frame.append(tracker_ids_t)
         similarity_scores.append(
-            mm.distances.iou_matrix(gt_boxes_t, tracker_boxes_t, return_dist=False)
+            distances.iou_matrix(gt_boxes_t, tracker_boxes_t, return_dist=False)
         )
 
     return {
@@ -99,61 +102,52 @@ def _to_trackeval_data(ground_truth, tracker):
 
 
 def _compute_py_motmetrics(sequences):
-    metric_host = mm.metrics.create()
+    metric_host = metrics._METRIC_HOST
     names = list(sequences)
-    clear_accumulators = [
-        mm.utils.compare_to_groundtruth(ground_truth, tracker, "iou", distth=0.5)
-        for ground_truth, tracker in sequences.values()
+    requested_metrics = [
+        *CLEAR_FIELD_MAP.values(),
+        "motp",
+        *IDENTITY_FIELD_MAP.values(),
     ]
-    clear_and_identity = metric_host.compute_many(
-        clear_accumulators,
-        metrics=[
-            *CLEAR_FIELD_MAP.values(),
-            "motp",
-            *IDENTITY_FIELD_MAP.values(),
-        ],
-        names=names,
-        generate_overall=True,
+    metric_partials = {}
+    hota_summaries = {}
+    for name, (ground_truth, tracker) in sequences.items():
+        prepared = evaluation._prepare_iou_sequence_data(ground_truth, tracker)
+        accumulator = evaluation._compare_prepared_iou(prepared, distth=0.5)
+        metric_partials[name] = metric_host.compute(
+            accumulator,
+            metrics=requested_metrics,
+        )
+        hota_summaries[name] = evaluation._compute_prepared_hota_sequence_summary(
+            prepared,
+            HOTA_ALPHAS,
+        )
+    metric_partials["OVERALL"] = metric_host.compute_overall(
+        list(metric_partials.values()),
+        metrics=requested_metrics,
     )
-
-    hota_by_alpha = []
-    hota_accumulators = {
-        name: mm.utils.compare_to_groundtruth_reweighting(
-            ground_truth,
-            tracker,
-            "iou",
-            distth=HOTA_ALPHAS,
-        )
-        for name, (ground_truth, tracker) in sequences.items()
-    }
-    for alpha_index in range(len(HOTA_ALPHAS)):
-        hota_by_alpha.append(
-            metric_host.compute_many(
-                [hota_accumulators[name][alpha_index] for name in names],
-                metrics=["hota_alpha", "deta_alpha", "assa_alpha"],
-                names=names,
-                generate_overall=True,
-            )
-        )
+    hota_summaries["OVERALL"] = evaluation._combine_hota_sequence_summaries(
+        hota_summaries.values()
+    )
 
     results = {}
     for name in [*names, "OVERALL"]:
         result = {
-            trackeval_name: clear_and_identity.loc[name, py_motmetrics_name]
+            trackeval_name: metric_partials[name][py_motmetrics_name]
             for trackeval_name, py_motmetrics_name in CLEAR_FIELD_MAP.items()
         }
-        result["MOTP"] = 1.0 - clear_and_identity.loc[name, "motp"]
+        result["MOTP"] = 1.0 - metric_partials[name]["motp"]
         result.update(
             {
-                trackeval_name: clear_and_identity.loc[name, py_motmetrics_name]
+                trackeval_name: metric_partials[name][py_motmetrics_name]
                 for trackeval_name, py_motmetrics_name in IDENTITY_FIELD_MAP.items()
             }
         )
         result.update(
             {
-                "HOTA": np.asarray([summary.loc[name, "hota_alpha"] for summary in hota_by_alpha]),
-                "DetA": np.asarray([summary.loc[name, "deta_alpha"] for summary in hota_by_alpha]),
-                "AssA": np.asarray([summary.loc[name, "assa_alpha"] for summary in hota_by_alpha]),
+                "HOTA": hota_summaries[name]["hota_alpha"],
+                "DetA": hota_summaries[name]["deta_alpha"],
+                "AssA": hota_summaries[name]["assa_alpha"],
             }
         )
         results[name] = result

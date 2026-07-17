@@ -10,18 +10,15 @@
 https://github.com/cheind/py-motmetrics/issues/19
 """
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import numpy as np
 
-import motmetrics as mm
+import motmetrics._metrics as metrics
+from motmetrics._accumulator import _Accumulator
 
 
 def test_issue19():
     """Tests issue 19."""
-    acc = mm.MOTAccumulator()
+    acc = _Accumulator()
 
     g0 = [0, 1]
     p0 = [0, 1]
@@ -34,5 +31,5 @@ def test_issue19():
     acc.update(g0, p0, d0, 0)
     acc.update(g1, p1, d1, 1)
 
-    mh = mm.metrics.create()
+    mh = metrics._METRIC_HOST
     mh.compute(acc)

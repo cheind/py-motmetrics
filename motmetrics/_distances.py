@@ -7,13 +7,9 @@
 
 """Functions for comparing predictions and ground-truth."""
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import numpy as np
 
-from motmetrics import math_util
+import motmetrics._math_util as math_util
 
 
 def norm2squared_matrix(objs, hyps, max_d2=float('inf')):
@@ -48,10 +44,10 @@ def norm2squared_matrix(objs, hyps, max_d2=float('inf')):
     assert hyps.shape[1] == objs.shape[1], "Dimension mismatch"
 
     delta = objs[:, np.newaxis] - hyps[np.newaxis, :]
-    C = np.sum(delta ** 2, axis=-1)
+    squared_distances = np.sum(delta ** 2, axis=-1)
 
-    C[C > max_d2] = np.nan
-    return C
+    squared_distances[squared_distances > max_d2] = np.nan
+    return squared_distances
 
 
 def rect_min_max(r):

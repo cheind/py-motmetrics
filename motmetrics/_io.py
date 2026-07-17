@@ -7,8 +7,6 @@
 
 """Functions for loading data and writing summaries."""
 
-from __future__ import absolute_import, division, print_function
-
 import io
 import shlex
 import xml.etree.ElementTree
@@ -410,9 +408,8 @@ def render_summary(summary, formatters=None, namemap=None, buf=None):
     buf : StringIO-like, optional
         Buffer to write to
     formatters : dict, optional
-        Dicionary defining custom formatters for individual metrics.
-        I.e `{'mota': '{:.2%}'.format}`. You can get preset formatters
-        from MetricsHost.formatters
+        Dictionary defining custom formatters for individual metrics, such as
+        ``{'mota': '{:.2%}'.format}``.
     namemap : dict, optional
         Dictionary defining new metric names for display. I.e
         `{'num_false_positives': 'FP'}`.
