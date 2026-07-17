@@ -4,14 +4,15 @@ import numpy as np
 from scipy.optimize import linear_sum_assignment as _scipy_assignment
 
 
-def _linear_sum_assignment(costs):
+def _linear_sum_assignment(costs, finite=None):
     """Solve a possibly sparse rectangular assignment with SciPy."""
     costs = np.asarray(costs)
     if costs.size == 0:
         empty = np.empty(0, dtype=int)
         return empty, empty
 
-    finite = np.isfinite(costs)
+    if finite is None:
+        finite = np.isfinite(costs)
     if finite.all():
         return _scipy_assignment(costs)
     if not finite.any():

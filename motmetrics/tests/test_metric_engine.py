@@ -14,6 +14,43 @@ import motmetrics._metrics as metrics
 from motmetrics._accumulator import _Accumulator
 
 
+def _empty_accumulator():
+    return _Accumulator(np.empty(0, dtype=int), np.empty(0, dtype=int))
+
+
+def _accumulate(frames):
+    """Encode arbitrary test IDs once, then exercise the production path."""
+    object_ids = sorted({object_id for objects, _, _ in frames for object_id in objects})
+    prediction_ids = sorted({prediction_id for _, predictions, _ in frames for prediction_id in predictions})
+    object_codes = {object_id: code for code, object_id in enumerate(object_ids)}
+    prediction_codes = {prediction_id: code for code, prediction_id in enumerate(prediction_ids)}
+    encoded_frames = []
+    object_counts = np.zeros(len(object_ids), dtype=int)
+    prediction_counts = np.zeros(len(prediction_ids), dtype=int)
+    for objects, predictions, distances in frames:
+        encoded_objects = np.asarray([object_codes[value] for value in objects], dtype=np.intp)
+        encoded_predictions = np.asarray([prediction_codes[value] for value in predictions], dtype=np.intp)
+        object_counts += np.bincount(encoded_objects, minlength=len(object_ids))
+        prediction_counts += np.bincount(encoded_predictions, minlength=len(prediction_ids))
+        encoded_frames.append(
+            (
+                encoded_objects,
+                encoded_predictions,
+                np.asarray(distances, dtype=float).reshape(len(objects), len(predictions)),
+            )
+        )
+
+    accumulator = _Accumulator(object_counts, prediction_counts)
+    for encoded_objects, encoded_predictions, distances in encoded_frames:
+        accumulator.update(
+            encoded_objects,
+            encoded_predictions,
+            distances,
+            np.isfinite(distances),
+        )
+    return accumulator
+
+
 def test_metricscontainer_1():
     """Tests registration of events with dependencies."""
     m = metrics._MetricsHost()
@@ -22,7 +59,7 @@ def test_metricscontainer_1():
     m._register(lambda engine, a, b: a + b, deps=["a", "b"], name="add")
     m._register(lambda engine, a, b: a - b, deps=["a", "b"], name="sub")
     m._register(lambda engine, a, b: a * b, deps=["add", "sub"], name="mul")
-    summary = m.compute(_Accumulator(), metrics=["mul", "add"])
+    summary = m.compute(_empty_accumulator(), metrics=["mul", "add"])
     assert summary["mul"] == -3.0
     assert summary["add"] == 3.0
 
@@ -35,7 +72,7 @@ def test_metricscontainer_autodep():
     m._register(lambda engine, a, b: a + b, name="add", deps="auto")
     m._register(lambda engine, a, b: a - b, name="sub", deps="auto")
     m._register(lambda engine, add, sub: add * sub, name="mul", deps="auto")
-    summary = m.compute(_Accumulator(), metrics=["mul", "add"])
+    summary = m.compute(_empty_accumulator(), metrics=["mul", "add"])
     assert summary["mul"] == -3.0
     assert summary["add"] == 3.0
 
@@ -66,13 +103,13 @@ def test_metricscontainer_autoname():
     m._register(sub, deps="auto")
     m._register(mul, deps="auto")
 
-    summary = m.compute(_Accumulator(), metrics=["mul", "add"])
+    summary = m.compute(_empty_accumulator(), metrics=["mul", "add"])
     assert summary["mul"] == -3.0
     assert summary["add"] == 3.0
 
 
 def test_metrics_with_empty_state():
-    acc = _Accumulator()
+    acc = _empty_accumulator()
 
     mh = metrics._METRIC_HOST
     metr = mh.compute(
@@ -100,9 +137,10 @@ def test_metric_input_must_be_the_compact_accumulator():
 
 
 def test_accumulator_keeps_all_metrics_in_compact_state():
-    acc = _Accumulator(auto_id=True)
-    acc.update([1, 2], [10, 20], [[0.1, np.nan], [np.nan, 0.2]])
-    acc.update([1, 2], [10, 30], [[0.1, np.nan], [np.nan, 0.2]])
+    acc = _accumulate([
+        ([1, 2], [10, 20], [[0.1, np.nan], [np.nan, 0.2]]),
+        ([1, 2], [10, 30], [[0.1, np.nan], [np.nan, 0.2]]),
+    ])
 
     metric_host = metrics._METRIC_HOST
     result = metric_host.compute(
@@ -117,12 +155,12 @@ def test_accumulator_keeps_all_metrics_in_compact_state():
 
 def test_assignment_metrics_with_empty_groundtruth():
     """Tests metrics when there are no ground-truth objects."""
-    acc = _Accumulator(auto_id=True)
-    # Empty groundtruth.
-    acc.update([], [1, 2, 3, 4], [])
-    acc.update([], [1, 2, 3, 4], [])
-    acc.update([], [1, 2, 3, 4], [])
-    acc.update([], [1, 2, 3, 4], [])
+    acc = _accumulate([
+        ([], [1, 2, 3, 4], []),
+        ([], [1, 2, 3, 4], []),
+        ([], [1, 2, 3, 4], []),
+        ([], [1, 2, 3, 4], []),
+    ])
 
     mh = metrics._METRIC_HOST
     metr = mh.compute(
@@ -148,12 +186,12 @@ def test_assignment_metrics_with_empty_groundtruth():
 
 def test_assignment_metrics_with_empty_predictions():
     """Tests metrics when there are no predictions."""
-    acc = _Accumulator(auto_id=True)
-    # Empty predictions.
-    acc.update([1, 2, 3, 4], [], [])
-    acc.update([1, 2, 3, 4], [], [])
-    acc.update([1, 2, 3, 4], [], [])
-    acc.update([1, 2, 3, 4], [], [])
+    acc = _accumulate([
+        ([1, 2, 3, 4], [], []),
+        ([1, 2, 3, 4], [], []),
+        ([1, 2, 3, 4], [], []),
+        ([1, 2, 3, 4], [], []),
+    ])
 
     mh = metrics._METRIC_HOST
     metr = mh.compute(
@@ -179,12 +217,12 @@ def test_assignment_metrics_with_empty_predictions():
 
 def test_assignment_metrics_with_both_empty():
     """Tests metrics when there are no ground-truth objects or predictions."""
-    acc = _Accumulator(auto_id=True)
-    # Empty groundtruth and empty predictions.
-    acc.update([], [], [])
-    acc.update([], [], [])
-    acc.update([], [], [])
-    acc.update([], [], [])
+    acc = _accumulate([
+        ([], [], []),
+        ([], [], []),
+        ([], [], []),
+        ([], [], []),
+    ])
 
     mh = metrics._METRIC_HOST
     metr = mh.compute(
@@ -230,33 +268,27 @@ def test_benchmark_all_metrics(benchmark):
 def _accum_random_uniform(
     rand, seq_len, num_objs, num_hyps, objs_per_frame, hyps_per_frame
 ):
-    acc = _Accumulator(auto_id=True)
+    frames = []
     for _ in range(seq_len):
         # Choose subset of objects present in this frame.
         objs = rand.choice(num_objs, objs_per_frame, replace=False)
         # Choose subset of hypotheses present in this frame.
         hyps = rand.choice(num_hyps, hyps_per_frame, replace=False)
         dist = rand.uniform(size=(objs_per_frame, hyps_per_frame))
-        acc.update(objs, hyps, dist)
-    return acc
+        frames.append((objs, hyps, dist))
+    return _accumulate(frames)
 
 
 def test_mota_motp():
     """Tests values of MOTA and MOTP."""
-    acc = _Accumulator()
-
-    # All FP
-    acc.update([], [1, 2], [], frameid=0)
-    # All miss
-    acc.update([1, 2], [], [], frameid=1)
-    # Match
-    acc.update([1, 2], [1, 2], [[1, 0.5], [0.3, 1]], frameid=2)
-    # Switch
-    acc.update([1, 2], [1, 2], [[0.2, np.nan], [np.nan, 0.1]], frameid=3)
-    # Match. Better new match is available but should prefer history
-    acc.update([1, 2], [1, 2], [[5, 1], [1, 5]], frameid=4)
-    # No data
-    acc.update([], [], [], frameid=5)
+    acc = _accumulate([
+        ([], [1, 2], []),
+        ([1, 2], [], []),
+        ([1, 2], [1, 2], [[1, 0.5], [0.3, 1]]),
+        ([1, 2], [1, 2], [[0.2, np.nan], [np.nan, 0.1]]),
+        ([1, 2], [1, 2], [[5, 1], [1, 5]]),
+        ([], [], []),
+    ])
 
     mh = metrics._METRIC_HOST
     metr = mh.compute(
@@ -287,24 +319,16 @@ def test_mota_motp():
     assert metr["num_frames"] == 6
 
 
-def test_ids():
-    """Test metrics with frame IDs specified manually."""
-    acc = _Accumulator()
-
-    # No data
-    acc.update([], [], [], frameid=0)
-    # Match
-    acc.update([1, 2], [1, 2], [[1, 0], [0, 1]], frameid=1)
-    # Switch also Transfer
-    acc.update([1, 2], [1, 2], [[0.4, np.nan], [np.nan, 0.4]], frameid=2)
-    # Match
-    acc.update([1, 2], [1, 2], [[0, 1], [1, 0]], frameid=3)
-    # Ascend (switch)
-    acc.update([1, 2], [2, 3], [[1, 0], [0.4, 0.7]], frameid=4)
-    # Migrate (transfer)
-    acc.update([1, 3], [2, 3], [[1, 0], [0.4, 0.7]], frameid=5)
-    # No data
-    acc.update([], [], [], frameid=6)
+def test_identity_change_metrics():
+    acc = _accumulate([
+        ([], [], []),
+        ([1, 2], [1, 2], [[1, 0], [0, 1]]),
+        ([1, 2], [1, 2], [[0.4, np.nan], [np.nan, 0.4]]),
+        ([1, 2], [1, 2], [[0, 1], [1, 0]]),
+        ([1, 2], [2, 3], [[1, 0], [0.4, 0.7]]),
+        ([1, 3], [2, 3], [[1, 0], [0.4, 0.7]]),
+        ([], [], []),
+    ])
 
     mh = metrics._METRIC_HOST
     metr = mh.compute(
@@ -342,19 +366,16 @@ def test_ids():
 
 def test_correct_average():
     """Tests what is depicted in figure 3 of 'Evaluating MOT Performance'."""
-    acc = _Accumulator(auto_id=True)
-
-    # No track
-    acc.update([1, 2, 3, 4], [], [])
-    acc.update([1, 2, 3, 4], [], [])
-    acc.update([1, 2, 3, 4], [], [])
-    acc.update([1, 2, 3, 4], [], [])
-
-    # Track single
-    acc.update([4], [4], [0])
-    acc.update([4], [4], [0])
-    acc.update([4], [4], [0])
-    acc.update([4], [4], [0])
+    acc = _accumulate([
+        ([1, 2, 3, 4], [], []),
+        ([1, 2, 3, 4], [], []),
+        ([1, 2, 3, 4], [], []),
+        ([1, 2, 3, 4], [], []),
+        ([4], [4], [0]),
+        ([4], [4], [0]),
+        ([4], [4], [0]),
+        ([4], [4], [0]),
+    ])
 
     mh = metrics._METRIC_HOST
     metr = mh.compute(acc, metrics="mota")
@@ -362,13 +383,13 @@ def test_correct_average():
 
 
 def test_track_quality_boundary_matches_trackeval():
-    acc = _Accumulator(auto_id=True)
-
-    acc.update([1], [1], [0])
-    acc.update([1], [1], [0])
-    acc.update([1], [1], [0])
-    acc.update([1], [1], [0])
-    acc.update([1], [], [])
+    acc = _accumulate([
+        ([1], [1], [0]),
+        ([1], [1], [0]),
+        ([1], [1], [0]),
+        ([1], [1], [0]),
+        ([1], [], []),
+    ])
 
     mh = metrics._METRIC_HOST
     metr = mh.compute(
@@ -381,12 +402,13 @@ def test_track_quality_boundary_matches_trackeval():
 
 
 def test_num_fragmentations_ignores_leading_and_trailing_misses():
-    acc = _Accumulator(auto_id=True)
-    acc.update([1, 2], [], [])
-    acc.update([1, 2], [1], [[0.1], [np.nan]])
-    acc.update([1, 2], [], [])
-    acc.update([1, 2], [1], [[0.1], [np.nan]])
-    acc.update([1, 2], [], [])
+    acc = _accumulate([
+        ([1, 2], [], []),
+        ([1, 2], [1], [[0.1], [np.nan]]),
+        ([1, 2], [], []),
+        ([1, 2], [1], [[0.1], [np.nan]]),
+        ([1, 2], [], []),
+    ])
 
     summary = metrics._METRIC_HOST.compute(acc, metrics=['num_fragmentations'])
 

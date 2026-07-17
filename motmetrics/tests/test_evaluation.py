@@ -150,11 +150,11 @@ def test_hota_is_invariant_to_zero_tracker_id():
     shifted_test = shifted_test.set_index(["FrameId", "Id"]).sort_index()
 
     original = evaluation._compute_prepared_hota_sequence_summary(
-        evaluation._prepare_iou_sequence_data(gt, test),
+        evaluation._prepare_iou_sequence_data(gt, test, 0.5),
         hota_alphas,
     )
     shifted = evaluation._compute_prepared_hota_sequence_summary(
-        evaluation._prepare_iou_sequence_data(gt, shifted_test),
+        evaluation._prepare_iou_sequence_data(gt, shifted_test, 0.5),
         hota_alphas,
     )
     for metric in ("hota_alpha", "deta_alpha", "assa_alpha"):

@@ -112,10 +112,9 @@ def _compute_py_motmetrics(sequences):
     metric_partials = {}
     hota_summaries = {}
     for name, (ground_truth, tracker) in sequences.items():
-        prepared = evaluation._prepare_iou_sequence_data(ground_truth, tracker)
-        accumulator = evaluation._compare_prepared_iou(prepared, distth=0.5)
+        prepared = evaluation._prepare_iou_sequence_data(ground_truth, tracker, 0.5)
         metric_partials[name] = metric_host.compute(
-            accumulator,
+            prepared.accumulator,
             metrics=requested_metrics,
         )
         hota_summaries[name] = evaluation._compute_prepared_hota_sequence_summary(

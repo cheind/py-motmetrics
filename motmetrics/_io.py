@@ -85,7 +85,8 @@ def load_motchallenge(fname, **kwargs):
     )
 
     # Account for matlab convention.
-    df[['X', 'Y']] -= (1, 1)
+    df['X'] -= 1
+    df['Y'] -= 1
 
     # Removed trailing column
     del df['unused']

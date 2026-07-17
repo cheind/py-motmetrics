@@ -18,14 +18,15 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from scipy.optimize import linear_sum_assignment as _dense_assignment
 
 import motmetrics._io as io
 import motmetrics._metrics as metrics_module
 from motmetrics._accumulator import _Accumulator
-from motmetrics._assignment import _linear_sum_assignment
 from motmetrics._distances import iou_matrix
 
 HOTA_ALPHAS = np.arange(0.05, 0.99, 0.05)
+_FLOAT_EPS = np.finfo(float).eps
 HOTA_SUMMARY_METRICS = OrderedDict([
     ("hota_alpha", "hota"),
     ("deta_alpha", "deta"),
@@ -39,16 +40,14 @@ _WORKER_PROGRESS_STAGE = None
 _PROGRESS_WAITING = 0
 _PROGRESS_LOADING = 1
 _PROGRESS_IOU = 2
-_PROGRESS_CLEAR = 3
-_PROGRESS_METRICS = 4
-_PROGRESS_HOTA = 5
-_PROGRESS_DONE = 6
-_PROGRESS_FAILED = 7
+_PROGRESS_METRICS = 3
+_PROGRESS_HOTA = 4
+_PROGRESS_DONE = 5
+_PROGRESS_FAILED = 6
 _PROGRESS_STAGE_NAMES = (
     "waiting",
     "loading",
-    "IoU",
-    "CLEAR",
+    "IoU+CLEAR",
     "metrics",
     "HOTA",
     "done",
@@ -80,13 +79,23 @@ class _MOTChallengeSummary(object):
 class _PreparedIoUSequence(object):
     """Per-frame IoU data shared by CLEAR/Identity and HOTA."""
 
-    def __init__(self, frame_data, gt_id_counts, tracker_id_counts, alignment_scores, num_objects, num_predictions):
+    def __init__(
+        self,
+        frame_data,
+        gt_id_counts,
+        tracker_id_counts,
+        alignment_scores,
+        num_objects,
+        num_predictions,
+        accumulator,
+    ):
         self.frame_data = frame_data
         self.gt_id_counts = gt_id_counts
         self.tracker_id_counts = tracker_id_counts
         self.alignment_scores = alignment_scores
         self.num_objects = num_objects
         self.num_predictions = num_predictions
+        self.accumulator = accumulator
 
 
 def evaluate_motchallenge(
@@ -283,15 +292,18 @@ def _evaluate_iou_sequence_file(task):
     try:
         ground_truth = io.loadtxt(gt_path, fmt=fmt, min_confidence=gt_min_confidence)
         tracker = io.loadtxt(test_path, fmt=fmt)
-        prepared = _prepare_iou_sequence_data(ground_truth, tracker, distfields, progress=sequence_progress)
-        if sequence_progress is not None:
-            sequence_progress.stage(_PROGRESS_CLEAR)
-        accumulator = _compare_prepared_iou(prepared, distth, progress=sequence_progress)
+        prepared = _prepare_iou_sequence_data(
+            ground_truth,
+            tracker,
+            distth,
+            distfields,
+            progress=sequence_progress,
+        )
 
         if sequence_progress is not None:
             sequence_progress.stage(_PROGRESS_METRICS)
         partial = metrics_module._METRIC_HOST.compute(
-            accumulator,
+            prepared.accumulator,
             metrics=metric_names,
         )
         if include_hota:
@@ -330,7 +342,7 @@ class _WorkerSequenceProgress(object):
 
     def __init__(self, index, include_hota):
         self.index = index
-        self.passes = 3 if include_hota else 2
+        self.passes = 2 if include_hota else 1
         self.current = 0
         self.total = 0
 
@@ -483,13 +495,13 @@ def _compute_prepared_hota_sequence_summary(prepared, hota_alphas, progress=None
     matched_tracker_indices = []
     matched_similarities = []
 
-    for _, gt_indices, tracker_indices, similarities in frame_data:
+    for gt_indices, tracker_indices, similarities in frame_data:
         if progress is not None:
             progress.advance()
         if similarities.size == 0:
             continue
-        weighted_similarities = similarities * alignment_scores[np.ix_(gt_indices, tracker_indices)]
-        row_indices, col_indices = _linear_sum_assignment(1 - weighted_similarities)
+        weighted_similarities = similarities * alignment_scores[gt_indices[:, None], tracker_indices]
+        row_indices, col_indices = _dense_assignment(1 - weighted_similarities)
         if len(row_indices) == 0:
             continue
         matched_gt_indices.append(gt_indices[row_indices])
@@ -500,15 +512,15 @@ def _compute_prepared_hota_sequence_summary(prepared, hota_alphas, progress=None
         matched_gt_indices = np.concatenate(matched_gt_indices)
         matched_tracker_indices = np.concatenate(matched_tracker_indices)
         matched_similarities = np.concatenate(matched_similarities)
-        valid_matches = matched_similarities[:, np.newaxis] >= hota_alphas - np.finfo("float").eps
+        valid_matches = matched_similarities[:, np.newaxis] >= hota_alphas - _FLOAT_EPS
         true_positives = valid_matches.sum(axis=0, dtype=float)
         pair_indices = matched_gt_indices * num_tracker_ids + matched_tracker_indices
         num_id_pairs = num_gt_ids * num_tracker_ids
-        for alpha_index in range(num_alphas):
-            match_counts[alpha_index] = np.bincount(
-                pair_indices[valid_matches[:, alpha_index]],
-                minlength=num_id_pairs,
-            ).reshape(num_gt_ids, num_tracker_ids)
+        alpha_indices, match_indices = np.nonzero(valid_matches.T)
+        match_counts = np.bincount(
+            alpha_indices * num_id_pairs + pair_indices[match_indices],
+            minlength=num_alphas * num_id_pairs,
+        ).reshape(num_alphas, num_gt_ids, num_tracker_ids)
 
     false_positives = num_predictions - true_positives
     deta = _quiet_divide(true_positives, np.maximum(1, num_objects + false_positives))
@@ -524,7 +536,7 @@ def _compute_prepared_hota_sequence_summary(prepared, hota_alphas, progress=None
     }
 
 
-def _prepare_iou_sequence_data(gt, test, distfields=None, progress=None):
+def _prepare_iou_sequence_data(gt, test, distth, distfields=None, progress=None):
     if distfields is None:
         distfields = ["X", "Y", "Width", "Height"]
 
@@ -537,6 +549,7 @@ def _prepare_iou_sequence_data(gt, test, distfields=None, progress=None):
     frame_ids = pd.Index(gt_groups).union(pd.Index(test_groups)).sort_values()
 
     potential_matches = np.zeros((len(gt_ids), len(tracker_ids)))
+    accumulator = _Accumulator(gt_id_counts, tracker_id_counts)
     frame_data = []
     empty_indices = np.empty(0, dtype=int)
     empty_values = np.empty((0, len(distfields)), dtype=float)
@@ -549,15 +562,21 @@ def _prepare_iou_sequence_data(gt, test, distfields=None, progress=None):
         frame_gt_indices, frame_gt_values = gt_groups.get(frame_id, (empty_indices, empty_values))
         frame_tracker_indices, frame_tracker_values = test_groups.get(frame_id, (empty_indices, empty_values))
         similarities = iou_matrix(frame_gt_values, frame_tracker_values, return_dist=False)
-        frame_data.append((frame_id, frame_gt_indices, frame_tracker_indices, similarities))
+        frame_data.append((frame_gt_indices, frame_tracker_indices, similarities))
+        distances = 1 - similarities
+        finite = distances <= distth
+        accumulator.update(frame_gt_indices, frame_tracker_indices, distances, finite)
         if similarities.size == 0:
             continue
 
         similarity_denominator = similarities.sum(0)[np.newaxis, :] + similarities.sum(1)[:, np.newaxis] - similarities
         similarity_iou = np.zeros_like(similarities)
-        similarity_mask = similarity_denominator > 0 + np.finfo("float").eps
+        similarity_mask = similarity_denominator > _FLOAT_EPS
         similarity_iou[similarity_mask] = similarities[similarity_mask] / similarity_denominator[similarity_mask]
-        potential_matches[np.ix_(frame_gt_indices, frame_tracker_indices)] += similarity_iou
+        potential_matches[
+            frame_gt_indices[:, None],
+            frame_tracker_indices,
+        ] += similarity_iou
 
     alignment_scores = _quiet_divide(
         potential_matches,
@@ -570,6 +589,7 @@ def _prepare_iou_sequence_data(gt, test, distfields=None, progress=None):
         alignment_scores=alignment_scores,
         num_objects=len(gt),
         num_predictions=len(test),
+        accumulator=accumulator,
     )
 
 
@@ -591,23 +611,11 @@ def _group_frame_arrays(dataframe, id_index):
     starts = np.concatenate(([0], boundaries))
     ends = np.concatenate((boundaries, [len(frame_ids)]))
     groups = {}
-    id_counts = np.zeros(len(id_index))
+    id_counts = np.bincount(id_codes, minlength=len(id_index)).astype(float, copy=False)
     for start, end in zip(starts, ends):
         frame_id_codes = id_codes[start:end]
         groups[frame_ids[start]] = (frame_id_codes, values[start:end])
-        np.add.at(id_counts, frame_id_codes, 1)
     return groups, id_counts
-
-
-def _compare_prepared_iou(prepared, distth, progress=None):
-    accumulator = _Accumulator()
-    for frame_id, gt_indices, tracker_indices, similarities in prepared.frame_data:
-        if progress is not None:
-            progress.advance()
-        distances = 1 - similarities
-        distances = np.where(distances > distth, np.nan, distances)
-        accumulator.update(gt_indices, tracker_indices, distances, frameid=frame_id)
-    return accumulator
 
 
 def _compute_hota_assa(match_counts, gt_id_counts, tracker_id_counts, true_positives):

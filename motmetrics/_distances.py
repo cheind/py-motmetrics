@@ -117,7 +117,25 @@ def iou_matrix(objs, hyps, max_iou=1., return_dist=True):
     hyps = np.asarray(hyps, dtype=float)
     assert objs.shape[1] == 4
     assert hyps.shape[1] == 4
-    iou = boxiou(objs[:, None], hyps[None, :])
+    # This is the dominant inner loop for MOT evaluation.  Computing the
+    # pairwise matrix directly avoids the temporary (..., 2) coordinate and
+    # size arrays created by the generic, broadcastable ``boxiou`` helper.
+    intersection_width = np.maximum(
+        np.minimum(objs[:, None, 0] + objs[:, None, 2], hyps[None, :, 0] + hyps[None, :, 2])
+        - np.maximum(objs[:, None, 0], hyps[None, :, 0]),
+        0.0,
+    )
+    intersection_height = np.maximum(
+        np.minimum(objs[:, None, 1] + objs[:, None, 3], hyps[None, :, 1] + hyps[None, :, 3])
+        - np.maximum(objs[:, None, 1], hyps[None, :, 1]),
+        0.0,
+    )
+    intersection = intersection_width * intersection_height
+    object_areas = np.maximum(objs[:, 2], 0.0) * np.maximum(objs[:, 3], 0.0)
+    hypothesis_areas = np.maximum(hyps[:, 2], 0.0) * np.maximum(hyps[:, 3], 0.0)
+    union = object_areas[:, None] + hypothesis_areas[None, :] - intersection
+    iou = np.zeros_like(intersection)
+    np.divide(intersection, union, out=iou, where=intersection != 0.0)
     if return_dist:
         dist = 1 - iou
         return np.where(dist > max_iou, np.nan, dist)

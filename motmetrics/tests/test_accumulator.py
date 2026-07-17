@@ -1,5 +1,6 @@
-"""Tests for the private state-only accumulator."""
+"""Tests for the integer-coded MOT accumulator."""
 
+import numpy as np
 import pytest
 
 import motmetrics._metrics as metrics
@@ -7,19 +8,13 @@ from motmetrics._accumulator import _Accumulator
 
 
 def _metric_values(accumulator, names):
-    return metrics._METRIC_HOST.compute(
-        accumulator,
-        metrics=names,
-    )
+    return metrics._METRIC_HOST.compute(accumulator, metrics=names)
 
 
-def test_auto_frame_ids():
-    accumulator = _Accumulator(auto_id=True)
-
-    assert accumulator.update([1], [10], [[0.1]]) == 0
-    assert accumulator.update([1], [10], [[0.2]]) == 1
-    with pytest.raises(AssertionError, match="Cannot provide frame id"):
-        accumulator.update([], [], [], frameid=2)
+def test_consecutive_matches_preserve_identity():
+    accumulator = _Accumulator(np.array([2]), np.array([2]))
+    accumulator.update(np.array([0]), np.array([0]), np.array([[0.1]]), np.array([[True]]))
+    accumulator.update(np.array([0]), np.array([0]), np.array([[0.2]]), np.array([[True]]))
 
     result = _metric_values(accumulator, ["num_frames", "num_matches", "motp", "idf1"])
     assert result["num_frames"] == 2
@@ -28,33 +23,23 @@ def test_auto_frame_ids():
     assert result["idf1"] == 1.0
 
 
-def test_manual_frame_ids_are_required_by_default():
-    accumulator = _Accumulator()
+def test_changed_prediction_is_a_switch():
+    accumulator = _Accumulator(np.array([2]), np.array([1, 1]))
+    accumulator.update(np.array([0]), np.array([0]), np.array([[0.1]]), np.array([[True]]))
+    accumulator.update(np.array([0]), np.array([1]), np.array([[0.1]]), np.array([[True]]))
 
-    assert accumulator.update([], [], [], frameid=7) == 7
-    with pytest.raises(AssertionError, match="auto-id is not enabled"):
-        accumulator.update([], [], [])
-
-
-def test_max_switch_time_limits_switches():
-    near = _Accumulator(max_switch_time=1)
-    near.update([1], [1], [[0.1]], frameid=1)
-    near.update([1], [2], [[0.1]], frameid=2)
-
-    far = _Accumulator(max_switch_time=1)
-    far.update([1], [1], [[0.1]], frameid=1)
-    far.update([1], [2], [[0.1]], frameid=5)
-
-    assert _metric_values(near, ["num_switches"])["num_switches"] == 1
-    assert _metric_values(far, ["num_switches"])["num_switches"] == 0
+    result = _metric_values(accumulator, ["num_matches", "num_switches"])
+    assert result["num_matches"] == 1
+    assert result["num_switches"] == 1
 
 
-def test_reset_discards_all_metric_state():
-    accumulator = _Accumulator(auto_id=True)
-    accumulator.update([1], [1], [[0.1]])
-    accumulator.reset()
+def test_empty_frames_are_counted():
+    accumulator = _Accumulator(np.empty(0, dtype=int), np.empty(0, dtype=int))
+    accumulator.update(
+        np.empty(0, dtype=int),
+        np.empty(0, dtype=int),
+        np.empty((0, 0)),
+        np.empty((0, 0), dtype=bool),
+    )
 
-    result = _metric_values(accumulator, ["num_frames", "num_objects", "num_predictions"])
-    assert result["num_frames"] == 0
-    assert result["num_objects"] == 0
-    assert result["num_predictions"] == 0
+    assert _metric_values(accumulator, ["num_frames"])["num_frames"] == 1
