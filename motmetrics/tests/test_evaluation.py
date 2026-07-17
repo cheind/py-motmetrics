@@ -1,10 +1,12 @@
 from pathlib import Path
 from shutil import copyfile
 
+import numpy as np
 import pandas as pd
 from pytest import approx
 
 import motmetrics as mm
+from motmetrics import evaluation, metrics, utils
 
 DATA_DIR = Path(__file__).parents[1] / "data"
 SEQUENCE_NAMES = ("TUD-Campus", "TUD-Stadtmitte")
@@ -83,3 +85,58 @@ def test_evaluate_motchallenge_rejects_mixed_file_and_folder_inputs():
         assert "both be files or both be folders" in str(exc)
     else:
         raise AssertionError("Expected mixed file/folder inputs to fail.")
+
+
+def test_direct_hota_matches_legacy_with_zero_tracker_id():
+    hota_alphas = np.array([0.25, 0.5, 0.75])
+    gt = _mot_dataframe([
+        [1, 1, 24, 36, 10, 10],
+        [1, 2, 36, 0, 10, 10],
+        [2, 1, 12, 24, 10, 10],
+        [2, 2, 24, 36, 10, 10],
+        [3, 1, 12, 12, 10, 10],
+        [3, 2, 36, 0, 10, 10],
+        [4, 1, 36, 36, 10, 10],
+        [4, 2, 0, 24, 10, 10],
+        [5, 2, 12, 24, 10, 10],
+        [6, 1, 24, 0, 10, 10],
+        [7, 1, 24, 24, 10, 10],
+        [7, 2, 36, 12, 10, 10],
+    ])
+    test = _mot_dataframe([
+        [1, 0, 12.090215403896158, 38.0103228683318, 10, 10],
+        [1, 2, 36.535330512240094, 12.158121373496847, 10, 10],
+        [2, 0, 22.065693390322537, 21.237397443312403, 10, 10],
+        [2, 1, 36.40689653823255, 24.23512662993634, 10, 10],
+        [2, 2, 35.191960656230044, 11.927248581898391, 10, 10],
+        [3, 0, 37.59134793507912, 22.788697987002156, 10, 10],
+        [3, 1, 23.124599350885045, 35.83244707562376, 10, 10],
+        [4, 0, 0.17903103854487185, 23.03779440883917, 10, 10],
+        [4, 1, 22.201066646842165, 24.111774343157194, 10, 10],
+        [4, 2, 1.024365400792809, -0.09977598022412335, 10, 10],
+        [5, 0, 24.190902616838745, 22.21920820822479, 10, 10],
+        [5, 1, 1.3481458081506117, 13.717833011181199, 10, 10],
+        [5, 2, 0.9703551338601327, 21.01137032373826, 10, 10],
+        [6, 0, 23.44713615885006, 35.62470689922311, 10, 10],
+        [6, 1, 35.544479417452905, 36.5288836009279, 10, 10],
+        [7, 0, 23.9637845804851, 1.0025715349010158, 10, 10],
+        [7, 1, 11.99190065899256, 12.87507353127062, 10, 10],
+        [7, 2, 33.467693823950185, -3.0529934174098985, 10, 10],
+    ])
+
+    legacy_accs = utils.compare_to_groundtruth_reweighting(gt, test, "iou", distth=hota_alphas)
+    legacy = metrics.create().compute_many(
+        legacy_accs,
+        metrics=evaluation.HOTA_ALPHA_METRICS,
+        names=list(range(len(hota_alphas))),
+        generate_overall=False,
+    )
+    direct = evaluation._compute_hota_sequence_summary(gt, test, None, hota_alphas)
+
+    for metric in evaluation.HOTA_ALPHA_METRICS:
+        np.testing.assert_allclose(legacy[metric].to_numpy(), direct[metric], rtol=1e-12, atol=1e-12)
+
+
+def _mot_dataframe(rows):
+    df = pd.DataFrame(rows, columns=["FrameId", "Id", "X", "Y", "Width", "Height"])
+    return df.set_index(["FrameId", "Id"]).sort_index()

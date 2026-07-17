@@ -280,10 +280,10 @@ def _compute_hota_sequence_summary(gt, test, distfields, hota_alphas):
     true_positives = np.zeros(num_alphas)
     match_counts = np.zeros((num_alphas, num_gt_ids, num_tracker_ids))
 
-    for gt_indices, tracker_indices, similarities in frame_data:
+    for gt_indices, tracker_indices, alignment_gt_indices, alignment_tracker_indices, similarities in frame_data:
         if similarities.size == 0:
             continue
-        weighted_similarities = similarities * alignment_scores[np.ix_(gt_indices, tracker_indices)]
+        weighted_similarities = similarities * alignment_scores[np.ix_(alignment_gt_indices, alignment_tracker_indices)]
         row_indices, col_indices = lap.linear_sum_assignment(1 - weighted_similarities)
         for row_index, col_index in zip(row_indices, col_indices):
             valid_alphas = similarities[row_index, col_index] >= hota_alphas - np.finfo("float").eps
@@ -313,6 +313,8 @@ def _compute_hota_sequence_summary(gt, test, distfields, hota_alphas):
 def _prepare_hota_sequence_data(gt, test):
     gt_ids = pd.Index(np.sort(gt.index.get_level_values("Id").unique()))
     tracker_ids = pd.Index(np.sort(test.index.get_level_values("Id").unique()))
+    num_alignment_gt_ids = int(gt.index.get_level_values("Id").max()) if not gt.empty else 0
+    num_alignment_tracker_ids = int(test.index.get_level_values("Id").max()) if not test.empty else 0
     gt_groups = dict(iter(gt.groupby("FrameId", sort=False)))
     test_groups = dict(iter(test.groupby("FrameId", sort=False)))
     frame_ids = pd.Index(gt.index.get_level_values("FrameId").unique()).union(
@@ -321,7 +323,9 @@ def _prepare_hota_sequence_data(gt, test):
 
     gt_id_counts = np.zeros(len(gt_ids))
     tracker_id_counts = np.zeros(len(tracker_ids))
-    potential_matches = np.zeros((len(gt_ids), len(tracker_ids)))
+    alignment_gt_id_counts = np.zeros((num_alignment_gt_ids, 1))
+    alignment_tracker_id_counts = np.zeros((1, num_alignment_tracker_ids))
+    potential_matches = np.zeros((num_alignment_gt_ids, num_alignment_tracker_ids))
     frame_data = []
 
     for frame_id in frame_ids:
@@ -329,22 +333,28 @@ def _prepare_hota_sequence_data(gt, test):
         frame_test = test_groups.get(frame_id)
         frame_gt_indices, frame_gt_values = _hota_frame_arrays(frame_gt, gt_ids)
         frame_tracker_indices, frame_tracker_values = _hota_frame_arrays(frame_test, tracker_ids)
+        alignment_gt_indices = _hota_legacy_id_indices(frame_gt)
+        alignment_tracker_indices = _hota_legacy_id_indices(frame_test)
         gt_id_counts[frame_gt_indices] += 1
         tracker_id_counts[frame_tracker_indices] += 1
         similarities = iou_matrix(frame_gt_values, frame_tracker_values, return_dist=False)
-        frame_data.append((frame_gt_indices, frame_tracker_indices, similarities))
+        frame_data.append(
+            (frame_gt_indices, frame_tracker_indices, alignment_gt_indices, alignment_tracker_indices, similarities)
+        )
         if similarities.size == 0:
             continue
 
+        alignment_gt_id_counts[alignment_gt_indices] += 1
+        alignment_tracker_id_counts[0, alignment_tracker_indices] += 1
         similarity_denominator = similarities.sum(0)[np.newaxis, :] + similarities.sum(1)[:, np.newaxis] - similarities
         similarity_iou = np.zeros_like(similarities)
         similarity_mask = similarity_denominator > 0 + np.finfo("float").eps
         similarity_iou[similarity_mask] = similarities[similarity_mask] / similarity_denominator[similarity_mask]
-        potential_matches[np.ix_(frame_gt_indices, frame_tracker_indices)] += similarity_iou
+        potential_matches[np.ix_(alignment_gt_indices, alignment_tracker_indices)] += similarity_iou
 
     alignment_scores = _quiet_divide(
         potential_matches,
-        np.maximum(1, gt_id_counts[:, np.newaxis] + tracker_id_counts[np.newaxis, :] - potential_matches),
+        np.maximum(1, alignment_gt_id_counts + alignment_tracker_id_counts - potential_matches),
     )
     return frame_data, gt_id_counts, tracker_id_counts, alignment_scores
 
@@ -354,6 +364,12 @@ def _hota_frame_arrays(frame, id_index):
         return np.empty(0, dtype=int), np.empty((0, 4), dtype=float)
     ids = id_index.get_indexer(frame.index.get_level_values("Id"))
     return ids, frame.to_numpy(dtype=float)
+
+
+def _hota_legacy_id_indices(frame):
+    if frame is None:
+        return np.empty(0, dtype=int)
+    return frame.index.get_level_values("Id").to_numpy(dtype=int) - 1
 
 
 def _compute_hota_assa(match_counts, gt_id_counts, tracker_id_counts, true_positives):
