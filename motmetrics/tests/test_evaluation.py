@@ -1,3 +1,4 @@
+import importlib.util
 from pathlib import Path
 from shutil import copyfile
 
@@ -17,6 +18,22 @@ def test_package_has_one_supported_metrics_entrypoint():
     assert {name for name in vars(mm) if not name.startswith("_")} == {
         "evaluate_motchallenge"
     }
+
+
+def test_legacy_metric_modules_are_absent():
+    removed_modules = (
+        "motmetrics.__main__",
+        "motmetrics.apps",
+        "motmetrics.evaluation",
+        "motmetrics.io",
+        "motmetrics.lap",
+        "motmetrics.metrics",
+        "motmetrics.mot",
+        "motmetrics.preprocess",
+        "motmetrics.utils",
+    )
+
+    assert all(importlib.util.find_spec(module_name) is None for module_name in removed_modules)
 
 
 def test_evaluate_motchallenge_files_returns_rich_summary():

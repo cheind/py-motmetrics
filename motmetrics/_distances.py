@@ -9,72 +9,6 @@
 
 import numpy as np
 
-import motmetrics._math_util as math_util
-
-
-def norm2squared_matrix(objs, hyps, max_d2=float('inf')):
-    """Computes the squared Euclidean distance matrix between object and hypothesis points.
-
-    Params
-    ------
-    objs : NxM array
-        Object points of dim M in rows
-    hyps : KxM array
-        Hypothesis points of dim M in rows
-
-    Kwargs
-    ------
-    max_d2 : float
-        Maximum tolerable squared Euclidean distance. Object / hypothesis points
-        with larger distance are set to np.nan signalling do-not-pair. Defaults
-        to +inf
-
-    Returns
-    -------
-    C : NxK array
-        Distance matrix containing pairwise distances or np.nan.
-    """
-
-    objs = np.atleast_2d(objs).astype(float)
-    hyps = np.atleast_2d(hyps).astype(float)
-
-    if objs.size == 0 or hyps.size == 0:
-        return np.empty((0, 0))
-
-    assert hyps.shape[1] == objs.shape[1], "Dimension mismatch"
-
-    delta = objs[:, np.newaxis] - hyps[np.newaxis, :]
-    squared_distances = np.sum(delta ** 2, axis=-1)
-
-    squared_distances[squared_distances > max_d2] = np.nan
-    return squared_distances
-
-
-def rect_min_max(r):
-    min_pt = r[..., :2]
-    size = r[..., 2:]
-    max_pt = min_pt + size
-    return min_pt, max_pt
-
-
-def boxiou(a, b):
-    """Computes IOU of two rectangles."""
-    a_min, a_max = rect_min_max(a)
-    b_min, b_max = rect_min_max(b)
-    # Compute intersection.
-    i_min = np.maximum(a_min, b_min)
-    i_max = np.minimum(a_max, b_max)
-    i_size = np.maximum(i_max - i_min, 0)
-    i_vol = np.prod(i_size, axis=-1)
-    # Get volume of union.
-    a_size = np.maximum(a_max - a_min, 0)
-    b_size = np.maximum(b_max - b_min, 0)
-    a_vol = np.prod(a_size, axis=-1)
-    b_vol = np.prod(b_size, axis=-1)
-    u_vol = a_vol + b_vol - i_vol
-    return np.where(i_vol == 0, np.zeros_like(i_vol, dtype=np.float64),
-                    math_util.quiet_divide(i_vol, u_vol))
-
 
 def iou_matrix(objs, hyps, max_iou=1., return_dist=True):
     """Computes 'intersection over union (IoU)' distance matrix between object and hypothesis rectangles.
@@ -117,9 +51,8 @@ def iou_matrix(objs, hyps, max_iou=1., return_dist=True):
     hyps = np.asarray(hyps, dtype=float)
     assert objs.shape[1] == 4
     assert hyps.shape[1] == 4
-    # This is the dominant inner loop for MOT evaluation.  Computing the
-    # pairwise matrix directly avoids the temporary (..., 2) coordinate and
-    # size arrays created by the generic, broadcastable ``boxiou`` helper.
+    # Compute the dominant evaluation inner loop directly, without generic
+    # broadcast coordinate/size temporaries.
     intersection_width = np.maximum(
         np.minimum(objs[:, None, 0] + objs[:, None, 2], hyps[None, :, 0] + hyps[None, :, 2])
         - np.maximum(objs[:, None, 0], hyps[None, :, 0]),

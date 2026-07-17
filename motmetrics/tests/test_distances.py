@@ -12,50 +12,6 @@ import numpy as np
 import motmetrics._distances as distance_functions
 
 
-def test_norm2squared():
-    """Tests norm2squared_matrix."""
-    a = np.asarray([
-        [1, 2],
-        [2, 2],
-        [3, 2],
-    ], dtype=float)
-
-    b = np.asarray([
-        [0, 0],
-        [1, 1],
-    ], dtype=float)
-
-    distances = distance_functions.norm2squared_matrix(a, b)
-    np.testing.assert_allclose(
-        distances,
-        [
-            [5, 1],
-            [8, 2],
-            [13, 5]
-        ]
-    )
-
-    distances = distance_functions.norm2squared_matrix(a, b, max_d2=5)
-    np.testing.assert_allclose(
-        distances,
-        [
-            [5, 1],
-            [np.nan, 2],
-            [np.nan, 5]
-        ]
-    )
-
-
-def test_norm2squared_empty():
-    """Tests norm2squared_matrix with an empty input."""
-    a = []
-    b = np.asarray([[0, 0], [1, 1]], dtype=float)
-    distances = distance_functions.norm2squared_matrix(a, b)
-    assert distances.size == 0
-    distances = distance_functions.norm2squared_matrix(b, a)
-    assert distances.size == 0
-
-
 def test_iou_matrix():
     """Tests iou_matrix."""
     a = np.array([
