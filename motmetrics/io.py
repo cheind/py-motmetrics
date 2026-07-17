@@ -7,12 +7,13 @@
 
 """Functions for loading data and writing summaries."""
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+from __future__ import absolute_import, division, print_function
 
-from enum import Enum
 import io
+import shlex
+import xml.etree.ElementTree
+from enum import Enum
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -21,6 +22,9 @@ import scipy.io
 
 class Format(Enum):
     """Enumerates supported file formats."""
+
+    AUTO = 'auto'
+    """Infer the format from the file extension and a small data sample."""
 
     MOT16 = 'mot16'
     """Milan, Anton, et al. "Mot16: A benchmark for multi-object tracking." arXiv preprint arXiv:1603.00831 (2016)."""
@@ -182,7 +186,7 @@ def load_vatictxt(fname, **kwargs):
         return df
 
 
-def load_detrac_mat(fname):
+def load_detrac_mat(fname, **kwargs):
     """Loads UA-DETRAC annotations data from mat files
 
     Competition Site: http://detrac-db.rit.albany.edu/download
@@ -207,32 +211,32 @@ def load_detrac_mat(fname):
         The dataframe is indexed by ('FrameId', 'Id')
     """
 
-    matData = scipy.io.loadmat(fname)
+    mat_data = scipy.io.loadmat(fname)
 
-    frameList = matData['gtInfo'][0][0][4][0]
-    leftArray = matData['gtInfo'][0][0][0].astype(np.float32)
-    topArray = matData['gtInfo'][0][0][1].astype(np.float32)
-    widthArray = matData['gtInfo'][0][0][3].astype(np.float32)
-    heightArray = matData['gtInfo'][0][0][2].astype(np.float32)
+    frame_list = mat_data['gtInfo'][0][0][4][0]
+    left_array = mat_data['gtInfo'][0][0][0].astype(np.float32)
+    top_array = mat_data['gtInfo'][0][0][1].astype(np.float32)
+    width_array = mat_data['gtInfo'][0][0][3].astype(np.float32)
+    height_array = mat_data['gtInfo'][0][0][2].astype(np.float32)
 
-    parsedGT = []
-    for f in frameList:
-        ids = [i + 1 for i, v in enumerate(leftArray[f - 1]) if v > 0]
+    parsed_gt = []
+    for f in frame_list:
+        ids = [i + 1 for i, v in enumerate(left_array[f - 1]) if v > 0]
         for i in ids:
             row = []
             row.append(f)
             row.append(i)
-            row.append(leftArray[f - 1, i - 1] - widthArray[f - 1, i - 1] / 2)
-            row.append(topArray[f - 1, i - 1] - heightArray[f - 1, i - 1])
-            row.append(widthArray[f - 1, i - 1])
-            row.append(heightArray[f - 1, i - 1])
+            row.append(left_array[f - 1, i - 1] - width_array[f - 1, i - 1] / 2)
+            row.append(top_array[f - 1, i - 1] - height_array[f - 1, i - 1])
+            row.append(width_array[f - 1, i - 1])
+            row.append(height_array[f - 1, i - 1])
             row.append(1)
             row.append(-1)
             row.append(-1)
             row.append(-1)
-            parsedGT.append(row)
+            parsed_gt.append(row)
 
-    df = pd.DataFrame(parsedGT,
+    df = pd.DataFrame(parsed_gt,
                       columns=['FrameId', 'Id', 'X', 'Y', 'Width', 'Height', 'Confidence', 'ClassId', 'Visibility', 'unused'])
     df.set_index(['FrameId', 'Id'], inplace=True)
 
@@ -245,7 +249,7 @@ def load_detrac_mat(fname):
     return df
 
 
-def load_detrac_xml(fname):
+def load_detrac_xml(fname, **kwargs):
     """Loads UA-DETRAC annotations data from xml files
 
     Competition Site: http://detrac-db.rit.albany.edu/download
@@ -266,34 +270,34 @@ def load_detrac_xml(fname):
             'X', 'Y', 'Width', 'Height', 'Confidence', 'ClassId', 'Visibility'
         The dataframe is indexed by ('FrameId', 'Id')
     """
-    import xmltodict
+    root = xml.etree.ElementTree.parse(fname).getroot()
+    frame_list = root.findall('frame')
 
-    with io.open(fname) as fd:
-        doc = xmltodict.parse(fd.read())
-    frameList = doc['sequence']['frame']
+    parsed_gt = []
+    for frame in frame_list:
+        fid = int(frame.attrib['num'])
+        target_list = frame.find('target_list')
+        if target_list is None:
+            continue
 
-    parsedGT = []
-    for f in frameList:
-        fid = int(f['@num'])
-        targetList = f['target_list']['target']
-        if not isinstance(targetList, list):
-            targetList = [targetList]
-
-        for t in targetList:
+        for target in target_list.findall('target'):
+            box = target.find('box')
+            if box is None:
+                continue
             row = []
             row.append(fid)
-            row.append(int(t['@id']))
-            row.append(float(t['box']['@left']))
-            row.append(float(t['box']['@top']))
-            row.append(float(t['box']['@width']))
-            row.append(float(t['box']['@height']))
+            row.append(int(target.attrib['id']))
+            row.append(float(box.attrib['left']))
+            row.append(float(box.attrib['top']))
+            row.append(float(box.attrib['width']))
+            row.append(float(box.attrib['height']))
             row.append(1)
             row.append(-1)
             row.append(-1)
             row.append(-1)
-            parsedGT.append(row)
+            parsed_gt.append(row)
 
-    df = pd.DataFrame(parsedGT,
+    df = pd.DataFrame(parsed_gt,
                       columns=['FrameId', 'Id', 'X', 'Y', 'Width', 'Height', 'Confidence', 'ClassId', 'Visibility', 'unused'])
     df.set_index(['FrameId', 'Id'], inplace=True)
 
@@ -306,9 +310,37 @@ def load_detrac_xml(fname):
     return df
 
 
+def infer_format(fname):
+    """Infer a supported file format from the path and a small data sample."""
+    path = Path(fname)
+    suffix = path.suffix.lower()
+    if suffix == '.mat':
+        return Format.DETRAC_MAT
+    if suffix == '.xml':
+        return Format.DETRAC_XML
+
+    with io.open(fname, encoding='utf-8', errors='ignore') as file:
+        sample = file.read(4096)
+
+    stripped = sample.lstrip()
+    if stripped.startswith('<'):
+        return Format.DETRAC_XML
+
+    first_line = next((line.strip() for line in sample.splitlines() if line.strip()), '')
+    if not first_line:
+        raise ValueError('Cannot infer format from empty file: {}'.format(fname))
+
+    fields = _split_text_fields(first_line)
+    if _looks_like_vatic_fields(fields):
+        return Format.VATIC_TXT
+    return Format.MOT15_2D
+
+
 def loadtxt(fname, fmt=Format.MOT15_2D, **kwargs):
     """Load data from any known format."""
     fmt = Format(fmt)
+    if fmt == Format.AUTO:
+        fmt = infer_format(fname)
 
     switcher = {
         Format.MOT16: load_motchallenge,
@@ -319,6 +351,27 @@ def loadtxt(fname, fmt=Format.MOT15_2D, **kwargs):
     }
     func = switcher.get(fmt)
     return func(fname, **kwargs)
+
+
+def _split_text_fields(line):
+    try:
+        return shlex.split(line.replace(',', ' '))
+    except ValueError:
+        return line.replace(',', ' ').split()
+
+
+def _looks_like_vatic_fields(fields):
+    if len(fields) < 10:
+        return False
+    return len(fields) > 10 or not _is_number(fields[9])
+
+
+def _is_number(value):
+    try:
+        float(value)
+    except ValueError:
+        return False
+    return True
 
 
 def render_summary(summary, formatters=None, namemap=None, buf=None):

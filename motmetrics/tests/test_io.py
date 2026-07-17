@@ -7,9 +7,7 @@
 
 """Tests IO functions."""
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+from __future__ import absolute_import, division, print_function
 
 import os
 
@@ -18,6 +16,29 @@ import pandas as pd
 import motmetrics as mm
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), '../data')
+
+
+def test_infer_format():
+    """Tests format inference from extension and text contents."""
+    assert mm.io.infer_format(os.path.join(DATA_DIR, 'iotest/motchallenge.txt')) == mm.io.Format.MOT15_2D
+    assert mm.io.infer_format(os.path.join(DATA_DIR, 'iotest/vatic.txt')) == mm.io.Format.VATIC_TXT
+    assert mm.io.infer_format(os.path.join(DATA_DIR, 'iotest/detrac.mat')) == mm.io.Format.DETRAC_MAT
+    assert mm.io.infer_format(os.path.join(DATA_DIR, 'iotest/detrac.xml')) == mm.io.Format.DETRAC_XML
+
+
+def test_loadtxt_auto():
+    """Tests AUTO format dispatch matches explicit formats."""
+    cases = [
+        ('iotest/motchallenge.txt', mm.io.Format.MOT15_2D),
+        ('iotest/vatic.txt', mm.io.Format.VATIC_TXT),
+        ('iotest/detrac.mat', mm.io.Format.DETRAC_MAT),
+        ('iotest/detrac.xml', mm.io.Format.DETRAC_XML),
+    ]
+    for filename, fmt in cases:
+        path = os.path.join(DATA_DIR, filename)
+        expected = mm.io.loadtxt(path, fmt=fmt)
+        actual = mm.io.loadtxt(path, fmt='auto')
+        pd.testing.assert_frame_equal(actual, expected)
 
 
 def test_load_vatic():
