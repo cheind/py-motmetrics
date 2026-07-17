@@ -76,7 +76,7 @@ class MOTChallengeSummary(object):
 def evaluate_motchallenge(
     groundtruths,
     tests,
-    fmt=io.Format.MOT15_2D,
+    fmt=io.Format.AUTO,
     dist="iou",
     distfields=None,
     distth=0.5,
@@ -186,7 +186,7 @@ def evaluate_motchallenge(
     )
 
 
-def load_motchallenge_groundtruths(root, fmt=io.Format.MOT15_2D, min_confidence=1):
+def load_motchallenge_groundtruths(root, fmt=io.Format.AUTO, min_confidence=1):
     """Load MOTChallenge ground-truth dataframes from a file or folder."""
     root = Path(root)
     if root.is_file():
@@ -199,7 +199,7 @@ def load_motchallenge_groundtruths(root, fmt=io.Format.MOT15_2D, min_confidence=
     return OrderedDict((name, io.loadtxt(path, fmt=fmt, min_confidence=min_confidence)) for name, path in files.items())
 
 
-def load_motchallenge_tests(root, fmt=io.Format.MOT15_2D):
+def load_motchallenge_tests(root, fmt=io.Format.AUTO):
     """Load MOTChallenge tracker result dataframes from a file or folder."""
     root = Path(root)
     if root.is_file():

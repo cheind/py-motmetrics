@@ -21,7 +21,7 @@ uv pip install --group dev
 
 ## Quick Start
 
-For MOTChallenge-style text files, compute and print metrics in one call:
+For MOTChallenge-style text files, compute and print metrics in one call. Supported file formats are detected automatically.
 
 ```python
 import motmetrics as mm
@@ -99,6 +99,7 @@ Useful lower-level pieces:
 
 - `mm.MOTAccumulator` stores frame-level matching events.
 - `mm.distances` contains distance helpers such as IoU and Euclidean matrices.
+- `mm.io.loadtxt(..., fmt="auto")` detects MOTChallenge text, VATIC text, and UA-DETRAC MAT/XML files.
 - `mm.metrics.create()` returns a `MetricsHost` for custom metric selection.
 - `mm.utils.compare_to_groundtruth` compares loaded dataframes directly.
 - `mm.utils.compare_to_groundtruth_reweighting` supports custom HOTA-style multi-threshold workflows.
