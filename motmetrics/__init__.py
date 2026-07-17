@@ -11,26 +11,24 @@ Christoph Heindl, 2017
 https://github.com/cheind/py-motmetrics
 """
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+from __future__ import absolute_import, division, print_function
 
 from importlib.metadata import version as _distribution_version
 
 __all__ = [
     "distances",
+    "evaluation",
     "io",
     "lap",
     "metrics",
     "utils",
+    "evaluate_motchallenge",
+    "MOTChallengeSummary",
     "MOTAccumulator",
 ]
 
-from motmetrics import distances
-from motmetrics import io
-from motmetrics import lap
-from motmetrics import metrics
-from motmetrics import utils
+from motmetrics import distances, evaluation, io, lap, metrics, utils
+from motmetrics.evaluation import MOTChallengeSummary, evaluate_motchallenge
 from motmetrics.mot import MOTAccumulator
 
 __version__ = _distribution_version("motmetrics")

@@ -15,6 +15,7 @@ import inspect
 import logging
 import time
 from collections import OrderedDict
+from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 import pandas as pd
@@ -270,7 +271,7 @@ class MetricsHost:
         return pd.DataFrame(data, index=[name]) if return_dataframe else data
 
     def compute_many(
-        self, dfs, anas=None, metrics=None, names=None, generate_overall=False
+        self, dfs, anas=None, metrics=None, names=None, generate_overall=False, n_jobs=1
     ):
         """Compute metrics on multiple dataframe / accumulators.
 
@@ -294,6 +295,8 @@ class MetricsHost:
             using the same metrics over an accumulator that is the concatentation of
             all input containers. In creating this temporary accumulator, care is taken
             to offset frame indices avoid object id collisions.
+        n_jobs : int, optional
+            Number of worker threads to use for per-accumulator metric computation.
 
         Returns
         -------
@@ -305,23 +308,21 @@ class MetricsHost:
         elif isinstance(metrics, str):
             metrics = [metrics]
 
+        if n_jobs < 1:
+            raise ValueError("n_jobs must be at least 1.")
+
         assert names is None or len(names) == len(dfs)
         st = time.time()
         if names is None:
             names = list(range(len(dfs)))
         if anas is None:
             anas = [None] * len(dfs)
-        partials = [
-            self.compute(
-                acc,
-                ana=analysis,
-                metrics=metrics,
-                name=name,
-                return_cached=True,
-                return_dataframe=False,
-            )
-            for acc, analysis, name in zip(dfs, anas, names)
-        ]
+        jobs = list(zip(dfs, anas, names))
+        if n_jobs == 1 or len(jobs) < 2:
+            partials = [self._compute_many_one(job, metrics) for job in jobs]
+        else:
+            with ThreadPoolExecutor(max_workers=n_jobs) as executor:
+                partials = list(executor.map(lambda job: self._compute_many_one(job, metrics), jobs))
         logging.info("partials: %.3f seconds.", time.time() - st)
         details = partials
         partials = [
@@ -337,6 +338,17 @@ class MetricsHost:
             partials.append(self.compute_overall(details, metrics=metrics, name=names))
         logging.info("mergeOverall: %.3f seconds.", time.time() - st)
         return pd.concat(partials)
+
+    def _compute_many_one(self, job, metrics):
+        acc, analysis, name = job
+        return self.compute(
+            acc,
+            ana=analysis,
+            metrics=metrics,
+            name=name,
+            return_cached=True,
+            return_dataframe=False,
+        )
 
     def _compute(self, df_map, name, cache, options, parent=None):
         """Compute metric and resolve dependencies."""
