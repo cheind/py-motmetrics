@@ -17,7 +17,6 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import scipy.io
 
 
 class Format(Enum):
@@ -233,7 +232,9 @@ def load_detrac_mat(fname, **kwargs):
         The dataframe is indexed by ('FrameId', 'Id')
     """
 
-    mat_data = scipy.io.loadmat(fname)
+    from scipy.io import loadmat
+
+    mat_data = loadmat(fname)
 
     frame_list = mat_data['gtInfo'][0][0][4][0]
     left_array = mat_data['gtInfo'][0][0][0].astype(np.float32)

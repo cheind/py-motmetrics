@@ -46,6 +46,7 @@ def test_evaluate_motchallenge_folders_returns_overall_summary(tmp_path):
         sequence_gt_dir.mkdir(parents=True)
         copyfile(source_dir / "gt.txt", sequence_gt_dir / "gt.txt")
         copyfile(source_dir / "test.txt", test_root / "{}.txt".format(sequence_name))
+    (test_root / "person_summary.txt").write_text("not MOTChallenge data", encoding="utf-8")
 
     summary = mm.evaluate_motchallenge(gt_root, test_root)
 
@@ -68,6 +69,24 @@ def test_evaluate_motchallenge_can_skip_hota():
 
     assert "hota" not in summary.df.columns
     assert "HOTA" not in summary.text
+
+
+def test_shared_iou_path_matches_legacy_clear_identity_metrics():
+    ground_truth = mm.io.loadtxt(DATA_DIR / "TUD-Campus" / "gt.txt")
+    tracker = mm.io.loadtxt(DATA_DIR / "TUD-Campus" / "test.txt")
+    shared = mm.evaluate_motchallenge(
+        DATA_DIR / "TUD-Campus" / "gt.txt",
+        DATA_DIR / "TUD-Campus" / "test.txt",
+    ).df.loc["TUD-Campus", metrics.motchallenge_metrics]
+
+    legacy_accumulator = utils.compare_to_groundtruth(ground_truth, tracker, "iou", distth=0.5)
+    legacy = metrics.create().compute(
+        legacy_accumulator,
+        metrics=metrics.motchallenge_metrics,
+        name="TUD-Campus",
+    ).loc["TUD-Campus"]
+
+    np.testing.assert_allclose(shared.to_numpy(dtype=float), legacy.to_numpy(dtype=float), rtol=0, atol=1e-12)
 
 
 def test_evaluate_motchallenge_sequence_folders():
@@ -135,6 +154,20 @@ def test_direct_hota_matches_accumulator_with_zero_tracker_id():
 
     for metric in evaluation.HOTA_ALPHA_METRICS:
         np.testing.assert_allclose(accumulator[metric].to_numpy(), direct[metric], rtol=1e-12, atol=1e-12)
+
+
+def test_frame_array_grouping_preserves_legacy_duplicate_id_counts():
+    tracker = _mot_dataframe([
+        [1, -1, 0, 0, 10, 10],
+        [1, -1, 20, 20, 10, 10],
+        [2, -1, 0, 0, 10, 10],
+        [2, -1, 20, 20, 10, 10],
+    ])
+
+    groups, counts = evaluation._group_frame_arrays(tracker, pd.Index([-1]))
+
+    assert len(groups) == 2
+    np.testing.assert_array_equal(counts, [2])
 
 
 def _mot_dataframe(rows):

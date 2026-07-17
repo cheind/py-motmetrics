@@ -9,14 +9,14 @@
 
 # pylint: disable=import-outside-toplevel
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+from __future__ import absolute_import, division, print_function
 
-from contextlib import contextmanager
 import warnings
+from contextlib import contextmanager
 
 import numpy as np
+
+_SCIPY_SOLVER = None
 
 
 def _module_is_available_py2(name):
@@ -111,21 +111,23 @@ def add_expensive_edges(costs):
 
 
 def _exclude_missing_edges(costs, rids, cids):
-    subset = [
-        index for index, (i, j) in enumerate(zip(rids, cids))
-        if np.isfinite(costs[i, j])
-    ]
-    return rids[subset], cids[subset]
+    rids = np.asarray(rids)
+    cids = np.asarray(cids)
+    valid = np.isfinite(costs[rids, cids])
+    return rids[valid], cids[valid]
 
 
 def lsa_solve_scipy(costs):
     """Solves the LSA problem using the scipy library."""
+    global _SCIPY_SOLVER  # pylint: disable=global-statement
+    if _SCIPY_SOLVER is None:
+        from scipy.optimize import linear_sum_assignment
 
-    from scipy.optimize import linear_sum_assignment as scipy_solve
+        _SCIPY_SOLVER = linear_sum_assignment
 
     # scipy (1.3.3) does not support nan or inf values
     finite_costs = add_expensive_edges(costs)
-    rids, cids = scipy_solve(finite_costs)
+    rids, cids = _SCIPY_SOLVER(finite_costs)
     rids, cids = _exclude_missing_edges(costs, rids, cids)
     return rids, cids
 

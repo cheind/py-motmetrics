@@ -20,6 +20,7 @@ import pandas as pd
 from motmetrics import io, lap, utils
 from motmetrics import metrics as metrics_module
 from motmetrics.distances import iou_matrix
+from motmetrics.mot import MOTAccumulator
 
 HOTA_ALPHAS = np.arange(0.05, 0.99, 0.05)
 HOTA_ALPHA_METRICS = ["hota_alpha", "deta_alpha", "assa_alpha"]
@@ -72,6 +73,18 @@ class MOTChallengeSummary(object):
 
     def __getattr__(self, name):
         return getattr(self.df, name)
+
+
+class _PreparedIoUSequence(object):
+    """Per-frame IoU data shared by CLEAR/Identity and HOTA."""
+
+    def __init__(self, frame_data, gt_id_counts, tracker_id_counts, alignment_scores, num_objects, num_predictions):
+        self.frame_data = frame_data
+        self.gt_id_counts = gt_id_counts
+        self.tracker_id_counts = tracker_id_counts
+        self.alignment_scores = alignment_scores
+        self.num_objects = num_objects
+        self.num_predictions = num_predictions
 
 
 def evaluate_motchallenge(
@@ -132,7 +145,8 @@ def evaluate_motchallenge(
         sequence_name = name or _default_sequence_name(test_path)
         gt = io.loadtxt(gt_path, fmt=fmt, min_confidence=gt_min_confidence)
         test = io.loadtxt(test_path, fmt=fmt)
-        acc = utils.compare_to_groundtruth(gt, test, dist, distfields=distfields, distth=distth)
+        acc, prepared = _compare_single_sequence(gt, test, dist, distfields, distth, include_hota)
+        prepared_sequences = OrderedDict([(sequence_name, prepared)]) if prepared is not None else None
 
         if id_solver:
             lap.default_solver = id_solver
@@ -149,11 +163,20 @@ def evaluate_motchallenge(
                 hota_alphas,
                 False,
                 n_jobs,
+                prepared_sequences=prepared_sequences,
             )
     else:
         gt = load_motchallenge_groundtruths(gt_path, fmt=fmt, min_confidence=gt_min_confidence)
-        test = load_motchallenge_tests(test_path, fmt=fmt)
-        accs, names = compare_dataframes(gt, test, dist=dist, distfields=distfields, distth=distth, n_jobs=n_jobs)
+        test = load_motchallenge_tests(test_path, fmt=fmt, names=gt)
+        accs, names, prepared_sequences = _compare_multiple_sequences(
+            gt,
+            test,
+            dist,
+            distfields,
+            distth,
+            include_hota,
+            n_jobs,
+        )
         if not accs:
             raise ValueError("No matching ground-truth and tracker result files found.")
 
@@ -178,6 +201,7 @@ def evaluate_motchallenge(
                 hota_alphas,
                 generate_overall,
                 n_jobs,
+                prepared_sequences=prepared_sequences,
             )
 
     return MOTChallengeSummary(
@@ -200,13 +224,15 @@ def load_motchallenge_groundtruths(root, fmt=io.Format.AUTO, min_confidence=1):
     return OrderedDict((name, io.loadtxt(path, fmt=fmt, min_confidence=min_confidence)) for name, path in files.items())
 
 
-def load_motchallenge_tests(root, fmt=io.Format.AUTO):
+def load_motchallenge_tests(root, fmt=io.Format.AUTO, names=None):
     """Load MOTChallenge tracker result dataframes from a file or folder."""
     root = Path(root)
     if root.is_file():
         return OrderedDict([(_default_sequence_name(root), io.loadtxt(root, fmt=fmt))])
 
     files = _find_test_files(root)
+    if names is not None:
+        files = OrderedDict((name, path) for name, path in files.items() if name in names)
     if not files:
         raise ValueError("No tracker result files found below {}.".format(root))
     logging.info("Found %d test files.", len(files))
@@ -233,7 +259,68 @@ def compare_dataframes(gts, tests, dist="iou", distfields=None, distth=0.5, n_jo
     return accs, names
 
 
-def _append_hota_summary(summary, gts, tests, names, metric_host, dist, distfields, hota_alphas, generate_overall, n_jobs):
+def _compare_single_sequence(gt, test, dist, distfields, distth, include_hota):
+    if not include_hota:
+        return utils.compare_to_groundtruth(gt, test, dist, distfields=distfields, distth=distth), None
+    prepared = _prepare_iou_sequence_data(gt, test, distfields)
+    return _compare_prepared_iou(prepared, distth), prepared
+
+
+def _compare_multiple_sequences(gts, tests, dist, distfields, distth, include_hota, n_jobs):
+    if include_hota:
+        return _compare_iou_dataframes(gts, tests, distfields=distfields, distth=distth, n_jobs=n_jobs)
+    accumulators, names = compare_dataframes(
+        gts,
+        tests,
+        dist=dist,
+        distfields=distfields,
+        distth=distth,
+        n_jobs=n_jobs,
+    )
+    return accumulators, names, None
+
+
+def _compare_iou_dataframes(gts, tests, distfields=None, distth=0.5, n_jobs=1):
+    """Prepare shared IoU data and build CLEAR accumulators."""
+    _validate_n_jobs(n_jobs)
+    tasks = []
+    for name, test in tests.items():
+        if name in gts:
+            tasks.append((name, gts[name], test))
+        else:
+            logging.warning("No ground truth for %s, skipping.", name)
+
+    def prepare_and_compare(task):
+        name, ground_truth, tracker = task
+        logging.info("Comparing %s...", name)
+        prepared = _prepare_iou_sequence_data(ground_truth, tracker, distfields)
+        return prepared, _compare_prepared_iou(prepared, distth)
+
+    if n_jobs == 1 or len(tasks) < 2:
+        results = [prepare_and_compare(task) for task in tasks]
+    else:
+        with ThreadPoolExecutor(max_workers=n_jobs) as executor:
+            results = list(executor.map(prepare_and_compare, tasks))
+
+    names = [name for name, _, _ in tasks]
+    prepared_sequences = OrderedDict((name, result[0]) for name, result in zip(names, results))
+    accumulators = [result[1] for result in results]
+    return accumulators, names, prepared_sequences
+
+
+def _append_hota_summary(
+    summary,
+    gts,
+    tests,
+    names,
+    metric_host,
+    dist,
+    distfields,
+    hota_alphas,
+    generate_overall,
+    n_jobs,
+    prepared_sequences=None,
+):
     hota_summary = _compute_hota_summary(
         gts,
         tests,
@@ -245,16 +332,34 @@ def _append_hota_summary(summary, gts, tests, names, metric_host, dist, distfiel
         generate_overall,
         n_jobs,
         summary.index,
+        prepared_sequences=prepared_sequences,
     )
     return pd.concat([summary, hota_summary], axis=1)
 
 
-def _compute_hota_summary(gts, tests, names, metric_host, dist, distfields, hota_alphas, generate_overall, n_jobs, index):
+def _compute_hota_summary(
+    gts,
+    tests,
+    names,
+    metric_host,
+    dist,
+    distfields,
+    hota_alphas,
+    generate_overall,
+    n_jobs,
+    index,
+    prepared_sequences=None,
+):
     del metric_host, dist, n_jobs  # HOTA is validated as IoU-only by the caller.
     hota_alphas = np.asarray(hota_alphas, dtype=float)
-    sequence_summaries = OrderedDict(
-        (name, _compute_hota_sequence_summary(gts[name], tests[name], distfields, hota_alphas)) for name in names
-    )
+    if prepared_sequences is None:
+        sequence_summaries = OrderedDict(
+            (name, _compute_hota_sequence_summary(gts[name], tests[name], distfields, hota_alphas)) for name in names
+        )
+    else:
+        sequence_summaries = OrderedDict(
+            (name, _compute_prepared_hota_sequence_summary(prepared_sequences[name], hota_alphas)) for name in names
+        )
     if generate_overall:
         sequence_summaries["OVERALL"] = _combine_hota_sequence_summaries(sequence_summaries.values())
 
@@ -268,12 +373,17 @@ def _compute_hota_summary(gts, tests, names, metric_host, dist, distfields, hota
 
 
 def _compute_hota_sequence_summary(gt, test, distfields, hota_alphas):
-    if distfields is None:
-        distfields = ["X", "Y", "Width", "Height"]
+    prepared = _prepare_iou_sequence_data(gt, test, distfields)
+    return _compute_prepared_hota_sequence_summary(prepared, hota_alphas)
 
-    gt = gt[distfields]
-    test = test[distfields]
-    frame_data, gt_id_counts, tracker_id_counts, alignment_scores = _prepare_hota_sequence_data(gt, test)
+
+def _compute_prepared_hota_sequence_summary(prepared, hota_alphas):
+    frame_data = prepared.frame_data
+    gt_id_counts = prepared.gt_id_counts
+    tracker_id_counts = prepared.tracker_id_counts
+    alignment_scores = prepared.alignment_scores
+    num_objects = prepared.num_objects
+    num_predictions = prepared.num_predictions
     num_alphas = len(hota_alphas)
     num_gt_ids = len(gt_id_counts)
     num_tracker_ids = len(tracker_id_counts)
@@ -283,7 +393,7 @@ def _compute_hota_sequence_summary(gt, test, distfields, hota_alphas):
     matched_tracker_indices = []
     matched_similarities = []
 
-    for gt_indices, tracker_indices, similarities in frame_data:
+    for _, gt_indices, tracker_indices, similarities in frame_data:
         if similarities.size == 0:
             continue
         weighted_similarities = similarities * alignment_scores[np.ix_(gt_indices, tracker_indices)]
@@ -308,8 +418,6 @@ def _compute_hota_sequence_summary(gt, test, distfields, hota_alphas):
                 minlength=num_id_pairs,
             ).reshape(num_gt_ids, num_tracker_ids)
 
-    num_objects = len(gt)
-    num_predictions = len(test)
     false_positives = num_predictions - true_positives
     deta = _quiet_divide(true_positives, np.maximum(1, num_objects + false_positives))
     assa = _compute_hota_assa(match_counts, gt_id_counts, tracker_id_counts, true_positives)
@@ -324,29 +432,28 @@ def _compute_hota_sequence_summary(gt, test, distfields, hota_alphas):
     }
 
 
-def _prepare_hota_sequence_data(gt, test):
+def _prepare_iou_sequence_data(gt, test, distfields=None):
+    if distfields is None:
+        distfields = ["X", "Y", "Width", "Height"]
+
+    gt = gt[distfields]
+    test = test[distfields]
     gt_ids = pd.Index(np.sort(gt.index.get_level_values("Id").unique()))
     tracker_ids = pd.Index(np.sort(test.index.get_level_values("Id").unique()))
-    gt_groups = dict(iter(gt.groupby("FrameId", sort=False)))
-    test_groups = dict(iter(test.groupby("FrameId", sort=False)))
-    frame_ids = pd.Index(gt.index.get_level_values("FrameId").unique()).union(
-        pd.Index(test.index.get_level_values("FrameId").unique())
-    ).sort_values()
+    gt_groups, gt_id_counts = _group_frame_arrays(gt, gt_ids)
+    test_groups, tracker_id_counts = _group_frame_arrays(test, tracker_ids)
+    frame_ids = pd.Index(gt_groups).union(pd.Index(test_groups)).sort_values()
 
-    gt_id_counts = np.zeros(len(gt_ids))
-    tracker_id_counts = np.zeros(len(tracker_ids))
     potential_matches = np.zeros((len(gt_ids), len(tracker_ids)))
     frame_data = []
+    empty_indices = np.empty(0, dtype=int)
+    empty_values = np.empty((0, len(distfields)), dtype=float)
 
     for frame_id in frame_ids:
-        frame_gt = gt_groups.get(frame_id)
-        frame_test = test_groups.get(frame_id)
-        frame_gt_indices, frame_gt_values = _hota_frame_arrays(frame_gt, gt_ids)
-        frame_tracker_indices, frame_tracker_values = _hota_frame_arrays(frame_test, tracker_ids)
-        gt_id_counts[frame_gt_indices] += 1
-        tracker_id_counts[frame_tracker_indices] += 1
+        frame_gt_indices, frame_gt_values = gt_groups.get(frame_id, (empty_indices, empty_values))
+        frame_tracker_indices, frame_tracker_values = test_groups.get(frame_id, (empty_indices, empty_values))
         similarities = iou_matrix(frame_gt_values, frame_tracker_values, return_dist=False)
-        frame_data.append((frame_gt_indices, frame_tracker_indices, similarities))
+        frame_data.append((frame_id, frame_gt_indices, frame_tracker_indices, similarities))
         if similarities.size == 0:
             continue
 
@@ -360,14 +467,51 @@ def _prepare_hota_sequence_data(gt, test):
         potential_matches,
         np.maximum(1, gt_id_counts[:, np.newaxis] + tracker_id_counts[np.newaxis, :] - potential_matches),
     )
-    return frame_data, gt_id_counts, tracker_id_counts, alignment_scores
+    return _PreparedIoUSequence(
+        frame_data=frame_data,
+        gt_id_counts=gt_id_counts,
+        tracker_id_counts=tracker_id_counts,
+        alignment_scores=alignment_scores,
+        num_objects=len(gt),
+        num_predictions=len(test),
+    )
 
 
-def _hota_frame_arrays(frame, id_index):
-    if frame is None:
-        return np.empty(0, dtype=int), np.empty((0, 4), dtype=float)
-    ids = id_index.get_indexer(frame.index.get_level_values("Id"))
-    return ids, frame.to_numpy(dtype=float)
+def _group_frame_arrays(dataframe, id_index):
+    """Group MOT rows into array views with one dataframe conversion."""
+    frame_ids = dataframe.index.get_level_values("FrameId").to_numpy()
+    id_codes = id_index.get_indexer(dataframe.index.get_level_values("Id"))
+    values = dataframe.to_numpy(dtype=float, copy=False)
+    if len(frame_ids) == 0:
+        return {}, np.zeros(len(id_index))
+
+    if np.any(frame_ids[1:] < frame_ids[:-1]):
+        order = np.argsort(frame_ids, kind="stable")
+        frame_ids = frame_ids[order]
+        id_codes = id_codes[order]
+        values = values[order]
+
+    boundaries = np.flatnonzero(frame_ids[1:] != frame_ids[:-1]) + 1
+    starts = np.concatenate(([0], boundaries))
+    ends = np.concatenate((boundaries, [len(frame_ids)]))
+    groups = {}
+    id_counts = np.zeros(len(id_index))
+    for start, end in zip(starts, ends):
+        frame_id_codes = id_codes[start:end]
+        groups[frame_ids[start]] = (frame_id_codes, values[start:end])
+        # Preserve the legacy advanced-index behavior for invalid inputs that
+        # repeat an identity within one frame.
+        id_counts[frame_id_codes] += 1
+    return groups, id_counts
+
+
+def _compare_prepared_iou(prepared, distth):
+    accumulator = MOTAccumulator()
+    for frame_id, gt_indices, tracker_indices, similarities in prepared.frame_data:
+        distances = 1 - similarities
+        distances = np.where(distances > distth, np.nan, distances)
+        accumulator.update(gt_indices, tracker_indices, distances, frameid=frame_id)
+    return accumulator
 
 
 def _compute_hota_assa(match_counts, gt_id_counts, tracker_id_counts, true_positives):
