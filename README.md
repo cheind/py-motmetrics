@@ -35,6 +35,7 @@ print(summary)
 ```python
 summary.mota
 summary.idf1
+summary.hota
 summary.df.to_csv("metrics.csv")
 ```
 
@@ -69,7 +70,7 @@ mh = mm.metrics.create()
 print(mh.list_metrics_markdown())
 ```
 
-The default MOTChallenge summary includes the commonly reported CLEAR and Identity metrics. HOTA-related metrics are available through the lower-level API because they require matching over multiple alpha thresholds.
+The default MOTChallenge summary includes the commonly reported CLEAR, Identity, and HOTA metrics.
 
 ## Advanced Use
 
@@ -100,7 +101,7 @@ Useful lower-level pieces:
 - `mm.distances` contains distance helpers such as IoU and Euclidean matrices.
 - `mm.metrics.create()` returns a `MetricsHost` for custom metric selection.
 - `mm.utils.compare_to_groundtruth` compares loaded dataframes directly.
-- `mm.utils.compare_to_groundtruth_reweighting` supports HOTA-style multi-threshold workflows.
+- `mm.utils.compare_to_groundtruth_reweighting` supports custom HOTA-style multi-threshold workflows.
 
 For the full HOTA/CLEAR/Identity parity check against TrackEval, see [motmetrics/tests/test_trackeval_parity.py](motmetrics/tests/test_trackeval_parity.py).
 

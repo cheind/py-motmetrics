@@ -14,8 +14,19 @@ from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+import numpy as np
+import pandas as pd
+
 from motmetrics import io, lap, utils
 from motmetrics import metrics as metrics_module
+
+HOTA_ALPHAS = np.arange(0.05, 0.99, 0.05)
+HOTA_ALPHA_METRICS = ["hota_alpha", "deta_alpha", "assa_alpha"]
+HOTA_SUMMARY_METRICS = OrderedDict([
+    ("hota_alpha", "hota"),
+    ("deta_alpha", "deta"),
+    ("assa_alpha", "assa"),
+])
 
 
 class MOTChallengeSummary(object):
@@ -76,6 +87,8 @@ def evaluate_motchallenge(
     solver=None,
     id_solver=None,
     exclude_id=False,
+    include_hota=True,
+    hota_alphas=None,
     n_jobs=1,
 ):
     """Evaluate MOTChallenge files or folders and return a rich summary.
@@ -88,6 +101,10 @@ def evaluate_motchallenge(
     tests : str or path-like
         Path to a tracker result file, a sequence folder containing ``test.txt``,
         or a MOTChallenge tracker root containing ``<sequence>.txt`` files.
+    include_hota : bool, optional
+        If true, append HOTA, DetA, and AssA averaged over ``hota_alphas``.
+    hota_alphas : array-like, optional
+        HOTA alpha thresholds. Defaults to the TrackEval thresholds from 0.05 to 0.95.
 
     Returns
     -------
@@ -105,15 +122,33 @@ def evaluate_motchallenge(
 
     metric_names = _prepare_metrics(metrics, exclude_id)
     metric_host = metrics_module.create()
+    if hota_alphas is None:
+        hota_alphas = HOTA_ALPHAS
+    if include_hota and dist.upper() != "IOU":
+        raise ValueError("HOTA is only supported with dist='iou'. Pass include_hota=False to skip HOTA metrics.")
 
     if gt_path.is_file() and test_path.is_file():
+        sequence_name = name or _default_sequence_name(test_path)
         gt = io.loadtxt(gt_path, fmt=fmt, min_confidence=gt_min_confidence)
         test = io.loadtxt(test_path, fmt=fmt)
         acc = utils.compare_to_groundtruth(gt, test, dist, distfields=distfields, distth=distth)
 
         if id_solver:
             lap.default_solver = id_solver
-        summary = metric_host.compute(acc, metrics=metric_names, name=name or _default_sequence_name(test_path))
+        summary = metric_host.compute(acc, metrics=metric_names, name=sequence_name)
+        if include_hota:
+            summary = _append_hota_summary(
+                summary,
+                OrderedDict([(sequence_name, gt)]),
+                OrderedDict([(sequence_name, test)]),
+                [sequence_name],
+                metric_host,
+                dist,
+                distfields,
+                hota_alphas,
+                False,
+                n_jobs,
+            )
     else:
         gt = load_motchallenge_groundtruths(gt_path, fmt=fmt, min_confidence=gt_min_confidence)
         test = load_motchallenge_tests(test_path, fmt=fmt)
@@ -130,11 +165,24 @@ def evaluate_motchallenge(
             generate_overall=generate_overall,
             n_jobs=n_jobs,
         )
+        if include_hota:
+            summary = _append_hota_summary(
+                summary,
+                gt,
+                test,
+                names,
+                metric_host,
+                dist,
+                distfields,
+                hota_alphas,
+                generate_overall,
+                n_jobs,
+            )
 
     return MOTChallengeSummary(
         summary,
-        formatters=metric_host.formatters,
-        namemap=io.motchallenge_metric_names,
+        formatters=_summary_formatters(metric_host, include_hota),
+        namemap=_summary_namemap(include_hota),
     )
 
 
@@ -184,6 +232,63 @@ def compare_dataframes(gts, tests, dist="iou", distfields=None, distth=0.5, n_jo
     return accs, names
 
 
+def _append_hota_summary(summary, gts, tests, names, metric_host, dist, distfields, hota_alphas, generate_overall, n_jobs):
+    hota_summary = _compute_hota_summary(
+        gts,
+        tests,
+        names,
+        metric_host,
+        dist,
+        distfields,
+        hota_alphas,
+        generate_overall,
+        n_jobs,
+        summary.index,
+    )
+    return pd.concat([summary, hota_summary], axis=1)
+
+
+def _compute_hota_summary(gts, tests, names, metric_host, dist, distfields, hota_alphas, generate_overall, n_jobs, index):
+    hota_accumulators = _compare_hota_dataframes(gts, tests, names, dist, distfields, hota_alphas, n_jobs)
+    per_alpha_summaries = []
+
+    for alpha_index in range(len(hota_alphas)):
+        per_alpha_summaries.append(
+            metric_host.compute_many(
+                [hota_accumulators[name][alpha_index] for name in names],
+                metrics=HOTA_ALPHA_METRICS,
+                names=names,
+                generate_overall=generate_overall,
+                n_jobs=n_jobs,
+            )
+        )
+
+    rows = []
+    for row_name in index:
+        row = OrderedDict()
+        for alpha_metric, summary_metric in HOTA_SUMMARY_METRICS.items():
+            row[summary_metric] = np.mean([summary.loc[row_name, alpha_metric] for summary in per_alpha_summaries])
+        rows.append(row)
+    return pd.DataFrame(rows, index=index)
+
+
+def _compare_hota_dataframes(gts, tests, names, dist, distfields, hota_alphas, n_jobs):
+    tasks = [(name, gts[name], tests[name]) for name in names]
+    if n_jobs == 1 or len(tasks) < 2:
+        results = [_compare_hota_dataframe_task(task, dist, distfields, hota_alphas) for task in tasks]
+    else:
+        with ThreadPoolExecutor(max_workers=n_jobs) as executor:
+            results = list(executor.map(lambda task: _compare_hota_dataframe_task(task, dist, distfields, hota_alphas), tasks))
+    return OrderedDict(results)
+
+
+def _compare_hota_dataframe_task(task, dist, distfields, hota_alphas):
+    name, gt, test = task
+    logging.info("Comparing %s for HOTA...", name)
+    accs = utils.compare_to_groundtruth_reweighting(gt, test, dist, distfields=distfields, distth=hota_alphas)
+    return name, accs
+
+
 def _compare_dataframe_task(task, dist, distfields, distth):
     name, gt, test = task
     logging.info("Comparing %s...", name)
@@ -201,6 +306,20 @@ def _prepare_metrics(metric_names, exclude_id):
     if exclude_id:
         metric_names = [metric_name for metric_name in metric_names if not metric_name.startswith("id")]
     return metric_names
+
+
+def _summary_formatters(metric_host, include_hota):
+    formatters = dict(metric_host.formatters)
+    if include_hota:
+        formatters.update({"hota": "{:.1%}".format, "deta": "{:.1%}".format, "assa": "{:.1%}".format})
+    return formatters
+
+
+def _summary_namemap(include_hota):
+    namemap = dict(io.motchallenge_metric_names)
+    if include_hota:
+        namemap.update({"hota": "HOTA", "deta": "DetA", "assa": "AssA"})
+    return namemap
 
 
 def _validate_paths(gt_path, test_path):

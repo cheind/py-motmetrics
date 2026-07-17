@@ -19,11 +19,14 @@ def test_evaluate_motchallenge_files_returns_rich_summary():
     assert summary.dataframe is summary.df
     assert list(summary.df.index) == ["TUD-Campus"]
     assert "mota" in summary
+    assert "hota" in summary
     assert summary["mota"].equals(summary.df["mota"])
     assert summary.mota.equals(summary.df["mota"])
+    assert summary.hota.equals(summary.df["hota"])
     assert summary.loc["TUD-Campus", "mota"] == summary.df.loc["TUD-Campus", "mota"]
     assert str(summary) == summary.text
     assert "MOTA" in summary.text
+    assert "HOTA" in summary.text
 
 
 def test_evaluate_motchallenge_folders_returns_overall_summary(tmp_path):
@@ -41,8 +44,21 @@ def test_evaluate_motchallenge_folders_returns_overall_summary(tmp_path):
     summary = mm.evaluate_motchallenge(gt_root, test_root)
 
     assert list(summary.df.index) == ["TUD-Campus", "TUD-Stadtmitte", "OVERALL"]
+    assert set(["hota", "deta", "assa"]).issubset(summary.df.columns)
     assert "IDF1" in summary.text
+    assert "HOTA" in summary.text
     assert summary.to_csv().startswith(",idf1")
+
+
+def test_evaluate_motchallenge_can_skip_hota():
+    summary = mm.evaluate_motchallenge(
+        DATA_DIR / "TUD-Campus" / "gt.txt",
+        DATA_DIR / "TUD-Campus" / "test.txt",
+        include_hota=False,
+    )
+
+    assert "hota" not in summary.df.columns
+    assert "HOTA" not in summary.text
 
 
 def test_evaluate_motchallenge_sequence_folders():
