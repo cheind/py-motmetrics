@@ -303,25 +303,77 @@ def test_summary_supports_native_metric_access():
         summary[0]
 
 
-def test_hota_metrics_are_always_calculated():
+def test_metrics_selects_core_and_hota_in_requested_order():
+    summary = mm.evaluate_motchallenge(
+        DATA_DIR / "TUD-Campus" / "gt.txt",
+        DATA_DIR / "TUD-Campus" / "test.txt",
+        metrics=["assa", "mota", "hota"],
+    )
+
+    assert list(summary.df.columns) == ["assa", "mota", "hota"]
+    assert summary["TUD-Campus", "assa"] == approx(0.36912068120832836)
+    assert summary["TUD-Campus", "mota"] == approx(0.5264623955431755)
+    assert summary["TUD-Campus", "hota"] == approx(0.3913974378451139)
+
+
+def test_metrics_without_hota_skips_hota_computation(monkeypatch):
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("HOTA was calculated despite not being selected")
+
+    prepare_iou_sequence_data = evaluation._prepare_iou_sequence_data
+
+    def assert_hota_is_not_prepared(*args, **kwargs):
+        assert kwargs["compute_hota"] is False
+        assert kwargs["retain_frame_iou"] is False
+        return prepare_iou_sequence_data(*args, **kwargs)
+
+    monkeypatch.setattr(
+        evaluation,
+        "_compute_prepared_hota_sequence_summary",
+        fail_if_called,
+    )
+    monkeypatch.setattr(
+        evaluation,
+        "_prepare_iou_sequence_data",
+        assert_hota_is_not_prepared,
+    )
     summary = mm.evaluate_motchallenge(
         DATA_DIR / "TUD-Campus" / "gt.txt",
         DATA_DIR / "TUD-Campus" / "test.txt",
         metrics=["mota"],
     )
 
-    assert list(summary.df.columns) == [
-        "mota",
-        "hota",
-        "deta",
-        "assa",
-        "detre",
-        "detpr",
-        "assre",
-        "asspr",
-        "loca",
-        "owta",
-    ]
+    assert summary.columns == ["mota"]
+    assert summary["TUD-Campus", "mota"] == approx(0.5264623955431755)
+
+
+def test_metrics_supports_hota_only_and_exclude_id():
+    hota_only = mm.evaluate_motchallenge(
+        DATA_DIR,
+        DATA_DIR,
+        metrics="hota",
+        progress=False,
+    )
+    without_identity = mm.evaluate_motchallenge(
+        DATA_DIR / "TUD-Campus" / "gt.txt",
+        DATA_DIR / "TUD-Campus" / "test.txt",
+        metrics=["idf1", "hota"],
+        exclude_id=True,
+    )
+
+    assert hota_only.columns == ["hota"]
+    assert hota_only["OVERALL", "hota"] == approx(0.3999570912884786)
+    assert without_identity.columns == ["hota"]
+
+
+def test_metrics_rejects_unknown_and_duplicate_names():
+    ground_truth = DATA_DIR / "TUD-Campus" / "gt.txt"
+    tracker = DATA_DIR / "TUD-Campus" / "test.txt"
+
+    with pytest.raises(ValueError, match="Unknown metric: unknown"):
+        mm.evaluate_motchallenge(ground_truth, tracker, metrics=["unknown"])
+    with pytest.raises(ValueError, match="must not contain duplicate"):
+        mm.evaluate_motchallenge(ground_truth, tracker, metrics=["hota", "hota"])
 
 
 def test_evaluate_motchallenge_folders_returns_overall_summary(tmp_path):

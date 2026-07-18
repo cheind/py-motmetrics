@@ -1,6 +1,12 @@
-[![PyPI version](https://badge.fury.io/py/motmetrics.svg)](https://badge.fury.io/py/motmetrics) [![Build Status](https://github.com/cheind/py-motmetrics/actions/workflows/python-package.yml/badge.svg)](https://github.com/cheind/py-motmetrics/actions/workflows/python-package.yml) [![DOI](https://zenodo.org/badge/87559569.svg)](https://doi.org/10.5281/zenodo.14014773)
+[![PyPI version](https://badge.fury.io/py/motmetrics.svg)](https://badge.fury.io/py/motmetrics) [![Build Status](https://github.com/cheind/py-motmetrics/actions/workflows/python-package.yml/badge.svg)](https://github.com/cheind/py-motmetrics/actions/workflows/python-package.yml) [![TrackEval parity](https://img.shields.io/badge/TrackEval%201.3.0-parity-brightgreen)](https://github.com/cheind/py-motmetrics/actions/workflows/python-package.yml) [![DOI](https://zenodo.org/badge/87559569.svg)](https://doi.org/10.5281/zenodo.14014773)
 
 # py-motmetrics
+
+<p align="center">
+  <img src="motmetrics/etc/mot.png" alt="Multiple-object tracking example" width="500">
+  <br>
+  <em>Pictures courtesy of Bernardin, Keni, and Rainer Stiefelhagen <a href="#references">[1]</a></em>
+</p>
 
 **py-motmetrics** provides Python tools for evaluating multiple object tracking (MOT) results. It implements MOTChallenge-aligned CLEAR MOT, Identity, and HOTA-related metrics, including MOTA, MOTP, IDF1, precision, recall, and track quality counts.
 
@@ -11,13 +17,6 @@ pip install motmetrics
 ```
 
 Python 3.8 through 3.14 is supported.
-
-To materialize results as a pandas dataframe through `summary.df`, install the
-optional dataframe extra:
-
-```bash
-pip install "motmetrics[dataframe]"
-```
 
 For development:
 
@@ -37,58 +36,6 @@ summary = mm.evaluate_motchallenge("path/to/gt.txt", "path/to/pred.txt")
 print(summary)
 ```
 
-`summary` displays as a MOTChallenge-style table. Read scalar values or complete
-metric columns without pandas:
-
-```python
-hota_by_sequence = summary["hota"]
-sequence_metrics = summary[summary.index[0]]
-sequence_hota = summary[summary.index[0], "hota"]
-```
-
-Column access returns an ordered mapping from sequence name to value. Row access
-returns an ordered mapping from metric name to value. Folder evaluation also
-provides `summary["OVERALL"]` and the scalar `summary["OVERALL", "hota"]`.
-
-With the dataframe extra installed, a pandas view remains available on demand:
-
-```python
-summary.df["mota"]
-summary.df["idf1"]
-summary.df["hota"]
-summary.df.to_csv("metrics.csv")
-```
-
-Evaluation, native metric access, and text rendering do not import pandas. The
-dataframe is materialized only when `.df` is accessed.
-
-By default, `evaluate_motchallenge` uses `fmt="auto"`. It detects MOTChallenge text, VATIC text, and UA-DETRAC XML files. For ambiguous text files, pass the format explicitly:
-
-```python
-summary = mm.evaluate_motchallenge(gt, pred, fmt="mot16")
-```
-
-Folder evaluation uses the same function:
-
-```python
-summary = mm.evaluate_motchallenge(
-    "path/to/gt_root",
-    "path/to/preds_root",
-    n_jobs=4,
-)
-print(summary)
-```
-
-For folder-based IoU evaluation, `n_jobs > 1` runs complete sequences in
-separate processes, including file loading, CLEAR/Identity metrics, and HOTA.
-Use at most the number of sequences and benchmark against the number of
-physical CPU cores; extra processes can be slower once process overhead or
-memory bandwidth becomes the bottleneck.
-
-Interactive terminals automatically show one progress row per sequence. Pass
-`progress=False` to suppress it, or `progress=True` to force it when stderr is
-not detected as an interactive terminal.
-
 Expected folder layout:
 
 ```text
@@ -98,19 +45,21 @@ preds_root/<SEQUENCE>.txt
 
 ## Metrics
 
-The MOTChallenge summary always includes the commonly reported CLEAR, Identity,
-and HOTA metrics. HOTA diagnostics include DetRe, DetPr, AssRe, AssPr, LocA,
-and OWTA. CLEAR diagnostics include MODA, sMOTA, MTR, PTR, MLR, CLR_F1, and
-false positives per frame.
+`evaluate_motchallenge` returns all built-in CLEAR, Identity, and HOTA metrics
+by default. Use `metrics=` to select and order only the metrics you need:
 
-### Metric reference
+```python
+summary = mm.evaluate_motchallenge(
+    gt,
+    predictions,
+    metrics=["mota", "idf1", "hota", "assa"],
+)
+```
 
-The display name is the column printed in the summary. The Python name is used
-by `summary[...]`, `summary.df`, and the optional `metrics=` argument. Ratios
-and accuracies are stored in the range `[0, 1]` before display formatting,
-although error-based scores such as MOTA, MODA, and sMOTA can be negative.
+Expand a group below for metric definitions.
 
-#### Identity and detection
+<details>
+<summary><strong>Identity and detection</strong></summary>
 
 | Display | Python name | Meaning | Better |
 |---|---|---|:---:|
@@ -133,7 +82,10 @@ IDR  = IDTP / (IDTP + IDFN)
 IDF1 = 2 * IDTP / (2 * IDTP + IDFP + IDFN)
 ```
 
-#### Track coverage
+</details>
+
+<details>
+<summary><strong>Track coverage</strong></summary>
 
 | Display | Python name | Meaning | Better |
 |---|---|---|:---:|
@@ -145,7 +97,10 @@ IDF1 = 2 * IDTP / (2 * IDTP + IDFP + IDFN)
 | PTR | `ptr` | Partially-tracked ratio: `PT / GT`. | Context |
 | MLR | `mlr` | Mostly-lost ratio: `ML / GT`. | Lower |
 
-#### CLEAR scores
+</details>
+
+<details>
+<summary><strong>CLEAR scores</strong></summary>
 
 | Display | Python name | Meaning | Better |
 |---|---|---|:---:|
@@ -173,7 +128,10 @@ FP/Frame = FP / F
 The displayed `GT` column counts unique trajectories. It is not `G`, the
 ground-truth detection count used as the denominator of MOTA, MODA, and sMOTA.
 
-#### Identity event diagnostics
+</details>
+
+<details>
+<summary><strong>Identity event diagnostics</strong></summary>
 
 | Display | Python name | Meaning | Better |
 |---|---|---|:---:|
@@ -184,7 +142,10 @@ ground-truth detection count used as the denominator of MOTA, MODA, and sMOTA.
 These event diagnostics describe how an identity error happened. `IDs` remains
 the standard identity-switch count used by MOTA.
 
-#### HOTA scores
+</details>
+
+<details>
+<summary><strong>HOTA scores</strong></summary>
 
 | Display | Python name | Meaning | Better |
 |---|---|---|:---:|
@@ -212,139 +173,36 @@ The displayed HOTA-family values are means over the configured thresholds. By
 default these are `0.05, 0.10, ..., 0.95`, matching TrackEval. `LocA` uses
 similarity, while this package's CLEAR `MOTP` column uses distance.
 
+</details>
+
 ### Custom metric families
 
-Add metrics through an explicit `MetricFamily` passed to the same evaluator.
-There is no process-global registry, and each family owns its sequence state,
-summary calculation, and mathematically correct cross-sequence aggregation.
-This example adds a metric derived from compact per-identity matching state.
-`TCOV` asks:
-"What fraction of a ground-truth track's lifespan is covered by all tracker
-tracks linked to it?" A frame is covered whenever CLEAR matching assigns any
-tracker identity to that ground-truth identity. Tracker identity changes do not
-break coverage. The metric first computes coverage per ground-truth track and
-then averages those fractions, so every ground-truth track has equal weight.
+Extend `evaluate_motchallenge` with `extra_metric_families=`. See examples using
+[shared statistics](examples/custom_metrics/from_shared_statistics.py) or
+[custom matching](examples/custom_metrics/with_custom_matching.py).
 
-```python
-import motmetrics as mm
+## Performance
 
+End-to-end median runtime on an Apple M3 Max across seven fresh runs per
+setting, including imports, file loading, IoU, CLEAR, Identity, and HOTA. One
+sequence worker is used per requested core, capped by the sequence count:
 
-class TrackCoverage(mm.MetricFamily):
-    name = "track_coverage"
-    metric_names = ("tcov",)
-    requirements = frozenset(("clear_statistics",))
-    display_names = {"tcov": "TCOV"}
-    formatters = {"tcov": "{:.1%}".format}
-
-    def evaluate_sequence(self, sequence, intermediates):
-        del sequence
-        coverage = intermediates.clear_statistics.track_coverage
-        return float(coverage.sum()), len(coverage)
-
-    def summarize(self, partial):
-        coverage_sum, track_count = partial
-        tcov = coverage_sum / max(1, track_count)
-        if not 0.0 <= tcov <= 1.0:
-            raise ValueError("TCOV must be between 0.0 and 1.0")
-        return {"tcov": tcov}
-
-    def combine(self, partials):
-        coverage_sum = sum(partial[0] for partial in partials)
-        track_count = sum(partial[1] for partial in partials)
-        return self.summarize((coverage_sum, track_count))
-
-
-summary = mm.evaluate_motchallenge(
-    "path/to/gt_root",
-    "path/to/preds_root",
-    n_jobs=4,
-    extra_metric_families=TrackCoverage(),
-)
-print(summary)
-```
-
-The runnable version is
-[`examples/custom_metrics/from_shared_statistics.py`](examples/custom_metrics/from_shared_statistics.py).
-
-For example, a raw `TCOV` value of `0.8` (displayed as `80.0%`) means that,
-on average, the tracker sees and processes a ground-truth object for 80% of the
-frames in which that object is annotated.
-
-A family implements three operations:
-
-- `evaluate_sequence(sequence, intermediates)` returns compact per-sequence
-  state. It may use entirely different matching semantics.
-- `summarize(partial)` maps that state to the family's scalar metric names for
-  one sequence.
-- `combine(partials)` combines the original states for `OVERALL`. This avoids
-  incorrect averaging of already-normalized sequence scores.
-
-Raw sequence inputs are always available as immutable columnar views through
-`sequence.ground_truth` and `sequence.tracker`. Each exposes `frame_ids`, `ids`,
-`field_names`, `column(name)`, `values(names)`, `boxes`, and `confidence`.
-Derived data must be declared in `requirements` and its view is created only
-on demand:
-
-| Requirement | Available data |
-|---|---|
-| `frame_iou` | Per-frame ground-truth IDs, tracker IDs, and IoU matrices. A family can apply its own assignment or thresholding. |
-| `trajectories` | Ground-truth and tracker detections grouped into immutable identity trajectories. |
-| `clear_statistics` | Compact per-identity detection and match counts, track coverage ratios, and aggregate CLEAR counters already produced by the fast matcher. |
-| `clear_events` | Compact `RAW`, `MATCH`, `SWITCH`, `MISS`, `FP`, `TRANSFER`, `ASCEND`, and `MIGRATE` event arrays from CLEAR matching. |
-
-`intermediates.clear_events.df` provides the former pandas-style event table
-when the dataframe extra is installed. The table and pandas import remain lazy;
-using the event arrays does not require pandas.
-
-Metric names must be unique within an evaluation and each summarized value
-must be a numeric scalar. Family instances and returned partial states must be
-picklable for `n_jobs > 1`. Keeping family classes at module scope and partials
-as tuples, dictionaries, or NumPy arrays satisfies this in typical cases.
-Families should be stateless during evaluation; treat each instance as immutable
-configuration so serial and process-parallel runs behave identically.
-
-For a metric that replaces the built-in assignment semantics and constructs
-intermediate state absent from the fast path, see
-[`examples/custom_metrics/with_custom_matching.py`](examples/custom_metrics/with_custom_matching.py).
-It performs confidence-ranked greedy matching and combines its own
-precision-recall state without changing the evaluator.
-
-`motmetrics.evaluate_motchallenge` is the only supported metrics entrypoint.
-The accumulator, matching, dependency resolution, and per-sequence process
-workers are internal implementation details so every invocation follows the
-same optimized computational path. Supplying a `MetricFamily` extends that
-path; it does not introduce an alternate evaluator. With no extra families,
-custom views and CLEAR event rows are never constructed.
-
-For the full HOTA/CLEAR/Identity parity check against TrackEval, see [motmetrics/tests/test_trackeval_parity.py](motmetrics/tests/test_trackeval_parity.py).
-
-## MOTChallenge Notes
-
-Results are aligned with the MOTChallenge devkit, with one format difference:
-
-- MOTChallenge reports MOTP as a percentage, while py-motmetrics reports the average distance. Convert with `(1 - MOTP) * 100` for MOTChallenge-style MOTP.
-
-## Development
-
-Run the test suite:
-
-```bash
-uv run --no-project pytest
-```
-
-Run the TrackEval parity test locally:
-
-```bash
-uv pip install trackeval==1.3.0
-uv run --no-project pytest -q motmetrics/tests/test_trackeval_parity.py
-```
+| Dataset | Backend | 1 core | 2 cores | 4 cores | 8 cores |
+|---|---|---:|---:|---:|---:|
+| TUD (2 sequences) | py-motmetrics | 0.117 s | 0.146 s | 0.164 s | 0.151 s |
+| TUD (2 sequences) | TrackEval 1.3.0 | 0.573 s | 0.492 s | 0.498 s | 0.495 s |
+| TUD (2 sequences) | Speedup | **4.90x** | **3.37x** | **3.04x** | **3.28x** |
+| MOT17 (7 sequences) | py-motmetrics | 0.374 s | 0.284 s | 0.248 s | 0.263 s |
+| MOT17 (7 sequences) | TrackEval 1.3.0 | 1.006 s | 0.753 s | 0.679 s | 0.696 s |
+| MOT17 (7 sequences) | Speedup | **2.69x** | **2.65x** | **2.74x** | **2.65x** |
 
 ## References
 
-1. Bernardin, Keni, and Rainer Stiefelhagen. "Evaluating multiple object tracking performance: the CLEAR MOT metrics." EURASIP Journal on Image and Video Processing, 2008.
-2. Milan, Anton, et al. "MOT16: A benchmark for multi-object tracking." arXiv preprint arXiv:1603.00831, 2016.
-3. Li, Yuan, Chang Huang, and Ram Nevatia. "Learning to associate: HybridBoosted multi-target tracker for crowded scene." CVPR, 2009.
-4. Ristani, Ergys, et al. "Performance Measures and a Data Set for Multi-Target, Multi-Camera Tracking." ECCV Workshop, 2016.
+1. Luiten, Jonathon, et al. ["HOTA: A Higher Order Metric for Evaluating Multi-Object Tracking."](https://doi.org/10.1007/s11263-020-01375-2) International Journal of Computer Vision, 2021.
+2. Ristani, Ergys, et al. ["Performance Measures and a Data Set for Multi-Target, Multi-Camera Tracking."](https://doi.org/10.1007/978-3-319-48881-3_2) ECCV Workshop, 2016.
+3. Milan, Anton, et al. ["MOT16: A Benchmark for Multi-Object Tracking."](https://arxiv.org/abs/1603.00831) arXiv:1603.00831, 2016.
+4. Li, Yuan, Chang Huang, and Ram Nevatia. ["Learning to Associate: HybridBoosted Multi-Target Tracker for Crowded Scene."](https://doi.org/10.1109/CVPR.2009.5206735) CVPR, 2009.
+5. Bernardin, Keni, and Rainer Stiefelhagen. ["Evaluating Multiple Object Tracking Performance: The CLEAR MOT Metrics."](https://doi.org/10.1155/2008/246309) EURASIP Journal on Image and Video Processing, 2008.
 
 ## License
 

@@ -188,6 +188,10 @@ def evaluate_motchallenge(
     tests : str or path-like
         Path to a tracker result file, a sequence folder containing ``test.txt``,
         or a MOTChallenge tracker root containing ``<sequence>.txt`` files.
+    metrics : str or iterable of str, optional
+        Built-in CLEAR, Identity, and HOTA result columns to return. Defaults
+        to every standard metric. Explicit selections preserve their order and
+        skip HOTA computation when no HOTA metric is requested.
     hota_alphas : array-like, optional
         HOTA alpha thresholds. Defaults to the TrackEval thresholds from 0.05 to 0.95.
     n_jobs : int, optional
@@ -214,7 +218,10 @@ def evaluate_motchallenge(
     _validate_n_jobs(n_jobs)
     progress_enabled = _progress_is_enabled(progress)
 
-    metric_names = _prepare_metrics(metrics, exclude_id)
+    metric_names, core_metric_names, hota_metric_names = _prepare_metrics(
+        metrics,
+        exclude_id,
+    )
     metric_families = _prepare_metric_families(
         extra_metric_families,
         n_jobs,
@@ -230,6 +237,8 @@ def evaluate_motchallenge(
         distfields,
         distth,
         metric_names,
+        core_metric_names,
+        hota_metric_names,
         hota_alphas,
         generate_overall and not gt_path.is_file(),
         n_jobs,
@@ -253,6 +262,8 @@ def _evaluate_iou_paths(
     distfields,
     distth,
     metric_names,
+    core_metric_names,
+    hota_metric_names,
     hota_alphas,
     generate_overall,
     n_jobs,
@@ -280,7 +291,8 @@ def _evaluate_iou_paths(
             gt_min_confidence,
             distfields,
             distth,
-            metric_names,
+            core_metric_names,
+            hota_metric_names,
             np.asarray(hota_alphas, dtype=float),
             metric_families,
         )
@@ -312,33 +324,36 @@ def _evaluate_iou_paths(
 
     names = [result[0] for result in results]
     partials = [result[1] for result in results]
-    rows = [OrderedDict((metric, partial[metric]) for metric in metric_names) for partial in partials]
+    rows = [
+        OrderedDict(
+            (metric, partial[metric])
+            for metric in core_metric_names
+        )
+        for partial in partials
+    ]
     result_names = list(names)
     if generate_overall:
         rows.append(
             metrics_module._compute_overall(
                 partials,
-                metric_names=metric_names,
+                metric_names=core_metric_names,
             )
         )
         result_names.append("OVERALL")
-    sequence_summaries = OrderedDict((result[0], result[2]) for result in results)
-    if generate_overall:
-        sequence_summaries["OVERALL"] = _combine_hota_sequence_summaries(
-            sequence_summaries.values()
-        )
-    for row_name, row in zip(result_names, rows):
-        row.update(
-            (summary_metric, np.mean(sequence_summaries[row_name][alpha_metric]))
-            for alpha_metric, summary_metric in HOTA_SUMMARY_METRICS.items()
-        )
+    _extend_rows_with_hota(
+        rows,
+        result_names,
+        results,
+        hota_metric_names,
+        generate_overall,
+    )
     _extend_rows_with_metric_families(
         rows,
         results,
         generate_overall,
         metric_families,
     )
-    columns = list(metric_names) + list(HOTA_SUMMARY_METRICS.values())
+    columns = list(metric_names)
     for family in metric_families:
         columns.extend(family.metric_names)
     return rows, result_names, columns
@@ -355,7 +370,8 @@ def _evaluate_iou_sequence_file(task):
         gt_min_confidence,
         distfields,
         distth,
-        metric_names,
+        core_metric_names,
+        hota_metric_names,
         hota_alphas,
         metric_families,
     ) = task
@@ -370,6 +386,11 @@ def _evaluate_iou_sequence_file(task):
             ground_truth,
             tracker,
         )
+        compute_hota = bool(hota_metric_names)
+        retain_frame_iou = compute_hota or any(
+            "frame_iou" in family.requirements
+            for family in metric_families
+        )
         prepared = _prepare_iou_sequence_data(
             ground_truth,
             tracker,
@@ -377,21 +398,25 @@ def _evaluate_iou_sequence_file(task):
             distfields,
             progress=sequence_progress,
             event_recorder=event_recorder,
+            compute_hota=compute_hota,
+            retain_frame_iou=retain_frame_iou,
         )
 
         if sequence_progress is not None:
             sequence_progress.stage(_PROGRESS_METRICS)
         partial = metrics_module._compute_metrics(
             prepared.accumulator,
-            metric_names=metric_names,
+            metric_names=core_metric_names,
         )
-        if sequence_progress is not None:
-            sequence_progress.stage(_PROGRESS_HOTA)
-        hota_summary = _compute_prepared_hota_sequence_summary(
-            prepared,
-            hota_alphas,
-            progress=sequence_progress,
-        )
+        hota_summary = None
+        if compute_hota:
+            if sequence_progress is not None:
+                sequence_progress.stage(_PROGRESS_HOTA)
+            hota_summary = _compute_prepared_hota_sequence_summary(
+                prepared,
+                hota_alphas,
+                progress=sequence_progress,
+            )
         family_results = ()
         if metric_families:
             if sequence_progress is not None:
@@ -476,9 +501,9 @@ class _WorkerSequenceProgress(object):
         self.current = 0
         self.total = 0
 
-    def begin(self, frame_count):
+    def begin(self, frame_count, include_hota=True):
         """Set the frame-derived total and enter the IoU pass."""
-        self.total = frame_count * 2
+        self.total = frame_count * (2 if include_hota else 1)
         _WORKER_PROGRESS_TOTAL[self.index] = self.total
         self.stage(_PROGRESS_IOU)
 
@@ -712,6 +737,8 @@ def _prepare_iou_sequence_data(
     distfields=None,
     progress=None,
     event_recorder=None,
+    compute_hota=True,
+    retain_frame_iou=True,
 ):
     if distfields is None:
         distfields = ["X", "Y", "Width", "Height"]
@@ -722,7 +749,9 @@ def _prepare_iou_sequence_data(
     test_groups, tracker_id_counts = _group_frame_arrays(test, tracker_ids, distfields)
     frame_ids = np.union1d(gt.frame_ids, test.frame_ids)
 
-    potential_matches = np.zeros((len(gt_ids), len(tracker_ids)))
+    potential_matches = None
+    if compute_hota:
+        potential_matches = np.zeros((len(gt_ids), len(tracker_ids)))
     accumulator = _Accumulator(
         gt_id_counts,
         tracker_id_counts,
@@ -732,7 +761,7 @@ def _prepare_iou_sequence_data(
     empty_indices = np.empty(0, dtype=int)
     empty_values = np.empty((0, len(distfields)), dtype=float)
     if progress is not None:
-        progress.begin(len(frame_ids))
+        progress.begin(len(frame_ids), include_hota=compute_hota)
 
     for frame_id in frame_ids:
         if progress is not None:
@@ -740,7 +769,12 @@ def _prepare_iou_sequence_data(
         frame_gt_indices, frame_gt_values = gt_groups.get(frame_id, (empty_indices, empty_values))
         frame_tracker_indices, frame_tracker_values = test_groups.get(frame_id, (empty_indices, empty_values))
         similarities = iou_matrix(frame_gt_values, frame_tracker_values, return_dist=False)
-        frame_data.append((frame_gt_indices, frame_tracker_indices, similarities))
+        if retain_frame_iou:
+            frame_data.append((
+                frame_gt_indices,
+                frame_tracker_indices,
+                similarities,
+            ))
         distances = 1 - similarities
         finite = distances <= distth
         accumulator.update(
@@ -750,7 +784,7 @@ def _prepare_iou_sequence_data(
             finite,
             frame_id=frame_id,
         )
-        if similarities.size == 0:
+        if not compute_hota or similarities.size == 0:
             continue
 
         similarity_denominator = similarities.sum(0)[np.newaxis, :] + similarities.sum(1)[:, np.newaxis] - similarities
@@ -762,10 +796,17 @@ def _prepare_iou_sequence_data(
             frame_tracker_indices,
         ] += similarity_iou
 
-    alignment_scores = metrics_module._quiet_divide(
-        potential_matches,
-        np.maximum(1, gt_id_counts[:, np.newaxis] + tracker_id_counts[np.newaxis, :] - potential_matches),
-    )
+    alignment_scores = None
+    if compute_hota:
+        alignment_scores = metrics_module._quiet_divide(
+            potential_matches,
+            np.maximum(
+                1,
+                gt_id_counts[:, np.newaxis]
+                + tracker_id_counts[np.newaxis, :]
+                - potential_matches,
+            ),
+        )
     return _PreparedIoUSequence(
         frame_data=frame_data,
         gt_id_counts=gt_id_counts,
@@ -890,15 +931,43 @@ def _combine_hota_sequence_summaries(summaries):
 
 def _prepare_metrics(metric_names, exclude_id):
     if metric_names is None:
-        metric_names = list(metrics_module._MOTCHALLENGE_METRICS)
+        metric_names = (
+            list(metrics_module._MOTCHALLENGE_METRICS)
+            + list(HOTA_SUMMARY_METRICS.values())
+        )
     elif isinstance(metric_names, str):
         metric_names = [metric_names]
     else:
         metric_names = list(metric_names)
 
+    if any(not isinstance(metric_name, str) for metric_name in metric_names):
+        raise TypeError("metrics must contain only metric-name strings.")
+    if len(set(metric_names)) != len(metric_names):
+        raise ValueError("metrics must not contain duplicate names.")
+    supported_names = set(metrics_module._METRIC_SPECS)
+    supported_names.update(HOTA_SUMMARY_METRICS.values())
+    unknown_names = set(metric_names) - supported_names
+    if unknown_names:
+        raise ValueError(
+            "Unknown metric: {}".format(", ".join(sorted(unknown_names)))
+        )
     if exclude_id:
-        metric_names = [metric_name for metric_name in metric_names if not metric_name.startswith("id")]
-    return metric_names
+        metric_names = [
+            metric_name
+            for metric_name in metric_names
+            if not metric_name.startswith("id")
+        ]
+    core_metric_names = [
+        metric_name
+        for metric_name in metric_names
+        if metric_name in metrics_module._METRIC_SPECS
+    ]
+    hota_metric_names = [
+        metric_name
+        for metric_name in metric_names
+        if metric_name in HOTA_SUMMARY_METRICS.values()
+    ]
+    return metric_names, core_metric_names, hota_metric_names
 
 
 def _prepare_metric_families(families, n_jobs):
@@ -1044,6 +1113,37 @@ def _extend_rows_with_metric_families(
                     "OVERALL",
                 )
             )
+
+
+def _extend_rows_with_hota(
+    rows,
+    result_names,
+    sequence_results,
+    hota_metric_names,
+    generate_overall,
+):
+    if not hota_metric_names:
+        return
+    summaries = OrderedDict(
+        (result[0], result[2])
+        for result in sequence_results
+    )
+    if generate_overall:
+        summaries["OVERALL"] = _combine_hota_sequence_summaries(
+            summaries.values()
+        )
+    alpha_names = {
+        summary_name: alpha_name
+        for alpha_name, summary_name in HOTA_SUMMARY_METRICS.items()
+    }
+    for row_name, row in zip(result_names, rows):
+        row.update(
+            (
+                metric_name,
+                np.mean(summaries[row_name][alpha_names[metric_name]]),
+            )
+            for metric_name in hota_metric_names
+        )
 
 
 def _validate_metric_family_metadata(family, metric_names):
