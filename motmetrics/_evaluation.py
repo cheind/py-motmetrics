@@ -83,14 +83,18 @@ class _MOTChallengeSummary(object):
             return self._rows[row_position][metric_name]
 
         if isinstance(key, str):
-            if key not in self.columns:
-                raise KeyError("Unknown summary metric: {!r}".format(key))
-            return OrderedDict(
-                (row_name, row[key])
-                for row_name, row in zip(self.index, self._rows)
-            )
+            if key in self.columns:
+                return OrderedDict(
+                    (row_name, row[key])
+                    for row_name, row in zip(self.index, self._rows)
+                )
+            if key in self.index:
+                row_position = self.index.index(key)
+                row = self._rows[row_position]
+                return OrderedDict((metric_name, row[metric_name]) for metric_name in self.columns)
+            raise KeyError("Unknown summary row or metric: {!r}".format(key))
 
-        raise TypeError("Summary keys must be a metric name or a (row, metric) pair.")
+        raise TypeError("Summary keys must be a row, metric name, or a (row, metric) pair.")
 
     @property
     def df(self):

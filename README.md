@@ -42,11 +42,13 @@ metric columns without pandas:
 
 ```python
 hota_by_sequence = summary["hota"]
+sequence_metrics = summary[summary.index[0]]
 sequence_hota = summary[summary.index[0], "hota"]
 ```
 
-Column access returns an ordered mapping from sequence name to value. Folder
-evaluation also provides the combined value as `summary["OVERALL", "hota"]`.
+Column access returns an ordered mapping from sequence name to value. Row access
+returns an ordered mapping from metric name to value. Folder evaluation also
+provides `summary["OVERALL"]` and the scalar `summary["OVERALL", "hota"]`.
 
 With the dataframe extra installed, a pandas view remains available on demand:
 

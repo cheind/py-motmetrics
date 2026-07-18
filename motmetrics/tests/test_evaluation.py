@@ -31,6 +31,7 @@ assert 'pandas' not in sys.modules
 summary = mm.evaluate_motchallenge({ground_truth!r}, {tracker!r})
 str(summary)
 assert summary['TUD-Campus', 'hota'] == summary['hota']['TUD-Campus']
+assert summary['TUD-Campus']['hota'] == summary['TUD-Campus', 'hota']
 assert 'pandas' not in sys.modules
 """.format(
         ground_truth=str(DATA_DIR / "TUD-Campus" / "gt.txt"),
@@ -83,14 +84,17 @@ def test_summary_supports_native_metric_access():
     assert hota_by_sequence["OVERALL"] == approx(0.3999570912884786)
     assert summary["OVERALL", "hota"] == approx(0.3999570912884786)
     assert summary["TUD-Campus", "hota"] == hota_by_sequence["TUD-Campus"]
+    overall = summary["OVERALL"]
+    assert list(overall) == summary.columns
+    assert overall["hota"] == summary["OVERALL", "hota"]
 
     with pytest.raises(KeyError, match="Unknown summary row"):
         summary["missing", "hota"]
     with pytest.raises(KeyError, match="Unknown summary metric"):
         summary["OVERALL", "missing"]
-    with pytest.raises(KeyError, match="Unknown summary metric"):
+    with pytest.raises(KeyError, match="Unknown summary row or metric"):
         summary["missing"]
-    with pytest.raises(TypeError, match="metric name or a \\(row, metric\\) pair"):
+    with pytest.raises(TypeError, match="row, metric name, or a \\(row, metric\\) pair"):
         summary[0]
 
 
