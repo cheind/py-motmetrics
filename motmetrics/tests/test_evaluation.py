@@ -71,6 +71,16 @@ def test_evaluate_motchallenge_files_returns_rich_summary():
     assert "HOTA" in summary.text
 
 
+def test_hota_metrics_are_always_calculated():
+    summary = mm.evaluate_motchallenge(
+        DATA_DIR / "TUD-Campus" / "gt.txt",
+        DATA_DIR / "TUD-Campus" / "test.txt",
+        metrics=["mota"],
+    )
+
+    assert list(summary.df.columns) == ["mota", "hota", "deta", "assa"]
+
+
 def test_evaluate_motchallenge_folders_returns_overall_summary(tmp_path):
     gt_root = tmp_path / "gt"
     test_root = tmp_path / "test"
@@ -94,17 +104,6 @@ def test_evaluate_motchallenge_folders_returns_overall_summary(tmp_path):
     assert "IDF1" in summary.text
     assert "HOTA" in summary.text
     assert summary.df.to_csv().startswith(",idf1")
-
-
-def test_evaluate_motchallenge_can_skip_hota():
-    summary = mm.evaluate_motchallenge(
-        DATA_DIR / "TUD-Campus" / "gt.txt",
-        DATA_DIR / "TUD-Campus" / "test.txt",
-        include_hota=False,
-    )
-
-    assert "hota" not in summary.df.columns
-    assert "HOTA" not in summary.text
 
 
 def test_evaluate_motchallenge_sequence_folders():

@@ -78,7 +78,7 @@ preds_root/<SEQUENCE>.txt
 
 ## Metrics
 
-The default MOTChallenge summary includes the commonly reported CLEAR, Identity, and HOTA metrics.
+The MOTChallenge summary always includes the commonly reported CLEAR, Identity, and HOTA metrics.
 
 `motmetrics.evaluate_motchallenge` is the only supported metrics entrypoint.
 The accumulator, matching, dependency resolution, and per-sequence process

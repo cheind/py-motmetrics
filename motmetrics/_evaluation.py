@@ -122,7 +122,6 @@ def evaluate_motchallenge(
     generate_overall=True,
     gt_min_confidence=1,
     exclude_id=False,
-    include_hota=True,
     hota_alphas=None,
     n_jobs=1,
     progress=None,
@@ -137,8 +136,6 @@ def evaluate_motchallenge(
     tests : str or path-like
         Path to a tracker result file, a sequence folder containing ``test.txt``,
         or a MOTChallenge tracker root containing ``<sequence>.txt`` files.
-    include_hota : bool, optional
-        If true, append HOTA, DetA, and AssA averaged over ``hota_alphas``.
     hota_alphas : array-like, optional
         HOTA alpha thresholds. Defaults to the TrackEval thresholds from 0.05 to 0.95.
     n_jobs : int, optional
@@ -174,7 +171,6 @@ def evaluate_motchallenge(
         distfields,
         distth,
         metric_names,
-        include_hota,
         hota_alphas,
         generate_overall and not gt_path.is_file(),
         n_jobs,
@@ -184,8 +180,8 @@ def evaluate_motchallenge(
 
     return _MOTChallengeSummary(
         *summary,
-        formatters=_summary_formatters(metric_host, include_hota),
-        namemap=_summary_namemap(include_hota),
+        formatters=_summary_formatters(metric_host),
+        namemap=_summary_namemap(),
     )
 
 
@@ -198,7 +194,6 @@ def _evaluate_iou_paths(
     distfields,
     distth,
     metric_names,
-    include_hota,
     hota_alphas,
     generate_overall,
     n_jobs,
@@ -227,7 +222,6 @@ def _evaluate_iou_paths(
             distfields,
             distth,
             metric_names,
-            include_hota,
             np.asarray(hota_alphas, dtype=float),
         )
         for task_index, (name, gt_path, test_path) in enumerate(matched_files)
@@ -268,20 +262,17 @@ def _evaluate_iou_paths(
             )
         )
         result_names.append("OVERALL")
-    if include_hota:
-        sequence_summaries = OrderedDict((result[0], result[2]) for result in results)
-        if generate_overall:
-            sequence_summaries["OVERALL"] = _combine_hota_sequence_summaries(
-                sequence_summaries.values()
-            )
-        for row_name, row in zip(result_names, rows):
-            row.update(
-                (summary_metric, np.mean(sequence_summaries[row_name][alpha_metric]))
-                for alpha_metric, summary_metric in HOTA_SUMMARY_METRICS.items()
-            )
-    columns = list(metric_names)
-    if include_hota:
-        columns.extend(HOTA_SUMMARY_METRICS.values())
+    sequence_summaries = OrderedDict((result[0], result[2]) for result in results)
+    if generate_overall:
+        sequence_summaries["OVERALL"] = _combine_hota_sequence_summaries(
+            sequence_summaries.values()
+        )
+    for row_name, row in zip(result_names, rows):
+        row.update(
+            (summary_metric, np.mean(sequence_summaries[row_name][alpha_metric]))
+            for alpha_metric, summary_metric in HOTA_SUMMARY_METRICS.items()
+        )
+    columns = list(metric_names) + list(HOTA_SUMMARY_METRICS.values())
     return rows, result_names, columns
 
 
@@ -297,10 +288,9 @@ def _evaluate_iou_sequence_file(task):
         distfields,
         distth,
         metric_names,
-        include_hota,
         hota_alphas,
     ) = task
-    sequence_progress = _WorkerSequenceProgress(task_index, include_hota) if _WORKER_PROGRESS_STAGE is not None else None
+    sequence_progress = _WorkerSequenceProgress(task_index) if _WORKER_PROGRESS_STAGE is not None else None
     if sequence_progress is not None:
         sequence_progress.stage(_PROGRESS_LOADING)
     try:
@@ -320,16 +310,13 @@ def _evaluate_iou_sequence_file(task):
             prepared.accumulator,
             metrics=metric_names,
         )
-        if include_hota:
-            if sequence_progress is not None:
-                sequence_progress.stage(_PROGRESS_HOTA)
-            hota_summary = _compute_prepared_hota_sequence_summary(
-                prepared,
-                hota_alphas,
-                progress=sequence_progress,
-            )
-        else:
-            hota_summary = None
+        if sequence_progress is not None:
+            sequence_progress.stage(_PROGRESS_HOTA)
+        hota_summary = _compute_prepared_hota_sequence_summary(
+            prepared,
+            hota_alphas,
+            progress=sequence_progress,
+        )
         if sequence_progress is not None:
             sequence_progress.finish()
         return name, partial, hota_summary
@@ -354,15 +341,14 @@ def _initialize_evaluation_worker(
 class _WorkerSequenceProgress(object):
     """Publish batched frame counters from one sequence worker."""
 
-    def __init__(self, index, include_hota):
+    def __init__(self, index):
         self.index = index
-        self.passes = 2 if include_hota else 1
         self.current = 0
         self.total = 0
 
     def begin(self, frame_count):
         """Set the frame-derived total and enter the IoU pass."""
-        self.total = frame_count * self.passes
+        self.total = frame_count * 2
         _WORKER_PROGRESS_TOTAL[self.index] = self.total
         self.stage(_PROGRESS_IOU)
 
@@ -676,17 +662,15 @@ def _prepare_metrics(metric_names, exclude_id):
     return metric_names
 
 
-def _summary_formatters(metric_host, include_hota):
+def _summary_formatters(metric_host):
     formatters = dict(metric_host.formatters)
-    if include_hota:
-        formatters.update({"hota": "{:.1%}".format, "deta": "{:.1%}".format, "assa": "{:.1%}".format})
+    formatters.update({"hota": "{:.1%}".format, "deta": "{:.1%}".format, "assa": "{:.1%}".format})
     return formatters
 
 
-def _summary_namemap(include_hota):
+def _summary_namemap():
     namemap = dict(io.motchallenge_metric_names)
-    if include_hota:
-        namemap.update({"hota": "HOTA", "deta": "DetA", "assa": "AssA"})
+    namemap.update({"hota": "HOTA", "deta": "DetA", "assa": "AssA"})
     return namemap
 
 
