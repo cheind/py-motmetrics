@@ -9,7 +9,7 @@
   <a href="https://doi.org/10.5281/zenodo.14014773"><img src="https://zenodo.org/badge/87559569.svg" alt="DOI"></a>
 </p>
 
-**py-motmetrics** provides Python tools for evaluating multiple object tracking (MOT) results. It implements MOTChallenge-aligned CLEAR MOT, Identity, and HOTA-related metrics, including MOTA, MOTP, IDF1, precision, recall, and track quality counts.
+**motmetrics** provides Python tools for evaluating multiple object tracking (MOT) results. It implements MOTChallenge-aligned CLEAR MOT, Identity, and HOTA-related metrics, including MOTA, MOTP, IDF1, precision, recall, and track quality counts.
 
 ## Why MOTMetrics
 
