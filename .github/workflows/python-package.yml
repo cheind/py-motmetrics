@@ -68,3 +68,6 @@ jobs:
             - name: Compare py-motmetrics with TrackEval
               run: |
                   uv run --no-project pytest -q -s motmetrics/tests/test_trackeval_parity.py
+            - name: Compare end-to-end metrics runtime
+              run: |
+                  uv run --no-project python motmetrics/tests/benchmark_trackeval_runtime.py --runs 7
