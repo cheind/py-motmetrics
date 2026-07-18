@@ -53,6 +53,11 @@ class _SequenceData(object):
     def __len__(self):
         return len(self.frame_ids)
 
+    @property
+    def field_names(self):
+        """Return the available detection fields in their input order."""
+        return tuple(self._fields)
+
     def column(self, name):
         """Return one stored column without copying it."""
         return self._fields[name]

@@ -10,6 +10,8 @@
 import os
 import sys
 from collections import OrderedDict
+from collections.abc import Collection, Mapping, Sequence
+from numbers import Number
 from pathlib import Path
 
 import numpy as np
@@ -19,6 +21,13 @@ import motmetrics._metrics as metrics_module
 from motmetrics._accumulator import _Accumulator
 from motmetrics._assignment import _dense_linear_sum_assignment
 from motmetrics._distances import iou_matrix
+from motmetrics._extensions import (
+    SUPPORTED_INTERMEDIATES,
+    MetricContext,
+    MetricFamily,
+    SequenceView,
+    _ClearEventRecorder,
+)
 
 HOTA_ALPHAS = np.arange(0.05, 0.99, 0.05)
 _FLOAT_EPS = np.finfo(float).eps
@@ -43,14 +52,16 @@ _PROGRESS_LOADING = 1
 _PROGRESS_IOU = 2
 _PROGRESS_METRICS = 3
 _PROGRESS_HOTA = 4
-_PROGRESS_DONE = 5
-_PROGRESS_FAILED = 6
+_PROGRESS_EXTENSIONS = 5
+_PROGRESS_DONE = 6
+_PROGRESS_FAILED = 7
 _PROGRESS_STAGE_NAMES = (
     "waiting",
     "loading",
     "IoU+CLEAR",
     "metrics",
     "HOTA",
+    "extensions",
     "done",
     "failed",
 )
@@ -132,6 +143,9 @@ class _PreparedIoUSequence(object):
         gt_id_counts,
         tracker_id_counts,
         alignment_scores,
+        frame_ids,
+        ground_truth_ids,
+        tracker_ids,
         num_objects,
         num_predictions,
         accumulator,
@@ -140,6 +154,9 @@ class _PreparedIoUSequence(object):
         self.gt_id_counts = gt_id_counts
         self.tracker_id_counts = tracker_id_counts
         self.alignment_scores = alignment_scores
+        self.frame_ids = frame_ids
+        self.ground_truth_ids = ground_truth_ids
+        self.tracker_ids = tracker_ids
         self.num_objects = num_objects
         self.num_predictions = num_predictions
         self.accumulator = accumulator
@@ -159,6 +176,7 @@ def evaluate_motchallenge(
     hota_alphas=None,
     n_jobs=1,
     progress=None,
+    extra_metric_families=None,
 ):
     """Evaluate MOTChallenge files or folders and return a rich summary.
 
@@ -179,6 +197,10 @@ def evaluate_motchallenge(
     progress : bool, optional
         Display one progress row per sequence. By default this is enabled for
         interactive folder evaluation and disabled when stderr is redirected.
+    extra_metric_families : MetricFamily or iterable of MetricFamily, optional
+        Explicit, per-call metric extensions. Each family owns its matching or
+        aggregation semantics and declares any opt-in intermediate data it
+        needs. Family instances must be picklable when ``n_jobs > 1``.
 
     Returns
     -------
@@ -193,6 +215,10 @@ def evaluate_motchallenge(
     progress_enabled = _progress_is_enabled(progress)
 
     metric_names = _prepare_metrics(metrics, exclude_id)
+    metric_families = _prepare_metric_families(
+        extra_metric_families,
+        n_jobs,
+    )
     if hota_alphas is None:
         hota_alphas = HOTA_ALPHAS
     summary = _evaluate_iou_paths(
@@ -208,12 +234,13 @@ def evaluate_motchallenge(
         generate_overall and not gt_path.is_file(),
         n_jobs,
         progress_enabled,
+        metric_families,
     )
 
     return _MOTChallengeSummary(
         *summary,
-        formatters=_summary_formatters(),
-        namemap=_summary_namemap(),
+        formatters=_summary_formatters(metric_families),
+        namemap=_summary_namemap(metric_families),
     )
 
 
@@ -230,6 +257,7 @@ def _evaluate_iou_paths(
     generate_overall,
     n_jobs,
     progress,
+    metric_families,
 ):
     """Evaluate every input through the canonical state-only IoU engine."""
     if gt_root.is_file():
@@ -254,6 +282,7 @@ def _evaluate_iou_paths(
             distth,
             metric_names,
             np.asarray(hota_alphas, dtype=float),
+            metric_families,
         )
         for task_index, (name, gt_path, test_path) in enumerate(matched_files)
     ]
@@ -303,7 +332,15 @@ def _evaluate_iou_paths(
             (summary_metric, np.mean(sequence_summaries[row_name][alpha_metric]))
             for alpha_metric, summary_metric in HOTA_SUMMARY_METRICS.items()
         )
+    _extend_rows_with_metric_families(
+        rows,
+        results,
+        generate_overall,
+        metric_families,
+    )
     columns = list(metric_names) + list(HOTA_SUMMARY_METRICS.values())
+    for family in metric_families:
+        columns.extend(family.metric_names)
     return rows, result_names, columns
 
 
@@ -320,6 +357,7 @@ def _evaluate_iou_sequence_file(task):
         distth,
         metric_names,
         hota_alphas,
+        metric_families,
     ) = task
     sequence_progress = _WorkerSequenceProgress(task_index) if _WORKER_PROGRESS_STAGE is not None else None
     if sequence_progress is not None:
@@ -327,12 +365,18 @@ def _evaluate_iou_sequence_file(task):
     try:
         ground_truth = io.loadtxt(gt_path, fmt=fmt, min_confidence=gt_min_confidence)
         tracker = io.loadtxt(test_path, fmt=fmt)
+        event_recorder = _create_clear_event_recorder(
+            metric_families,
+            ground_truth,
+            tracker,
+        )
         prepared = _prepare_iou_sequence_data(
             ground_truth,
             tracker,
             distth,
             distfields,
             progress=sequence_progress,
+            event_recorder=event_recorder,
         )
 
         if sequence_progress is not None:
@@ -348,13 +392,68 @@ def _evaluate_iou_sequence_file(task):
             hota_alphas,
             progress=sequence_progress,
         )
+        family_results = ()
+        if metric_families:
+            if sequence_progress is not None:
+                sequence_progress.stage(_PROGRESS_EXTENSIONS)
+            family_results = _evaluate_metric_families(
+                name,
+                ground_truth,
+                tracker,
+                prepared,
+                event_recorder,
+                metric_families,
+            )
         if sequence_progress is not None:
             sequence_progress.finish()
-        return name, partial, hota_summary
+        return name, partial, hota_summary, family_results
     except BaseException:
         if sequence_progress is not None:
             sequence_progress.fail()
         raise
+
+
+def _create_clear_event_recorder(metric_families, ground_truth, tracker):
+    if not metric_families:
+        return None
+    if not any(
+        "clear_events" in family.requirements
+        for family in metric_families
+    ):
+        return None
+    return _ClearEventRecorder(
+        np.unique(ground_truth.ids),
+        np.unique(tracker.ids),
+    )
+
+
+def _evaluate_metric_families(
+    name,
+    ground_truth,
+    tracker,
+    prepared,
+    event_recorder,
+    metric_families,
+):
+    sequence = SequenceView(name, ground_truth, tracker)
+    intermediates = MetricContext(
+        sequence,
+        prepared,
+        event_recorder.finish() if event_recorder is not None else None,
+    )
+    results = []
+    for family in metric_families:
+        family_intermediates = intermediates._for_requirements(
+            family.requirements
+        )
+        partial = family.evaluate_sequence(sequence, family_intermediates)
+        values = _validate_metric_family_values(
+            family,
+            family.summarize(partial),
+            name,
+        )
+        results.append((partial, values))
+    return tuple(results)
 
 
 def _initialize_evaluation_worker(
@@ -606,7 +705,14 @@ def _compute_prepared_hota_sequence_summary(prepared, hota_alphas, progress=None
     }
 
 
-def _prepare_iou_sequence_data(gt, test, distth, distfields=None, progress=None):
+def _prepare_iou_sequence_data(
+    gt,
+    test,
+    distth,
+    distfields=None,
+    progress=None,
+    event_recorder=None,
+):
     if distfields is None:
         distfields = ["X", "Y", "Width", "Height"]
 
@@ -617,7 +723,11 @@ def _prepare_iou_sequence_data(gt, test, distth, distfields=None, progress=None)
     frame_ids = np.union1d(gt.frame_ids, test.frame_ids)
 
     potential_matches = np.zeros((len(gt_ids), len(tracker_ids)))
-    accumulator = _Accumulator(gt_id_counts, tracker_id_counts)
+    accumulator = _Accumulator(
+        gt_id_counts,
+        tracker_id_counts,
+        event_recorder=event_recorder,
+    )
     frame_data = []
     empty_indices = np.empty(0, dtype=int)
     empty_values = np.empty((0, len(distfields)), dtype=float)
@@ -633,7 +743,13 @@ def _prepare_iou_sequence_data(gt, test, distth, distfields=None, progress=None)
         frame_data.append((frame_gt_indices, frame_tracker_indices, similarities))
         distances = 1 - similarities
         finite = distances <= distth
-        accumulator.update(frame_gt_indices, frame_tracker_indices, distances, finite)
+        accumulator.update(
+            frame_gt_indices,
+            frame_tracker_indices,
+            distances,
+            finite,
+            frame_id=frame_id,
+        )
         if similarities.size == 0:
             continue
 
@@ -655,6 +771,9 @@ def _prepare_iou_sequence_data(gt, test, distth, distfields=None, progress=None)
         gt_id_counts=gt_id_counts,
         tracker_id_counts=tracker_id_counts,
         alignment_scores=alignment_scores,
+        frame_ids=frame_ids,
+        ground_truth_ids=gt_ids,
+        tracker_ids=tracker_ids,
         num_objects=len(gt),
         num_predictions=len(test),
         accumulator=accumulator,
@@ -782,13 +901,225 @@ def _prepare_metrics(metric_names, exclude_id):
     return metric_names
 
 
-def _summary_formatters():
+def _prepare_metric_families(families, n_jobs):
+    """Validate explicit extensions before any worker processes are started."""
+    families = _coerce_metric_families(families)
+    if not families:
+        return ()
+    reserved_metric_names = set(metrics_module._METRIC_SPECS)
+    reserved_metric_names.update(HOTA_SUMMARY_METRICS.values())
+    family_names = set()
+    for family in families:
+        _validate_metric_family(
+            family,
+            family_names,
+            reserved_metric_names,
+        )
+
+    if n_jobs > 1 and families:
+        import pickle
+
+        try:
+            pickle.dumps(families, protocol=pickle.HIGHEST_PROTOCOL)
+        except Exception as exc:
+            raise TypeError(
+                "Metric family instances must be picklable when n_jobs > 1."
+            ) from exc
+    return families
+
+
+def _coerce_metric_families(families):
+    if families is None:
+        return ()
+    if isinstance(families, MetricFamily):
+        return (families,)
+    try:
+        return tuple(families)
+    except TypeError as exc:
+        raise TypeError(
+            "extra_metric_families must be a MetricFamily or an iterable "
+            "of MetricFamily instances."
+        ) from exc
+
+
+def _validate_metric_family(family, family_names, reserved_metric_names):
+    if not isinstance(family, MetricFamily):
+        raise TypeError(
+            "Every extra metric family must inherit motmetrics.MetricFamily."
+        )
+    if not isinstance(family.name, str) or not family.name:
+        raise ValueError("Every metric family must declare a non-empty name.")
+    if family.name in family_names:
+        raise ValueError("Duplicate metric family name: {!r}.".format(family.name))
+    family_names.add(family.name)
+    if any(
+        not callable(getattr(family, method_name, None))
+        for method_name in ("evaluate_sequence", "summarize", "combine")
+    ):
+        raise TypeError(
+            "Metric family {!r} must implement evaluate_sequence, summarize, "
+            "and combine.".format(family.name)
+        )
+
+    family_metric_names = _validate_metric_family_names(family)
+    collisions = reserved_metric_names.intersection(family_metric_names)
+    if collisions:
+        raise ValueError(
+            "Metric family {!r} reuses existing metric names: {}.".format(
+                family.name,
+                ", ".join(sorted(collisions)),
+            )
+        )
+    reserved_metric_names.update(family_metric_names)
+    _validate_metric_family_requirements(family)
+    _validate_metric_family_metadata(family, family_metric_names)
+
+
+def _validate_metric_family_names(family):
+    if (
+        isinstance(family.metric_names, str)
+        or not isinstance(family.metric_names, Sequence)
+    ):
+        raise TypeError(
+            "Metric family {!r} metric_names must be an ordered sequence.".format(
+                family.name
+            )
+        )
+    metric_names = tuple(family.metric_names)
+    if not metric_names:
+        raise ValueError(
+            "Metric family {!r} must declare at least one metric name.".format(
+                family.name
+            )
+        )
+    if any(not isinstance(name, str) or not name for name in metric_names):
+        raise ValueError(
+            "Metric family {!r} has an invalid metric name.".format(family.name)
+        )
+    if len(set(metric_names)) != len(metric_names):
+        raise ValueError(
+            "Metric family {!r} contains duplicate metric names.".format(family.name)
+        )
+    return metric_names
+
+
+def _validate_metric_family_requirements(family):
+    if (
+        isinstance(family.requirements, str)
+        or not isinstance(family.requirements, Collection)
+    ):
+        raise TypeError(
+            "Metric family {!r} requirements must be a reusable collection "
+            "of names.".format(family.name)
+        )
+    requirements = frozenset(family.requirements)
+    unknown_requirements = requirements - SUPPORTED_INTERMEDIATES
+    if unknown_requirements:
+        raise ValueError(
+            "Metric family {!r} requests unsupported intermediates: {}.".format(
+                family.name,
+                ", ".join(sorted(unknown_requirements)),
+            )
+        )
+
+
+def _extend_rows_with_metric_families(
+    rows,
+    sequence_results,
+    generate_overall,
+    metric_families,
+):
+    for family_index, family in enumerate(metric_families):
+        for row, result in zip(rows[:len(sequence_results)], sequence_results):
+            row.update(result[3][family_index][1])
+        if generate_overall:
+            partials = [
+                result[3][family_index][0]
+                for result in sequence_results
+            ]
+            rows[-1].update(
+                _validate_metric_family_values(
+                    family,
+                    family.combine(partials),
+                    "OVERALL",
+                )
+            )
+
+
+def _validate_metric_family_metadata(family, metric_names):
+    for attribute in ("display_names", "formatters"):
+        values = getattr(family, attribute)
+        if not isinstance(values, Mapping):
+            raise TypeError(
+                "Metric family {!r} {} must be a mapping.".format(
+                    family.name,
+                    attribute,
+                )
+            )
+        unknown_names = set(values) - set(metric_names)
+        if unknown_names:
+            raise ValueError(
+                "Metric family {!r} {} contains unknown metrics: {}.".format(
+                    family.name,
+                    attribute,
+                    ", ".join(sorted(unknown_names)),
+                )
+            )
+    if any(not isinstance(value, str) or not value for value in family.display_names.values()):
+        raise ValueError(
+            "Metric family {!r} display names must be non-empty strings.".format(
+                family.name
+            )
+        )
+    if any(not callable(value) for value in family.formatters.values()):
+        raise TypeError(
+            "Metric family {!r} formatters must be callable.".format(family.name)
+        )
+
+
+def _validate_metric_family_values(family, values, row_name):
+    if not isinstance(values, Mapping):
+        raise TypeError(
+            "Metric family {!r} summarize/combine must return a mapping for {}.".format(
+                family.name,
+                row_name,
+            )
+        )
+    metric_names = tuple(family.metric_names)
+    missing = set(metric_names) - set(values)
+    unexpected = set(values) - set(metric_names)
+    if missing or unexpected:
+        details = []
+        if missing:
+            details.append("missing {}".format(", ".join(sorted(missing))))
+        if unexpected:
+            details.append("unexpected {}".format(", ".join(sorted(unexpected))))
+        raise ValueError(
+            "Metric family {!r} returned invalid metrics for {}: {}.".format(
+                family.name,
+                row_name,
+                "; ".join(details),
+            )
+        )
+    if any(not isinstance(values[name], Number) for name in metric_names):
+        raise TypeError(
+            "Metric family {!r} must return numeric scalar values for {}.".format(
+                family.name,
+                row_name,
+            )
+        )
+    return OrderedDict((name, values[name]) for name in metric_names)
+
+
+def _summary_formatters(metric_families=()):
     formatters = dict(metrics_module._FORMATTERS)
     formatters.update({metric: "{:.1%}".format for metric in HOTA_SUMMARY_METRICS.values()})
+    for family in metric_families:
+        formatters.update(family.formatters)
     return formatters
 
 
-def _summary_namemap():
+def _summary_namemap(metric_families=()):
     namemap = dict(io.motchallenge_metric_names)
     namemap.update({
         "hota": "HOTA",
@@ -801,6 +1132,8 @@ def _summary_namemap():
         "loca": "LocA",
         "owta": "OWTA",
     })
+    for family in metric_families:
+        namemap.update(family.display_names)
     return namemap
 
 

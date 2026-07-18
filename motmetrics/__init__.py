@@ -8,5 +8,6 @@
 """Fast MOTChallenge evaluation."""
 
 from motmetrics._evaluation import evaluate_motchallenge
+from motmetrics._extensions import MetricFamily
 
-__all__ = ["evaluate_motchallenge"]
+__all__ = ["evaluate_motchallenge", "MetricFamily"]

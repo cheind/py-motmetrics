@@ -16,10 +16,165 @@ DATA_DIR = Path(__file__).parents[1] / "data"
 SEQUENCE_NAMES = ("TUD-Campus", "TUD-Stadtmitte")
 
 
+class _IndependentCoverageFamily(mm.MetricFamily):
+    """Track coverage with independent, non-bipartite matching semantics."""
+
+    name = "independent_coverage"
+    metric_names = ("independent_track_coverage", "mean_tracker_track_length")
+    requirements = frozenset(("frame_iou", "trajectories"))
+    display_names = {
+        "independent_track_coverage": "IndTCOV",
+        "mean_tracker_track_length": "MeanTL",
+    }
+    formatters = {"independent_track_coverage": "{:.1%}".format}
+
+    def evaluate_sequence(self, sequence, intermediates):
+        assert not sequence.ground_truth.frame_ids.flags.writeable
+        assert not sequence.tracker.ids.flags.writeable
+        assert "Confidence" in sequence.tracker.field_names
+        assert not sequence.tracker.boxes.flags.writeable
+        assert all(
+            not frame.similarities.flags.writeable
+            for frame in intermediates.frame_iou
+        )
+        lifespan = {}
+        covered = {}
+        for frame in intermediates.frame_iou:
+            frame_coverage = np.any(frame.similarities >= 0.5, axis=1)
+            for ground_truth_id, is_covered in zip(
+                frame.ground_truth_ids,
+                frame_coverage,
+            ):
+                lifespan[ground_truth_id] = lifespan.get(ground_truth_id, 0) + 1
+                covered[ground_truth_id] = (
+                    covered.get(ground_truth_id, 0) + int(is_covered)
+                )
+        coverage_sum = sum(
+            covered.get(track_id, 0) / track_lifespan
+            for track_id, track_lifespan in lifespan.items()
+        )
+        tracker_trajectories = intermediates.trajectories.tracker
+        assert all(not trajectory.frame_ids.flags.writeable for trajectory in tracker_trajectories)
+        return (
+            coverage_sum,
+            len(lifespan),
+            len(sequence.tracker),
+            len(tracker_trajectories),
+        )
+
+    def summarize(self, partial):
+        coverage_sum, ground_truth_tracks, tracker_count, tracker_tracks = partial
+        return {
+            "independent_track_coverage": coverage_sum / max(1, ground_truth_tracks),
+            "mean_tracker_track_length": tracker_count / max(1, tracker_tracks),
+        }
+
+    def combine(self, partials):
+        return self.summarize(tuple(sum(values) for values in zip(*partials)))
+
+
+class _TrackCoverageFamily(mm.MetricFamily):
+    name = "track_coverage"
+    metric_names = ("tcov",)
+    requirements = frozenset(("clear_statistics",))
+    display_names = {"tcov": "TCOV"}
+    formatters = {"tcov": "{:.1%}".format}
+
+    def evaluate_sequence(self, sequence, intermediates):
+        del sequence
+        coverage = intermediates.clear_statistics.track_coverage
+        assert not coverage.flags.writeable
+        return float(coverage.sum()), len(coverage)
+
+    def summarize(self, partial):
+        coverage_sum, track_count = partial
+        return {"tcov": coverage_sum / max(1, track_count)}
+
+    def combine(self, partials):
+        return self.summarize(tuple(sum(values) for values in zip(*partials)))
+
+
+class _ClearEventFamily(mm.MetricFamily):
+    name = "clear_event_diagnostics"
+    metric_names = (
+        "event_switches",
+        "event_transfers",
+        "event_ascends",
+        "event_migrates",
+        "event_rows",
+    )
+    requirements = frozenset(("clear_events",))
+    display_names = {
+        "event_switches": "EventIDs",
+        "event_transfers": "EventIDt",
+        "event_ascends": "EventIDa",
+        "event_migrates": "EventIDm",
+        "event_rows": "Events",
+    }
+    formatters = {name: "{:d}".format for name in metric_names}
+
+    def __init__(self, materialize_dataframe=False):
+        self.materialize_dataframe = materialize_dataframe
+
+    def evaluate_sequence(self, sequence, intermediates):
+        events = intermediates.clear_events
+        assert not events.frame_ids.flags.writeable
+        assert not events.ground_truth_ids.flags.writeable
+        if self.materialize_dataframe:
+            assert list(events.df.columns) == ["Type", "OId", "HId", "D"]
+            assert list(events.df.index.names) == ["FrameId", "Event"]
+        return (
+            int(np.count_nonzero(events.types == "SWITCH")),
+            int(np.count_nonzero(events.types == "TRANSFER")),
+            int(np.count_nonzero(events.types == "ASCEND")),
+            int(np.count_nonzero(events.types == "MIGRATE")),
+            len(events),
+        )
+
+    def summarize(self, partial):
+        return dict(zip(self.metric_names, partial))
+
+    def combine(self, partials):
+        return self.summarize(tuple(sum(values) for values in zip(*partials)))
+
+
+class _UndeclaredIntermediateFamily(mm.MetricFamily):
+    name = "undeclared"
+    metric_names = ("undeclared_value",)
+
+    def evaluate_sequence(self, sequence, intermediates):
+        return len(intermediates.frame_iou)
+
+    def summarize(self, partial):
+        return {"undeclared_value": partial}
+
+    def combine(self, partials):
+        return {"undeclared_value": sum(partials)}
+
+
+class _InvalidRequirementFamily(_UndeclaredIntermediateFamily):
+    name = "invalid_requirement"
+    metric_names = ("invalid_requirement_value",)
+    requirements = frozenset(("optical_flow",))
+
+
+class _CollidingFamily(_UndeclaredIntermediateFamily):
+    name = "collision"
+    metric_names = ("mota",)
+
+
+class _NonPicklableFamily(_IndependentCoverageFamily):
+    name = "non_picklable"
+
+    def __init__(self):
+        self.callback = lambda value: value
+
+
 def test_package_has_one_supported_metrics_entrypoint():
-    assert mm.__all__ == ["evaluate_motchallenge"]
+    assert mm.__all__ == ["evaluate_motchallenge", "MetricFamily"]
     assert {name for name in vars(mm) if not name.startswith("_")} == {
-        "evaluate_motchallenge"
+        "evaluate_motchallenge",
+        "MetricFamily",
     }
 
 
@@ -38,6 +193,56 @@ assert 'pandas' not in sys.modules
         tracker=str(DATA_DIR / "TUD-Campus" / "test.txt"),
     )
     subprocess.run([sys.executable, "-c", script], check=True)
+
+
+def test_compact_clear_events_do_not_import_pandas():
+    script = """
+import sys
+import motmetrics as mm
+
+class EventCount(mm.MetricFamily):
+    name = 'event_count'
+    metric_names = ('event_count',)
+    requirements = frozenset(('clear_events',))
+
+    def evaluate_sequence(self, sequence, intermediates):
+        return len(intermediates.clear_events)
+
+    def summarize(self, partial):
+        return {{'event_count': partial}}
+
+    def combine(self, partials):
+        return {{'event_count': sum(partials)}}
+
+assert 'pandas' not in sys.modules
+summary = mm.evaluate_motchallenge(
+    {ground_truth!r},
+    {tracker!r},
+    extra_metric_families=EventCount(),
+)
+assert summary['TUD-Campus', 'event_count'] > 0
+str(summary)
+assert 'pandas' not in sys.modules
+""".format(
+        ground_truth=str(DATA_DIR / "TUD-Campus" / "gt.txt"),
+        tracker=str(DATA_DIR / "TUD-Campus" / "test.txt"),
+    )
+    subprocess.run([sys.executable, "-c", script], check=True)
+
+
+def test_default_path_does_not_construct_extension_views(monkeypatch):
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("default evaluation constructed extension state")
+
+    monkeypatch.setattr(evaluation, "SequenceView", fail_if_called)
+    monkeypatch.setattr(evaluation, "MetricContext", fail_if_called)
+    monkeypatch.setattr(evaluation, "_ClearEventRecorder", fail_if_called)
+
+    summary = mm.evaluate_motchallenge(
+        DATA_DIR / "TUD-Campus" / "gt.txt",
+        DATA_DIR / "TUD-Campus" / "test.txt",
+    )
+    assert summary["TUD-Campus", "hota"] == approx(0.3913974378451139)
 
 
 def test_legacy_metric_modules_are_absent():
@@ -155,6 +360,146 @@ def test_parallel_file_evaluation_matches_serial_results():
     parallel = mm.evaluate_motchallenge(DATA_DIR, DATA_DIR, n_jobs=2).df
 
     pd.testing.assert_frame_equal(parallel, serial)
+
+
+def test_custom_metric_family_owns_matching_and_overall_aggregation():
+    family = _IndependentCoverageFamily()
+    default = mm.evaluate_motchallenge(DATA_DIR, DATA_DIR, progress=False)
+    summary = mm.evaluate_motchallenge(
+        DATA_DIR,
+        DATA_DIR,
+        extra_metric_families=family,
+        progress=False,
+    )
+
+    assert summary.columns[-2:] == list(family.metric_names)
+    assert "IndTCOV" in summary.text
+    for row_name in summary.index:
+        for metric_name in default.columns:
+            assert summary[row_name, metric_name] == default[row_name, metric_name]
+
+    sequence_partials = []
+    for sequence_name in SEQUENCE_NAMES:
+        ground_truth = evaluation.io.loadtxt(
+            DATA_DIR / sequence_name / "gt.txt",
+            min_confidence=1,
+        )
+        tracker = evaluation.io.loadtxt(DATA_DIR / sequence_name / "test.txt")
+        tracker_track_count = len(np.unique(tracker.ids))
+        ground_truth_track_count = len(np.unique(ground_truth.ids))
+        track_coverage = summary[sequence_name, "independent_track_coverage"]
+        sequence_partials.append((
+            track_coverage * ground_truth_track_count,
+            ground_truth_track_count,
+            len(tracker),
+            tracker_track_count,
+        ))
+    expected_overall = family.combine(sequence_partials)
+    assert summary["OVERALL", "independent_track_coverage"] == approx(
+        expected_overall["independent_track_coverage"]
+    )
+    assert summary["OVERALL", "mean_tracker_track_length"] == approx(
+        expected_overall["mean_tracker_track_length"]
+    )
+
+
+def test_custom_metric_family_matches_between_serial_and_parallel():
+    families = (
+        _IndependentCoverageFamily(),
+        _TrackCoverageFamily(),
+        _ClearEventFamily(),
+    )
+    serial = mm.evaluate_motchallenge(
+        DATA_DIR,
+        DATA_DIR,
+        n_jobs=1,
+        progress=False,
+        extra_metric_families=families,
+    ).df
+    parallel = mm.evaluate_motchallenge(
+        DATA_DIR,
+        DATA_DIR,
+        n_jobs=2,
+        progress=False,
+        extra_metric_families=families,
+    ).df
+
+    pd.testing.assert_frame_equal(parallel, serial)
+
+
+def test_clear_statistics_reuses_compact_match_counts(monkeypatch):
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("clear statistics constructed event history")
+
+    monkeypatch.setattr(evaluation, "_ClearEventRecorder", fail_if_called)
+    summary = mm.evaluate_motchallenge(
+        DATA_DIR / "TUD-Campus" / "gt.txt",
+        DATA_DIR / "TUD-Campus" / "test.txt",
+        extra_metric_families=_TrackCoverageFamily(),
+    )
+
+    assert summary["TUD-Campus", "tcov"] == approx(
+        0.5794012687234518
+    )
+
+
+def test_clear_events_are_opt_in_and_match_fast_clear_counts():
+    summary = mm.evaluate_motchallenge(
+        DATA_DIR / "TUD-Campus" / "gt.txt",
+        DATA_DIR / "TUD-Campus" / "test.txt",
+        extra_metric_families=_ClearEventFamily(materialize_dataframe=True),
+    )
+
+    assert summary["TUD-Campus", "event_switches"] == summary[
+        "TUD-Campus",
+        "num_switches",
+    ]
+    assert summary["TUD-Campus", "event_transfers"] == summary[
+        "TUD-Campus",
+        "num_transfer",
+    ]
+    assert summary["TUD-Campus", "event_ascends"] == summary[
+        "TUD-Campus",
+        "num_ascend",
+    ]
+    assert summary["TUD-Campus", "event_migrates"] == summary[
+        "TUD-Campus",
+        "num_migrate",
+    ]
+    assert summary["TUD-Campus", "event_rows"] > len(
+        evaluation.io.loadtxt(DATA_DIR / "TUD-Campus" / "gt.txt")
+    )
+
+
+def test_metric_family_cannot_access_undeclared_intermediate():
+    with pytest.raises(RuntimeError, match="must declare the 'frame_iou' requirement"):
+        mm.evaluate_motchallenge(
+            DATA_DIR / "TUD-Campus" / "gt.txt",
+            DATA_DIR / "TUD-Campus" / "test.txt",
+            extra_metric_families=_UndeclaredIntermediateFamily(),
+        )
+
+
+def test_metric_family_validation_fails_before_evaluation():
+    with pytest.raises(ValueError, match="unsupported intermediates: optical_flow"):
+        mm.evaluate_motchallenge(
+            DATA_DIR,
+            DATA_DIR,
+            extra_metric_families=_InvalidRequirementFamily(),
+        )
+    with pytest.raises(ValueError, match="reuses existing metric names: mota"):
+        mm.evaluate_motchallenge(
+            DATA_DIR,
+            DATA_DIR,
+            extra_metric_families=_CollidingFamily(),
+        )
+    with pytest.raises(TypeError, match="must be picklable"):
+        mm.evaluate_motchallenge(
+            DATA_DIR,
+            DATA_DIR,
+            n_jobs=2,
+            extra_metric_families=_NonPicklableFamily(),
+        )
 
 
 def test_parallel_progress_renders_one_terminal_row_per_sequence(capsys):

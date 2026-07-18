@@ -212,10 +212,100 @@ The displayed HOTA-family values are means over the configured thresholds. By
 default these are `0.05, 0.10, ..., 0.95`, matching TrackEval. `LocA` uses
 similarity, while this package's CLEAR `MOTP` column uses distance.
 
+### Custom metric families
+
+Add metrics through an explicit `MetricFamily` passed to the same evaluator.
+There is no process-global registry, and each family owns its sequence state,
+summary calculation, and mathematically correct cross-sequence aggregation.
+This example adds a metric derived from compact per-identity matching state.
+`TCOV` asks:
+"What fraction of a ground-truth track's lifespan is covered by all tracker
+tracks linked to it?" A frame is covered whenever CLEAR matching assigns any
+tracker identity to that ground-truth identity. Tracker identity changes do not
+break coverage. The metric first computes coverage per ground-truth track and
+then averages those fractions, so every ground-truth track has equal weight.
+
+```python
+import motmetrics as mm
+
+
+class TrackCoverage(mm.MetricFamily):
+    name = "track_coverage"
+    metric_names = ("tcov",)
+    requirements = frozenset(("clear_statistics",))
+    display_names = {"tcov": "TCOV"}
+    formatters = {"tcov": "{:.1%}".format}
+
+    def evaluate_sequence(self, sequence, intermediates):
+        del sequence
+        coverage = intermediates.clear_statistics.track_coverage
+        return float(coverage.sum()), len(coverage)
+
+    def summarize(self, partial):
+        coverage_sum, track_count = partial
+        tcov = coverage_sum / max(1, track_count)
+        if not 0.0 <= tcov <= 1.0:
+            raise ValueError("TCOV must be between 0.0 and 1.0")
+        return {"tcov": tcov}
+
+    def combine(self, partials):
+        coverage_sum = sum(partial[0] for partial in partials)
+        track_count = sum(partial[1] for partial in partials)
+        return self.summarize((coverage_sum, track_count))
+
+
+summary = mm.evaluate_motchallenge(
+    "path/to/gt_root",
+    "path/to/preds_root",
+    n_jobs=4,
+    extra_metric_families=TrackCoverage(),
+)
+print(summary)
+```
+
+For example, a raw `TCOV` value of `0.8` (displayed as `80.0%`) means that,
+on average, the tracker sees and processes a ground-truth object for 80% of the
+frames in which that object is annotated.
+
+A family implements three operations:
+
+- `evaluate_sequence(sequence, intermediates)` returns compact per-sequence
+  state. It may use entirely different matching semantics.
+- `summarize(partial)` maps that state to the family's scalar metric names for
+  one sequence.
+- `combine(partials)` combines the original states for `OVERALL`. This avoids
+  incorrect averaging of already-normalized sequence scores.
+
+Raw sequence inputs are always available as immutable columnar views through
+`sequence.ground_truth` and `sequence.tracker`. Each exposes `frame_ids`, `ids`,
+`field_names`, `column(name)`, `values(names)`, `boxes`, and `confidence`.
+Derived data must be declared in `requirements` and its view is created only
+on demand:
+
+| Requirement | Available data |
+|---|---|
+| `frame_iou` | Per-frame ground-truth IDs, tracker IDs, and IoU matrices. A family can apply its own assignment or thresholding. |
+| `trajectories` | Ground-truth and tracker detections grouped into immutable identity trajectories. |
+| `clear_statistics` | Compact per-identity detection and match counts, track coverage ratios, and aggregate CLEAR counters already produced by the fast matcher. |
+| `clear_events` | Compact `RAW`, `MATCH`, `SWITCH`, `MISS`, `FP`, `TRANSFER`, `ASCEND`, and `MIGRATE` event arrays from CLEAR matching. |
+
+`intermediates.clear_events.df` provides the former pandas-style event table
+when the dataframe extra is installed. The table and pandas import remain lazy;
+using the event arrays does not require pandas.
+
+Metric names must be unique within an evaluation and each summarized value
+must be a numeric scalar. Family instances and returned partial states must be
+picklable for `n_jobs > 1`. Keeping family classes at module scope and partials
+as tuples, dictionaries, or NumPy arrays satisfies this in typical cases.
+Families should be stateless during evaluation; treat each instance as immutable
+configuration so serial and process-parallel runs behave identically.
+
 `motmetrics.evaluate_motchallenge` is the only supported metrics entrypoint.
 The accumulator, matching, dependency resolution, and per-sequence process
 workers are internal implementation details so every invocation follows the
-same optimized computational path.
+same optimized computational path. Supplying a `MetricFamily` extends that
+path; it does not introduce an alternate evaluator. With no extra families,
+custom views and CLEAR event rows are never constructed.
 
 For the full HOTA/CLEAR/Identity parity check against TrackEval, see [motmetrics/tests/test_trackeval_parity.py](motmetrics/tests/test_trackeval_parity.py).
 
