@@ -4,6 +4,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+import motmetrics as mm
 import motmetrics._distances as distances
 import motmetrics._evaluation as evaluation
 import motmetrics._io as io
@@ -23,8 +24,15 @@ PARITY_TOLERANCE = 1e-6
 
 CLEAR_FIELD_MAP = {
     "MOTA": "mota",
+    "MODA": "moda",
     "CLR_Re": "recall",
     "CLR_Pr": "precision",
+    "MTR": "mtr",
+    "PTR": "ptr",
+    "MLR": "mlr",
+    "sMOTA": "smota",
+    "CLR_F1": "clr_f1",
+    "FP_per_frame": "fp_per_frame",
     "CLR_TP": "num_detections",
     "CLR_FN": "num_misses",
     "CLR_FP": "num_false_positives",
@@ -33,6 +41,17 @@ CLEAR_FIELD_MAP = {
     "PT": "partially_tracked",
     "ML": "mostly_lost",
     "Frag": "num_fragmentations",
+}
+HOTA_FIELD_MAP = {
+    "HOTA": "hota_alpha",
+    "DetA": "deta_alpha",
+    "AssA": "assa_alpha",
+    "DetRe": "detre_alpha",
+    "DetPr": "detpr_alpha",
+    "AssRe": "assre_alpha",
+    "AssPr": "asspr_alpha",
+    "LocA": "loca_alpha",
+    "OWTA": "owta_alpha",
 }
 IDENTITY_FIELD_MAP = {
     "IDF1": "idf1",
@@ -139,9 +158,8 @@ def _compute_py_motmetrics(sequences):
         )
         result.update(
             {
-                "HOTA": hota_summaries[name]["hota_alpha"],
-                "DetA": hota_summaries[name]["deta_alpha"],
-                "AssA": hota_summaries[name]["assa_alpha"],
+                trackeval_name: hota_summaries[name][py_motmetrics_name]
+                for trackeval_name, py_motmetrics_name in HOTA_FIELD_MAP.items()
             }
         )
         results[name] = result
@@ -227,7 +245,7 @@ def _render_comparison_table(rows):
     return "\n".join(
         [
             f"TrackEval parity (absolute tolerance: {PARITY_TOLERANCE:.0e})",
-            "HOTA, DetA, and AssA values are alpha means; their difference is the maximum over all alphas.",
+            "HOTA-family values are alpha means; their difference is the maximum over all alphas.",
             *table,
         ]
     )
@@ -242,7 +260,7 @@ def _write_github_summary(rows):
         "## TrackEval parity",
         "",
         f"Maximum permitted absolute difference: `{PARITY_TOLERANCE:.0e}`.",
-        "HOTA, DetA, and AssA values are alpha means; their difference is the maximum over all alphas.",
+        "HOTA-family values are alpha means; their difference is the maximum over all alphas.",
         "",
         "| Dataset | Metric | py-motmetrics | TrackEval | max abs diff | Status |",
         "|---|---|---:|---:|---:|:---:|",
@@ -266,10 +284,23 @@ def test_metrics_match_trackeval_on_bundled_tud_sequences():
         "HOTA",
         "DetA",
         "AssA",
+        "DetRe",
+        "DetPr",
+        "AssRe",
+        "AssPr",
+        "LocA",
+        "OWTA",
         "MOTA",
         "MOTP",
+        "MODA",
         "CLR_Re",
         "CLR_Pr",
+        "MTR",
+        "PTR",
+        "MLR",
+        "sMOTA",
+        "CLR_F1",
+        "FP_per_frame",
         "CLR_TP",
         "CLR_FN",
         "CLR_FP",
@@ -309,3 +340,26 @@ def test_metrics_match_trackeval_on_bundled_tud_sequences():
             f"TrackEval parity exceeded {PARITY_TOLERANCE:.0e}:\n" + "\n".join(failures),
             pytrace=False,
         )
+
+    public_summary = mm.evaluate_motchallenge(DATA_DIR, DATA_DIR, progress=False)
+    public_rows = dict(zip(public_summary.index, public_summary._rows))
+    hota_public_names = {
+        trackeval_name: evaluation.HOTA_SUMMARY_METRICS[alpha_name]
+        for trackeval_name, alpha_name in HOTA_FIELD_MAP.items()
+    }
+    clear_public_names = {
+        trackeval_name: py_motmetrics_name
+        for trackeval_name, py_motmetrics_name in CLEAR_FIELD_MAP.items()
+        if py_motmetrics_name in public_summary.columns
+    }
+    for sequence_name in [*SEQUENCE_NAMES, "OVERALL"]:
+        for trackeval_name, public_name in hota_public_names.items():
+            assert public_rows[sequence_name][public_name] == pytest.approx(
+                np.mean(trackeval_results[sequence_name][trackeval_name]),
+                abs=PARITY_TOLERANCE,
+            )
+        for trackeval_name, public_name in clear_public_names.items():
+            assert public_rows[sequence_name][public_name] == pytest.approx(
+                trackeval_results[sequence_name][trackeval_name],
+                abs=PARITY_TOLERANCE,
+            )

@@ -198,6 +198,11 @@ def motp(engine, num_detections):
     return _quiet_divide(engine.distance_sum, num_detections)
 
 
+def motp_sum(engine, num_detections):
+    """Sum of CLEAR match similarities used by TrackEval derivatives."""
+    return num_detections - engine.distance_sum
+
+
 def _merge_motp(partials, num_detections):
     res = 0
     for v in partials:
@@ -211,6 +216,49 @@ def mota(engine, num_misses, num_switches, num_false_positives, num_objects):
     return 1.0 - _quiet_divide(
         num_misses + num_switches + num_false_positives, num_objects
     )
+
+
+def moda(engine, num_detections, num_false_positives, num_objects):
+    """Multiple object detection accuracy."""
+    del engine  # unused
+    return (num_detections - num_false_positives) / np.maximum(1.0, num_objects)
+
+
+def smota(engine, motp_sum, num_false_positives, num_switches, num_objects):
+    """Soft multiple object tracker accuracy."""
+    del engine  # unused
+    return (motp_sum - num_false_positives - num_switches) / np.maximum(1.0, num_objects)
+
+
+def mtr(engine, mostly_tracked, partially_tracked, mostly_lost):
+    """Fraction of ground-truth tracks that are mostly tracked."""
+    del engine  # unused
+    return mostly_tracked / np.maximum(1.0, mostly_tracked + partially_tracked + mostly_lost)
+
+
+def ptr(engine, mostly_tracked, partially_tracked, mostly_lost):
+    """Fraction of ground-truth tracks that are partially tracked."""
+    del engine  # unused
+    return partially_tracked / np.maximum(1.0, mostly_tracked + partially_tracked + mostly_lost)
+
+
+def mlr(engine, mostly_tracked, partially_tracked, mostly_lost):
+    """Fraction of ground-truth tracks that are mostly lost."""
+    del engine  # unused
+    return mostly_lost / np.maximum(1.0, mostly_tracked + partially_tracked + mostly_lost)
+
+
+def clr_f1(engine, num_detections, num_misses, num_false_positives):
+    """CLEAR detection F1 score."""
+    del engine  # unused
+    denominator = num_detections + 0.5 * num_misses + 0.5 * num_false_positives
+    return num_detections / np.maximum(1.0, denominator)
+
+
+def fp_per_frame(engine, num_false_positives, num_frames):
+    """Average number of false positives per frame."""
+    del engine  # unused
+    return num_false_positives / np.maximum(1.0, num_frames)
 
 
 def precision(engine, num_detections, num_false_positives):
@@ -409,7 +457,15 @@ _METRIC_FUNCTIONS = (
     mostly_lost,
     num_fragmentations,
     motp,
+    motp_sum,
     mota,
+    moda,
+    smota,
+    mtr,
+    ptr,
+    mlr,
+    clr_f1,
+    fp_per_frame,
     precision,
     recall,
     id_global_assignment,
@@ -440,12 +496,20 @@ _ADDITIVE_METRICS = {
     partially_tracked,
     mostly_lost,
     num_fragmentations,
+    motp_sum,
     idfp,
     idfn,
     idtp,
 }
 _SAME_OVERALL_FORMULA = {
     mota,
+    moda,
+    smota,
+    mtr,
+    ptr,
+    mlr,
+    clr_f1,
+    fp_per_frame,
     precision,
     recall,
     idp,
@@ -474,6 +538,13 @@ _FORMATTERS = {
     "mostly_lost": "{:d}".format,
     "motp": "{:.3f}".format,
     "mota": "{:.1%}".format,
+    "moda": "{:.1%}".format,
+    "smota": "{:.1%}".format,
+    "mtr": "{:.1%}".format,
+    "ptr": "{:.1%}".format,
+    "mlr": "{:.1%}".format,
+    "clr_f1": "{:.1%}".format,
+    "fp_per_frame": "{:.3f}".format,
     "precision": "{:.1%}".format,
     "recall": "{:.1%}".format,
     "idp": "{:.1%}".format,
@@ -539,12 +610,19 @@ _MOTCHALLENGE_METRICS = (
     "mostly_tracked",
     "partially_tracked",
     "mostly_lost",
+    "mtr",
+    "ptr",
+    "mlr",
     "num_false_positives",
     "num_misses",
     "num_switches",
     "num_fragmentations",
     "mota",
+    "moda",
     "motp",
+    "smota",
+    "clr_f1",
+    "fp_per_frame",
     "num_transfer",
     "num_ascend",
     "num_migrate",

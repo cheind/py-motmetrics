@@ -277,6 +277,35 @@ def test_mota_motp():
     assert metr["num_frames"] == 6
 
 
+def test_trackeval_clear_derivatives():
+    acc = _accumulate([
+        ([1], [1], [[0.2]]),
+        ([1, 2], [1], [[0.1], [np.nan]]),
+        ([], [2], []),
+    ])
+
+    result = _compute(
+        acc,
+        metric_names=[
+            "moda",
+            "smota",
+            "mtr",
+            "ptr",
+            "mlr",
+            "clr_f1",
+            "fp_per_frame",
+        ],
+    )
+
+    assert result["moda"] == approx(1 / 3)
+    assert result["smota"] == approx(0.7 / 3)
+    assert result["mtr"] == approx(0.5)
+    assert result["ptr"] == approx(0)
+    assert result["mlr"] == approx(0.5)
+    assert result["clr_f1"] == approx(2 / 3)
+    assert result["fp_per_frame"] == approx(1 / 3)
+
+
 def test_identity_change_metrics():
     acc = _accumulate([
         ([], [], []),

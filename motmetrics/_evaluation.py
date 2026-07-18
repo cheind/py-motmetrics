@@ -26,6 +26,12 @@ HOTA_SUMMARY_METRICS = OrderedDict([
     ("hota_alpha", "hota"),
     ("deta_alpha", "deta"),
     ("assa_alpha", "assa"),
+    ("detre_alpha", "detre"),
+    ("detpr_alpha", "detpr"),
+    ("assre_alpha", "assre"),
+    ("asspr_alpha", "asspr"),
+    ("loca_alpha", "loca"),
+    ("owta_alpha", "owta"),
 ])
 
 _WORKER_PROGRESS_CURRENT = None
@@ -61,6 +67,30 @@ class _MOTChallengeSummary(object):
         self.formatters = formatters
         self.namemap = namemap
         self._df = None
+
+    def __getitem__(self, key):
+        """Return one metric value or an ordered metric column without pandas."""
+        if isinstance(key, tuple):
+            if len(key) != 2:
+                raise TypeError("Summary tuple keys must contain (row, metric).")
+            row_name, metric_name = key
+            if metric_name not in self.columns:
+                raise KeyError("Unknown summary metric: {!r}".format(metric_name))
+            try:
+                row_position = self.index.index(row_name)
+            except ValueError:
+                raise KeyError("Unknown summary row: {!r}".format(row_name)) from None
+            return self._rows[row_position][metric_name]
+
+        if isinstance(key, str):
+            if key not in self.columns:
+                raise KeyError("Unknown summary metric: {!r}".format(key))
+            return OrderedDict(
+                (row_name, row[key])
+                for row_name, row in zip(self.index, self._rows)
+            )
+
+        raise TypeError("Summary keys must be a metric name or a (row, metric) pair.")
 
     @property
     def df(self):
@@ -486,7 +516,11 @@ def _compute_prepared_hota_sequence_summary(prepared, hota_alphas, progress=None
     num_gt_ids = len(gt_id_counts)
     num_tracker_ids = len(tracker_id_counts)
     true_positives = np.zeros(num_alphas)
-    match_counts = np.zeros((num_alphas, num_gt_ids, num_tracker_ids))
+    localization_sums = np.zeros(num_alphas)
+    match_alpha_indices = np.empty(0, dtype=np.intp)
+    match_gt_indices = np.empty(0, dtype=np.intp)
+    match_tracker_indices = np.empty(0, dtype=np.intp)
+    match_counts = np.empty(0)
     matched_gt_indices = []
     matched_tracker_indices = []
     matched_similarities = []
@@ -510,26 +544,59 @@ def _compute_prepared_hota_sequence_summary(prepared, hota_alphas, progress=None
         matched_similarities = np.concatenate(matched_similarities)
         valid_matches = matched_similarities[:, np.newaxis] >= hota_alphas - _FLOAT_EPS
         true_positives = valid_matches.sum(axis=0, dtype=float)
+        localization_sums = matched_similarities @ valid_matches
         pair_indices = matched_gt_indices * num_tracker_ids + matched_tracker_indices
         num_id_pairs = num_gt_ids * num_tracker_ids
         alpha_indices, match_indices = np.nonzero(valid_matches.T)
-        match_counts = np.bincount(
+        flat_match_counts = np.bincount(
             alpha_indices * num_id_pairs + pair_indices[match_indices],
             minlength=num_alphas * num_id_pairs,
-        ).reshape(num_alphas, num_gt_ids, num_tracker_ids)
+        )
+        nonzero_match_indices = np.flatnonzero(flat_match_counts)
+        match_alpha_indices = nonzero_match_indices // num_id_pairs
+        matched_pair_indices = nonzero_match_indices % num_id_pairs
+        match_gt_indices = matched_pair_indices // num_tracker_ids
+        match_tracker_indices = matched_pair_indices % num_tracker_ids
+        match_counts = flat_match_counts[nonzero_match_indices].astype(float, copy=False)
 
+    false_negatives = num_objects - true_positives
     false_positives = num_predictions - true_positives
+    detre = metrics_module._quiet_divide(
+        true_positives,
+        np.maximum(1, true_positives + false_negatives),
+    )
+    detpr = metrics_module._quiet_divide(
+        true_positives,
+        np.maximum(1, true_positives + false_positives),
+    )
     deta = metrics_module._quiet_divide(
         true_positives,
-        np.maximum(1, num_objects + false_positives),
+        np.maximum(1, true_positives + false_negatives + false_positives),
     )
-    assa = _compute_hota_assa(match_counts, gt_id_counts, tracker_id_counts, true_positives)
+    assa, assre, asspr = _compute_hota_association_scores(
+        match_alpha_indices,
+        match_gt_indices,
+        match_tracker_indices,
+        match_counts,
+        gt_id_counts,
+        tracker_id_counts,
+        true_positives,
+    )
+    loca = np.maximum(1e-10, localization_sums) / np.maximum(1e-10, true_positives)
     hota = np.sqrt(deta * assa)
+    owta = np.sqrt(detre * assa)
     return {
         "hota_alpha": hota,
         "deta_alpha": deta,
         "assa_alpha": assa,
+        "detre_alpha": detre,
+        "detpr_alpha": detpr,
+        "assre_alpha": assre,
+        "asspr_alpha": asspr,
+        "loca_alpha": loca,
+        "owta_alpha": owta,
         "num_detections": true_positives,
+        "num_misses": false_negatives,
         "num_objects": num_objects,
         "num_false_positives": false_positives,
     }
@@ -615,42 +682,84 @@ def _group_frame_arrays(data, unique_ids, fields):
     return groups, id_counts
 
 
-def _compute_hota_assa(match_counts, gt_id_counts, tracker_id_counts, true_positives):
-    if match_counts.shape[1] == 0 or match_counts.shape[2] == 0:
-        return metrics_module._quiet_divide(
-            np.zeros_like(true_positives),
-            np.maximum(1, true_positives),
-        )
-    assa_denominator = gt_id_counts[np.newaxis, :, np.newaxis] + tracker_id_counts[np.newaxis, np.newaxis, :] - match_counts
-    assa_per_pair = metrics_module._quiet_divide(
-        match_counts,
-        np.maximum(1, assa_denominator),
-    )
-    return metrics_module._quiet_divide(
-        (assa_per_pair * match_counts).sum(axis=(1, 2)),
-        np.maximum(1, true_positives),
-    )
+def _compute_hota_association_scores(
+    alpha_indices,
+    gt_indices,
+    tracker_indices,
+    match_counts,
+    gt_id_counts,
+    tracker_id_counts,
+    true_positives,
+):
+    if len(match_counts) == 0:
+        zeros = np.zeros_like(true_positives)
+        return zeros, zeros.copy(), zeros.copy()
+    true_positive_denominator = np.maximum(1, true_positives)
+    squared_match_counts = match_counts * match_counts
+
+    def aggregate(denominator):
+        weighted_counts = squared_match_counts / np.maximum(1, denominator)
+        return np.bincount(
+            alpha_indices,
+            weights=weighted_counts,
+            minlength=len(true_positives),
+        ) / true_positive_denominator
+
+    assa = aggregate(gt_id_counts[gt_indices] + tracker_id_counts[tracker_indices] - match_counts)
+    assre = aggregate(gt_id_counts[gt_indices])
+    asspr = aggregate(tracker_id_counts[tracker_indices])
+    return assa, assre, asspr
 
 
 def _combine_hota_sequence_summaries(summaries):
     summaries = list(summaries)
     true_positives = np.sum([summary["num_detections"] for summary in summaries], axis=0)
-    num_objects = sum(summary["num_objects"] for summary in summaries)
+    false_negatives = np.sum([summary["num_misses"] for summary in summaries], axis=0)
     false_positives = np.sum([summary["num_false_positives"] for summary in summaries], axis=0)
+    num_objects = sum(summary["num_objects"] for summary in summaries)
+    detre = metrics_module._quiet_divide(
+        true_positives,
+        np.maximum(1, true_positives + false_negatives),
+    )
+    detpr = metrics_module._quiet_divide(
+        true_positives,
+        np.maximum(1, true_positives + false_positives),
+    )
     deta = metrics_module._quiet_divide(
         true_positives,
-        np.maximum(1, num_objects + false_positives),
+        np.maximum(1, true_positives + false_negatives + false_positives),
     )
-    assa = metrics_module._quiet_divide(
-        np.sum([summary["assa_alpha"] * summary["num_detections"] for summary in summaries], axis=0),
-        np.maximum(1, true_positives),
+    weighted_denominator = np.maximum(1, true_positives)
+
+    def combine_weighted(metric):
+        weighted_sum = np.sum(
+            [summary[metric] * summary["num_detections"] for summary in summaries],
+            axis=0,
+        )
+        return metrics_module._quiet_divide(weighted_sum, weighted_denominator)
+
+    assa = combine_weighted("assa_alpha")
+    assre = combine_weighted("assre_alpha")
+    asspr = combine_weighted("asspr_alpha")
+    localization_sum = np.sum(
+        [summary["loca_alpha"] * summary["num_detections"] for summary in summaries],
+        axis=0,
     )
+    loca = np.maximum(1e-10, localization_sum) / np.maximum(1e-10, true_positives)
     hota = np.sqrt(deta * assa)
+    owta = np.sqrt(detre * assa)
     return {
         "hota_alpha": hota,
         "deta_alpha": deta,
         "assa_alpha": assa,
+        "detre_alpha": detre,
+        "detpr_alpha": detpr,
+        "assre_alpha": assre,
+        "asspr_alpha": asspr,
+        "loca_alpha": loca,
+        "owta_alpha": owta,
         "num_detections": true_positives,
+        "num_misses": false_negatives,
         "num_objects": num_objects,
         "num_false_positives": false_positives,
     }
@@ -671,13 +780,23 @@ def _prepare_metrics(metric_names, exclude_id):
 
 def _summary_formatters():
     formatters = dict(metrics_module._FORMATTERS)
-    formatters.update({"hota": "{:.1%}".format, "deta": "{:.1%}".format, "assa": "{:.1%}".format})
+    formatters.update({metric: "{:.1%}".format for metric in HOTA_SUMMARY_METRICS.values()})
     return formatters
 
 
 def _summary_namemap():
     namemap = dict(io.motchallenge_metric_names)
-    namemap.update({"hota": "HOTA", "deta": "DetA", "assa": "AssA"})
+    namemap.update({
+        "hota": "HOTA",
+        "deta": "DetA",
+        "assa": "AssA",
+        "detre": "DetRe",
+        "detpr": "DetPr",
+        "assre": "AssRe",
+        "asspr": "AssPr",
+        "loca": "LocA",
+        "owta": "OWTA",
+    })
     return namemap
 
 

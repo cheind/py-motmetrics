@@ -6,6 +6,7 @@ from shutil import copyfile
 
 import numpy as np
 import pandas as pd
+import pytest
 from pytest import approx
 
 import motmetrics as mm
@@ -29,6 +30,7 @@ import motmetrics as mm
 assert 'pandas' not in sys.modules
 summary = mm.evaluate_motchallenge({ground_truth!r}, {tracker!r})
 str(summary)
+assert summary['TUD-Campus', 'hota'] == summary['hota']['TUD-Campus']
 assert 'pandas' not in sys.modules
 """.format(
         ground_truth=str(DATA_DIR / "TUD-Campus" / "gt.txt"),
@@ -66,9 +68,30 @@ def test_evaluate_motchallenge_files_returns_rich_summary():
     assert summary.df.loc["TUD-Campus", "hota"] == approx(0.3913974378451139)
     assert summary.df.loc["TUD-Campus", "deta"] == approx(0.418047030142763)
     assert summary.df.loc["TUD-Campus", "assa"] == approx(0.36912068120832836)
+    assert set(["detre", "detpr", "assre", "asspr", "loca", "owta"]).issubset(summary.df.columns)
+    assert set(["moda", "smota", "mtr", "ptr", "mlr", "clr_f1", "fp_per_frame"]).issubset(summary.df.columns)
     assert str(summary) == summary.text
     assert "MOTA" in summary.text
     assert "HOTA" in summary.text
+
+
+def test_summary_supports_native_metric_access():
+    summary = mm.evaluate_motchallenge(DATA_DIR, DATA_DIR, progress=False)
+
+    hota_by_sequence = summary["hota"]
+    assert list(hota_by_sequence) == ["TUD-Campus", "TUD-Stadtmitte", "OVERALL"]
+    assert hota_by_sequence["OVERALL"] == approx(0.3999570912884786)
+    assert summary["OVERALL", "hota"] == approx(0.3999570912884786)
+    assert summary["TUD-Campus", "hota"] == hota_by_sequence["TUD-Campus"]
+
+    with pytest.raises(KeyError, match="Unknown summary row"):
+        summary["missing", "hota"]
+    with pytest.raises(KeyError, match="Unknown summary metric"):
+        summary["OVERALL", "missing"]
+    with pytest.raises(KeyError, match="Unknown summary metric"):
+        summary["missing"]
+    with pytest.raises(TypeError, match="metric name or a \\(row, metric\\) pair"):
+        summary[0]
 
 
 def test_hota_metrics_are_always_calculated():
@@ -78,7 +101,18 @@ def test_hota_metrics_are_always_calculated():
         metrics=["mota"],
     )
 
-    assert list(summary.df.columns) == ["mota", "hota", "deta", "assa"]
+    assert list(summary.df.columns) == [
+        "mota",
+        "hota",
+        "deta",
+        "assa",
+        "detre",
+        "detpr",
+        "assre",
+        "asspr",
+        "loca",
+        "owta",
+    ]
 
 
 def test_evaluate_motchallenge_folders_returns_overall_summary(tmp_path):
@@ -97,7 +131,7 @@ def test_evaluate_motchallenge_folders_returns_overall_summary(tmp_path):
     summary = mm.evaluate_motchallenge(gt_root, test_root)
 
     assert list(summary.df.index) == ["TUD-Campus", "TUD-Stadtmitte", "OVERALL"]
-    assert set(["hota", "deta", "assa"]).issubset(summary.df.columns)
+    assert set(evaluation.HOTA_SUMMARY_METRICS.values()).issubset(summary.df.columns)
     assert summary.df.loc["OVERALL", "hota"] == approx(0.3999570912884786)
     assert summary.df.loc["OVERALL", "deta"] == approx(0.3976832912424188)
     assert summary.df.loc["OVERALL", "assa"] == approx(0.4124495298453543)
@@ -192,7 +226,7 @@ def test_hota_is_invariant_to_zero_tracker_id():
         evaluation._prepare_iou_sequence_data(gt, shifted_test, 0.5),
         hota_alphas,
     )
-    for metric in ("hota_alpha", "deta_alpha", "assa_alpha"):
+    for metric in evaluation.HOTA_SUMMARY_METRICS:
         np.testing.assert_allclose(original[metric], shifted[metric], rtol=0, atol=0)
 
 
