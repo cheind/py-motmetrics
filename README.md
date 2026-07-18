@@ -211,7 +211,3 @@ sequence worker is used per requested core, capped by the sequence count:
 3. Milan, Anton, et al. ["MOT16: A Benchmark for Multi-Object Tracking."](https://arxiv.org/abs/1603.00831) arXiv:1603.00831, 2016.
 4. Li, Yuan, Chang Huang, and Ram Nevatia. ["Learning to Associate: HybridBoosted Multi-Target Tracker for Crowded Scene."](https://doi.org/10.1109/CVPR.2009.5206735) CVPR, 2009.
 5. Bernardin, Keni, and Rainer Stiefelhagen. ["Evaluating Multiple Object Tracking Performance: The CLEAR MOT Metrics."](https://doi.org/10.1155/2008/246309) EURASIP Journal on Image and Video Processing, 2008.
-
-## License
-
-MIT. See [LICENSE](LICENSE).
