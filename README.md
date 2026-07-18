@@ -1,14 +1,22 @@
-[![PyPI version](https://badge.fury.io/py/motmetrics.svg)](https://badge.fury.io/py/motmetrics) [![Build Status](https://github.com/cheind/py-motmetrics/actions/workflows/python-package.yml/badge.svg)](https://github.com/cheind/py-motmetrics/actions/workflows/python-package.yml) [![TrackEval parity](https://img.shields.io/badge/TrackEval%201.3.0-parity-brightgreen)](https://github.com/cheind/py-motmetrics/actions/workflows/python-package.yml) [![DOI](https://zenodo.org/badge/87559569.svg)](https://doi.org/10.5281/zenodo.14014773)
-
-# py-motmetrics
+<p align="center">
+  <img src=".github/assets/logo.png" alt="py-motmetrics logo" width="500">
+</p>
 
 <p align="center">
-  <img src="motmetrics/etc/mot.png" alt="Multiple-object tracking example" width="500">
-  <br>
-  <em>Pictures courtesy of Bernardin, Keni, and Rainer Stiefelhagen <a href="#references">[1]</a></em>
+  <a href="https://badge.fury.io/py/motmetrics"><img src="https://badge.fury.io/py/motmetrics.svg" alt="PyPI version"></a>
+  <a href="https://github.com/cheind/py-motmetrics/actions/workflows/python-package.yml"><img src="https://github.com/cheind/py-motmetrics/actions/workflows/python-package.yml/badge.svg" alt="Build status"></a>
+  <a href="https://github.com/cheind/py-motmetrics/actions/workflows/python-package.yml"><img src="https://img.shields.io/badge/TrackEval%201.3.0-parity-brightgreen" alt="TrackEval parity"></a>
+  <a href="https://doi.org/10.5281/zenodo.14014773"><img src="https://zenodo.org/badge/87559569.svg" alt="DOI"></a>
 </p>
 
 **py-motmetrics** provides Python tools for evaluating multiple object tracking (MOT) results. It implements MOTChallenge-aligned CLEAR MOT, Identity, and HOTA-related metrics, including MOTA, MOTP, IDF1, precision, recall, and track quality counts.
+
+## Why MOTMetrics
+
+- **Fast:** 2.65–4.90x faster than TrackEval 1.3.0 in measured end-to-end benchmarks.
+- **Complete:** CLEAR, Identity, and HOTA metrics with TrackEval parity.
+- **Simple:** one evaluation API, sequence parallelism, and two runtime dependencies.
+- **Extensible:** custom metrics can reuse shared statistics or define their own matching.
 
 ## Installation
 

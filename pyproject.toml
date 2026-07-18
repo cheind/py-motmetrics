@@ -54,7 +54,6 @@ Issues = "https://github.com/cheind/py-motmetrics/issues"
 packages = ["motmetrics"]
 exclude = [
     "motmetrics/data",
-    "motmetrics/etc",
     "motmetrics/tests",
 ]
 
