@@ -18,6 +18,10 @@ def _empty_accumulator():
     return _Accumulator(np.empty(0, dtype=int), np.empty(0, dtype=int))
 
 
+def _compute(accumulator, metric_names=None):
+    return metrics._compute_metrics(accumulator, metric_names=metric_names)
+
+
 def _accumulate(frames):
     """Encode arbitrary test IDs once, then exercise the production path."""
     object_ids = sorted({object_id for objects, _, _ in frames for object_id in objects})
@@ -51,70 +55,12 @@ def _accumulate(frames):
     return accumulator
 
 
-def test_metricscontainer_1():
-    """Tests registration of events with dependencies."""
-    m = metrics._MetricsHost()
-    m._register(lambda engine: 1.0, name="a")
-    m._register(lambda engine: 2.0, name="b")
-    m._register(lambda engine, a, b: a + b, deps=["a", "b"], name="add")
-    m._register(lambda engine, a, b: a - b, deps=["a", "b"], name="sub")
-    m._register(lambda engine, a, b: a * b, deps=["add", "sub"], name="mul")
-    summary = m.compute(_empty_accumulator(), metrics=["mul", "add"])
-    assert summary["mul"] == -3.0
-    assert summary["add"] == 3.0
-
-
-def test_metricscontainer_autodep():
-    """Tests automatic dependencies from argument names."""
-    m = metrics._MetricsHost()
-    m._register(lambda engine: 1.0, name="a")
-    m._register(lambda engine: 2.0, name="b")
-    m._register(lambda engine, a, b: a + b, name="add", deps="auto")
-    m._register(lambda engine, a, b: a - b, name="sub", deps="auto")
-    m._register(lambda engine, add, sub: add * sub, name="mul", deps="auto")
-    summary = m.compute(_empty_accumulator(), metrics=["mul", "add"])
-    assert summary["mul"] == -3.0
-    assert summary["add"] == 3.0
-
-
-def test_metricscontainer_autoname():
-    """Tests automatic names (and dependencies) from inspection."""
-
-    def constant_a(_):
-        """Constant a help."""
-        return 1.0
-
-    def constant_b(_):
-        return 2.0
-
-    def add(_, constant_a, constant_b):
-        return constant_a + constant_b
-
-    def sub(_, constant_a, constant_b):
-        return constant_a - constant_b
-
-    def mul(_, add, sub):
-        return add * sub
-
-    m = metrics._MetricsHost()
-    m._register(constant_a, deps="auto")
-    m._register(constant_b, deps="auto")
-    m._register(add, deps="auto")
-    m._register(sub, deps="auto")
-    m._register(mul, deps="auto")
-
-    summary = m.compute(_empty_accumulator(), metrics=["mul", "add"])
-    assert summary["mul"] == -3.0
-    assert summary["add"] == 3.0
-
-
 def test_metrics_with_empty_state():
     acc = _empty_accumulator()
 
-    mh = metrics._METRIC_HOST
-    metr = mh.compute(
+    metr = _compute(
         acc,
-        metrics=[
+        metric_names=[
             "mota",
             "motp",
             "num_predictions",
@@ -133,7 +79,7 @@ def test_metrics_with_empty_state():
 
 def test_metric_input_must_be_the_compact_accumulator():
     with raises(TypeError, match="requires an accumulator"):
-        metrics._METRIC_HOST.compute(object())
+        _compute(object())
 
 
 def test_accumulator_keeps_all_metrics_in_compact_state():
@@ -142,10 +88,9 @@ def test_accumulator_keeps_all_metrics_in_compact_state():
         ([1, 2], [10, 30], [[0.1, np.nan], [np.nan, 0.2]]),
     ])
 
-    metric_host = metrics._METRIC_HOST
-    result = metric_host.compute(
+    result = _compute(
         acc,
-        metrics=metric_host.names,
+        metric_names=metrics._METRIC_SPECS,
     )
 
     assert result["num_frames"] == 2
@@ -162,10 +107,9 @@ def test_assignment_metrics_with_empty_groundtruth():
         ([], [1, 2, 3, 4], []),
     ])
 
-    mh = metrics._METRIC_HOST
-    metr = mh.compute(
+    metr = _compute(
         acc,
-        metrics=[
+        metric_names=[
             "num_matches",
             "num_false_positives",
             "num_misses",
@@ -193,10 +137,9 @@ def test_assignment_metrics_with_empty_predictions():
         ([1, 2, 3, 4], [], []),
     ])
 
-    mh = metrics._METRIC_HOST
-    metr = mh.compute(
+    metr = _compute(
         acc,
-        metrics=[
+        metric_names=[
             "num_matches",
             "num_false_positives",
             "num_misses",
@@ -224,10 +167,9 @@ def test_assignment_metrics_with_both_empty():
         ([], [], []),
     ])
 
-    mh = metrics._METRIC_HOST
-    metr = mh.compute(
+    metr = _compute(
         acc,
-        metrics=[
+        metric_names=[
             "num_matches",
             "num_false_positives",
             "num_misses",
@@ -275,11 +217,10 @@ def test_benchmark_all_metrics(benchmark):
         objs_per_frame=20,
         hyps_per_frame=40,
     )
-    metric_host = metrics._METRIC_HOST
     benchmark(
-        metric_host.compute,
+        metrics._compute_metrics,
         acc,
-        metrics=metric_host.names,
+        metric_names=metrics._METRIC_SPECS,
     )
 
 
@@ -308,10 +249,9 @@ def test_mota_motp():
         ([], [], []),
     ])
 
-    mh = metrics._METRIC_HOST
-    metr = mh.compute(
+    metr = _compute(
         acc,
-        metrics=[
+        metric_names=[
             "num_matches",
             "num_false_positives",
             "num_misses",
@@ -348,10 +288,9 @@ def test_identity_change_metrics():
         ([], [], []),
     ])
 
-    mh = metrics._METRIC_HOST
-    metr = mh.compute(
+    metr = _compute(
         acc,
-        metrics=[
+        metric_names=[
             "num_matches",
             "num_false_positives",
             "num_misses",
@@ -395,8 +334,7 @@ def test_correct_average():
         ([4], [4], [0]),
     ])
 
-    mh = metrics._METRIC_HOST
-    metr = mh.compute(acc, metrics="mota")
+    metr = _compute(acc, metric_names="mota")
     assert metr["mota"] == approx(0.2)
 
 
@@ -409,10 +347,9 @@ def test_track_quality_boundary_matches_trackeval():
         ([1], [], []),
     ])
 
-    mh = metrics._METRIC_HOST
-    metr = mh.compute(
+    metr = _compute(
         acc,
-        metrics=["mostly_tracked", "partially_tracked", "mostly_lost"],
+        metric_names=["mostly_tracked", "partially_tracked", "mostly_lost"],
     )
     assert metr["mostly_tracked"] == 0
     assert metr["partially_tracked"] == 1
@@ -428,6 +365,6 @@ def test_num_fragmentations_ignores_leading_and_trailing_misses():
         ([1, 2], [], []),
     ])
 
-    summary = metrics._METRIC_HOST.compute(acc, metrics=['num_fragmentations'])
+    summary = _compute(acc, metric_names=["num_fragmentations"])
 
     assert summary['num_fragmentations'] == 1

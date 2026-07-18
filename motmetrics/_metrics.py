@@ -9,193 +9,67 @@
 
 # pylint: disable=redefined-outer-name
 
-from collections import OrderedDict
-
 import numpy as np
 
-import motmetrics._math_util as math_util
 from motmetrics._accumulator import _Accumulator
 from motmetrics._assignment import _linear_sum_assignment
 
 
-class _MetricsHost:
-    """Keeps track of metrics and intra metric dependencies."""
+def _compute_metrics(accumulator, metric_names=None):
+    """Compute a fixed set of metrics from compact sequence state."""
+    if not isinstance(accumulator, _Accumulator):
+        raise TypeError("The metric engine requires an accumulator.")
+    metric_names = _normalize_metric_names(metric_names)
+    cache = {}
+    for metric_name in metric_names:
+        _resolve_metric(accumulator.metrics_engine, metric_name, cache)
+    return cache
 
-    def __init__(self):
-        self.metrics = OrderedDict()
 
-    def _register(  # noqa: C901
-        self,
-        fnc,
-        deps="auto",
-        name=None,
-        formatter=None,
-        fnc_m=None,
-        deps_m="auto",
-    ):
-        """Register a new metric.
+def _compute_overall(partials, metric_names=None):
+    """Merge fixed per-sequence metric state into an overall result."""
+    metric_names = _normalize_metric_names(metric_names)
+    cache = {}
+    for metric_name in metric_names:
+        _resolve_overall_metric(partials, metric_name, cache)
+    return cache
 
-        Params
-        ------
-        fnc : Function
-            Function that computes the metric to be registered. The number of arguments
-            is 1 + N, where N is the number of dependencies of the metric to be registered.
-            The order of the argument passed is `engine, result_dep1, result_dep2, ...`.
 
-        Kwargs
-        ------
-        deps : string, list of strings or None, optional
-            The dependencies of this metric. Each dependency is evaluated and the result
-            is passed as argument to `fnc` as described above. If None is specified, the
-            function does not have any dependencies. If a list of strings is given, dependencies
-            for these metric strings are registered. If 'auto' is passed, the dependencies
-            are deduced from argument inspection of the method. For this to work the argument
-            names have to be equal to the intended dependencies.
-        name : string or None, optional
-            Name identifier of this metric. If None is passed the name is deduced from
-            function inspection.
-        formatter: Format object, optional
-            An optional default formatter when rendering metric results as string. I.e to
-            render the result `0.35` as `35%` one would pass `{:.2%}.format`
-        fnc_m : Function or None, optional
-            Function that merges metric results. The number of arguments
-            is 1 + N, where N is the number of dependencies of the metric to be registered.
-            The order is `partials, result_dep1, result_dep2, ...`.
-        """
+def _normalize_metric_names(metric_names):
+    if metric_names is None:
+        return _MOTCHALLENGE_METRICS
+    if isinstance(metric_names, str):
+        return (metric_names,)
+    return tuple(metric_names)
 
-        assert fnc is not None, "No function given for metric {}".format(name)
 
-        if deps is None:
-            deps = []
-        elif deps == "auto":
-            deps = _required_arguments(fnc)[1:]  # first argument is the incremental engine
+def _resolve_metric(engine, name, cache):
+    if name in cache:
+        return cache[name]
+    try:
+        function, dependencies, _, _ = _METRIC_SPECS[name]
+    except KeyError as exc:
+        raise ValueError("Unknown metric: {}".format(name)) from exc
+    values = [_resolve_metric(engine, dependency, cache) for dependency in dependencies]
+    cache[name] = function(engine, *values)
+    return cache[name]
 
-        if name is None:
-            name = fnc.__name__
 
-        if fnc_m is not None:
-            if deps_m is None:
-                deps_m = []
-            elif deps_m == "auto":
-                deps_m = _required_arguments(fnc_m)[1:]  # first argument contains per-sequence partials
-        else:
-            deps_m = None
-
-        self.metrics[name] = {
-            "name": name,
-            "fnc": fnc,
-            "fnc_m": fnc_m,
-            "deps": deps,
-            "deps_m": deps_m,
-            "formatter": formatter,
-        }
-
-    @property
-    def names(self):
-        """Returns the name identifiers of all registered metrics."""
-        return [v["name"] for v in self.metrics.values()]
-
-    @property
-    def formatters(self):
-        """Returns the formatters for all metrics that have associated formatters."""
-        return {
-            k: v["formatter"]
-            for k, v in self.metrics.items()
-            if v["formatter"] is not None
-        }
-
-    def compute(self, accumulator, metrics=None):
-        """Compute metrics and their dependencies from compact state.
-
-        Params
-        ------
-        accumulator : _Accumulator
-            Accumulator containing incremental metric state.
-
-        Kwargs
-        ------
-        metrics : string, list of string or None, optional
-            The identifiers of the metrics to be computed. This method will only
-            compute the minimal set of necessary metrics to fullfill the request.
-            If None is passed all registered metrics are computed.
-        """
-
-        if not isinstance(accumulator, _Accumulator):
-            raise TypeError("The metric engine requires an accumulator.")
-        if metrics is None:
-            metrics = motchallenge_metrics
-        elif isinstance(metrics, str):
-            metrics = [metrics]
-
-        cache = {}
-        engine = accumulator.metrics_engine
-        for mname in metrics:
-            cache[mname] = self._compute(engine, mname, cache, parent="summarize")
-        return cache
-
-    def compute_overall(self, partials, metrics=None):
-        """Merge per-sequence primitive dictionaries into overall metrics.
-
-        Params
-        ------
-        partials : list of metric results to combine overall
-
-        Kwargs
-        ------
-        metrics : string, list of string or None, optional
-            The identifiers of the metrics to be computed. This method will only
-            compute the minimal set of necessary metrics to fullfill the request.
-            If None is passed all registered metrics are computed.
-        """
-        if metrics is None:
-            metrics = motchallenge_metrics
-        elif isinstance(metrics, str):
-            metrics = [metrics]
-        cache = {}
-
-        for mname in metrics:
-            cache[mname] = self._compute_overall(
-                partials, mname, cache, parent="summarize"
-            )
-        return cache
-
-    def _compute(self, engine, name, cache, parent=None):
-        """Compute metric and resolve dependencies."""
-        assert name in self.metrics, "Cannot find metric {} required by {}.".format(
-            name, parent
-        )
-        already = cache.get(name, None)
-        if already is not None:
-            return already
-        minfo = self.metrics[name]
-        vals = []
-        for depname in minfo["deps"]:
-            v = cache.get(depname, None)
-            if v is None:
-                v = cache[depname] = self._compute(
-                    engine, depname, cache, parent=name
-                )
-            vals.append(v)
-        return minfo["fnc"](engine, *vals)
-
-    def _compute_overall(self, partials, name, cache, parent=None):
-        assert name in self.metrics, "Cannot find metric {} required by {}.".format(
-            name, parent
-        )
-        already = cache.get(name, None)
-        if already is not None:
-            return already
-        minfo = self.metrics[name]
-        vals = []
-        for depname in minfo["deps_m"]:
-            v = cache.get(depname, None)
-            if v is None:
-                v = cache[depname] = self._compute_overall(
-                    partials, depname, cache, parent=name
-                )
-            vals.append(v)
-        assert minfo["fnc_m"] is not None, "merge function for metric %s is None" % name
-        return minfo["fnc_m"](partials, *vals)
+def _resolve_overall_metric(partials, name, cache):
+    if name in cache:
+        return cache[name]
+    try:
+        _, _, merge, dependencies = _METRIC_SPECS[name]
+    except KeyError as exc:
+        raise ValueError("Unknown metric: {}".format(name)) from exc
+    if merge is None:
+        raise ValueError("Metric cannot be combined across sequences: {}".format(name))
+    values = [
+        _resolve_overall_metric(partials, dependency, cache)
+        for dependency in dependencies
+    ]
+    cache[name] = merge(partials, *values)
+    return cache[name]
 
 
 def _required_arguments(function):
@@ -321,27 +195,20 @@ def num_fragmentations(engine, obj_frequencies):
 
 def motp(engine, num_detections):
     """Multiple object tracker precision."""
-    return math_util.quiet_divide(engine.distance_sum, num_detections)
+    return _quiet_divide(engine.distance_sum, num_detections)
 
 
 def _merge_motp(partials, num_detections):
     res = 0
     for v in partials:
         res += v["motp"] * v["num_detections"]
-    return math_util.quiet_divide(res, num_detections)
+    return _quiet_divide(res, num_detections)
 
 
 def mota(engine, num_misses, num_switches, num_false_positives, num_objects):
     """Multiple object tracker accuracy."""
     del engine  # unused
-    return 1.0 - math_util.quiet_divide(
-        num_misses + num_switches + num_false_positives, num_objects
-    )
-
-
-def _merge_mota(partials, num_misses, num_switches, num_false_positives, num_objects):
-    del partials  # unused
-    return 1.0 - math_util.quiet_divide(
+    return 1.0 - _quiet_divide(
         num_misses + num_switches + num_false_positives, num_objects
     )
 
@@ -349,23 +216,13 @@ def _merge_mota(partials, num_misses, num_switches, num_false_positives, num_obj
 def precision(engine, num_detections, num_false_positives):
     """Number of detected objects over sum of detected and false positives."""
     del engine  # unused
-    return math_util.quiet_divide(num_detections, num_false_positives + num_detections)
-
-
-def _merge_precision(partials, num_detections, num_false_positives):
-    del partials  # unused
-    return math_util.quiet_divide(num_detections, num_false_positives + num_detections)
+    return _quiet_divide(num_detections, num_false_positives + num_detections)
 
 
 def recall(engine, num_detections, num_objects):
     """Number of detections over number of objects."""
     del engine  # unused
-    return math_util.quiet_divide(num_detections, num_objects)
-
-
-def _merge_recall(partials, num_detections, num_objects):
-    del partials  # unused
-    return math_util.quiet_divide(num_detections, num_objects)
+    return _quiet_divide(num_detections, num_objects)
 
 
 def id_global_assignment(engine):
@@ -514,35 +371,55 @@ def idtp(engine, id_global_assignment, num_objects, idfn):
 def idp(engine, idtp, idfp):
     """ID measures: global min-cost precision."""
     del engine  # unused
-    return math_util.quiet_divide(idtp, idtp + idfp)
-
-
-def _merge_idp(partials, idtp, idfp):
-    del partials  # unused
-    return math_util.quiet_divide(idtp, idtp + idfp)
+    return _quiet_divide(idtp, idtp + idfp)
 
 
 def idr(engine, idtp, idfn):
     """ID measures: global min-cost recall."""
     del engine  # unused
-    return math_util.quiet_divide(idtp, idtp + idfn)
-
-
-def _merge_idr(partials, idtp, idfn):
-    del partials  # unused
-    return math_util.quiet_divide(idtp, idtp + idfn)
+    return _quiet_divide(idtp, idtp + idfn)
 
 
 def idf1(engine, idtp, num_objects, num_predictions):
     """ID measures: global min-cost F1 score."""
     del engine  # unused
-    return math_util.quiet_divide(2 * idtp, num_objects + num_predictions)
+    return _quiet_divide(2 * idtp, num_objects + num_predictions)
 
 
-def _merge_idf1(partials, idtp, num_objects, num_predictions):
-    del partials  # unused
-    return math_util.quiet_divide(2 * idtp, num_objects + num_predictions)
-
+_METRIC_FUNCTIONS = (
+    num_frames,
+    obj_frequencies,
+    pred_frequencies,
+    num_matches,
+    num_switches,
+    num_transfer,
+    num_ascend,
+    num_migrate,
+    num_false_positives,
+    num_misses,
+    num_detections,
+    num_objects,
+    num_predictions,
+    num_gt_ids,
+    num_dt_ids,
+    num_unique_objects,
+    track_ratios,
+    mostly_tracked,
+    partially_tracked,
+    mostly_lost,
+    num_fragmentations,
+    motp,
+    mota,
+    precision,
+    recall,
+    id_global_assignment,
+    idfp,
+    idfn,
+    idtp,
+    idp,
+    idr,
+    idf1,
+)
 
 _ADDITIVE_METRICS = {
     num_frames,
@@ -567,14 +444,41 @@ _ADDITIVE_METRICS = {
     idfn,
     idtp,
 }
-_MERGE_FUNCTIONS = {
-    motp: _merge_motp,
-    mota: _merge_mota,
-    precision: _merge_precision,
-    recall: _merge_recall,
-    idp: _merge_idp,
-    idr: _merge_idr,
-    idf1: _merge_idf1,
+_SAME_OVERALL_FORMULA = {
+    mota,
+    precision,
+    recall,
+    idp,
+    idr,
+    idf1,
+}
+_FORMATTERS = {
+    "num_frames": "{:d}".format,
+    "obj_frequencies": "{:d}".format,
+    "pred_frequencies": "{:d}".format,
+    "num_matches": "{:d}".format,
+    "num_switches": "{:d}".format,
+    "num_transfer": "{:d}".format,
+    "num_ascend": "{:d}".format,
+    "num_migrate": "{:d}".format,
+    "num_false_positives": "{:d}".format,
+    "num_misses": "{:d}".format,
+    "num_detections": "{:d}".format,
+    "num_objects": "{:d}".format,
+    "num_predictions": "{:d}".format,
+    "num_gt_ids": "{:d}".format,
+    "num_dt_ids": "{:d}".format,
+    "num_unique_objects": "{:d}".format,
+    "mostly_tracked": "{:d}".format,
+    "partially_tracked": "{:d}".format,
+    "mostly_lost": "{:d}".format,
+    "motp": "{:.3f}".format,
+    "mota": "{:.1%}".format,
+    "precision": "{:.1%}".format,
+    "recall": "{:.1%}".format,
+    "idp": "{:.1%}".format,
+    "idr": "{:.1%}".format,
+    "idf1": "{:.1%}".format,
 }
 
 
@@ -587,52 +491,45 @@ def _sum_partial(metric):
     return merge
 
 
-def _build_metric_host():
-    """Build the internal metric dependency engine once per process."""
-    m = _MetricsHost()
+def _merge_same_formula(metric):
+    def merge(partials, *values):
+        del partials
+        return metric(None, *values)
 
-    def _register(metric, formatter=None):
-        merge = _sum_partial(metric) if metric in _ADDITIVE_METRICS else _MERGE_FUNCTIONS.get(metric)
-        m._register(metric, formatter=formatter, fnc_m=merge)
-
-    _register(num_frames, formatter="{:d}".format)
-    _register(obj_frequencies, formatter="{:d}".format)
-    _register(pred_frequencies, formatter="{:d}".format)
-    _register(num_matches, formatter="{:d}".format)
-    _register(num_switches, formatter="{:d}".format)
-    _register(num_transfer, formatter="{:d}".format)
-    _register(num_ascend, formatter="{:d}".format)
-    _register(num_migrate, formatter="{:d}".format)
-    _register(num_false_positives, formatter="{:d}".format)
-    _register(num_misses, formatter="{:d}".format)
-    _register(num_detections, formatter="{:d}".format)
-    _register(num_objects, formatter="{:d}".format)
-    _register(num_predictions, formatter="{:d}".format)
-    _register(num_gt_ids, formatter="{:d}".format)
-    _register(num_dt_ids, formatter="{:d}".format)
-    _register(num_unique_objects, formatter="{:d}".format)
-    _register(track_ratios)
-    _register(mostly_tracked, formatter="{:d}".format)
-    _register(partially_tracked, formatter="{:d}".format)
-    _register(mostly_lost, formatter="{:d}".format)
-    _register(num_fragmentations)
-    _register(motp, formatter="{:.3f}".format)
-    _register(mota, formatter="{:.1%}".format)
-    _register(precision, formatter="{:.1%}".format)
-    _register(recall, formatter="{:.1%}".format)
-
-    _register(id_global_assignment)
-    _register(idfp)
-    _register(idfn)
-    _register(idtp)
-    _register(idp, formatter="{:.1%}".format)
-    _register(idr, formatter="{:.1%}".format)
-    _register(idf1, formatter="{:.1%}".format)
-
-    return m
+    return merge
 
 
-motchallenge_metrics = [
+def _build_metric_specs():
+    specs = {}
+    for metric in _METRIC_FUNCTIONS:
+        dependencies = tuple(_required_arguments(metric)[1:])
+        if metric in _ADDITIVE_METRICS:
+            merge = _sum_partial(metric)
+            overall_dependencies = ()
+        elif metric is motp:
+            merge = _merge_motp
+            overall_dependencies = ("num_detections",)
+        elif metric in _SAME_OVERALL_FORMULA:
+            merge = _merge_same_formula(metric)
+            overall_dependencies = dependencies
+        else:
+            merge = None
+            overall_dependencies = ()
+        specs[metric.__name__] = (
+            metric,
+            dependencies,
+            merge,
+            overall_dependencies,
+        )
+    return specs
+
+
+def _quiet_divide(numerator, denominator):
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return np.true_divide(numerator, denominator)
+
+
+_MOTCHALLENGE_METRICS = (
     "idf1",
     "idp",
     "idr",
@@ -651,7 +548,6 @@ motchallenge_metrics = [
     "num_transfer",
     "num_ascend",
     "num_migrate",
-]
-"""A list of all metrics from MOTChallenge."""
+)
 
-_METRIC_HOST = _build_metric_host()
+_METRIC_SPECS = _build_metric_specs()

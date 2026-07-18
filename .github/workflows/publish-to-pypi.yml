@@ -29,6 +29,7 @@ jobs:
         outputs:
             base_sha: ${{ steps.release.outputs.base_sha }}
             project_url: ${{ steps.release.outputs.project_url }}
+            release_date: ${{ steps.release.outputs.release_date }}
             tag: ${{ steps.release.outputs.tag }}
             version: ${{ steps.release.outputs.version }}
         steps:
@@ -50,6 +51,7 @@ jobs:
                   import re
                   import subprocess
                   import tomllib
+                  from datetime import datetime, timezone
                   from pathlib import Path
 
                   with Path("pyproject.toml").open("rb") as pyproject:
@@ -69,6 +71,7 @@ jobs:
                   values = {
                       "base_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
                       "project_url": f"https://pypi.org/project/motmetrics/{new_version}/",
+                      "release_date": datetime.now(timezone.utc).date().isoformat(),
                       "tag": f"v{new_version}",
                       "version": new_version,
                   }
@@ -89,28 +92,11 @@ jobs:
             - uses: actions/setup-python@v6
               with:
                   python-version: "3.x"
-            - name: Set release version
+            - name: Set release metadata
               env:
+                  RELEASE_DATE: ${{ needs.metadata.outputs.release_date }}
                   RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
-              run: |
-                  python - <<'PY'
-                  import os
-                  import re
-                  from pathlib import Path
-
-                  path = Path("pyproject.toml")
-                  content = path.read_text(encoding="utf-8")
-                  updated, count = re.subn(
-                      r'^version = "\d+\.\d+\.\d+"$',
-                      f'version = "{os.environ["RELEASE_VERSION"]}"',
-                      content,
-                      count=1,
-                      flags=re.MULTILINE,
-                  )
-                  if count != 1:
-                      raise SystemExit("Could not update project.version")
-                  path.write_text(updated, encoding="utf-8")
-                  PY
+              run: python .github/set_release_metadata.py
             - name: Build wheel and source distribution
               run: |
                   python -m pip install --upgrade build packaging twine
@@ -148,10 +134,10 @@ jobs:
               run: |
                   python -m venv /tmp/motmetrics-wheel-test
                   /tmp/motmetrics-wheel-test/bin/python -m pip install dist/*.whl
-                  /tmp/motmetrics-wheel-test/bin/python -c "import motmetrics, os; assert motmetrics.__version__ == os.environ['RELEASE_VERSION']"
+                  /tmp/motmetrics-wheel-test/bin/python -c "import os; from importlib.metadata import version; assert version('motmetrics') == os.environ['RELEASE_VERSION']"
                   python -m venv /tmp/motmetrics-sdist-test
                   /tmp/motmetrics-sdist-test/bin/python -m pip install dist/*.tar.gz
-                  /tmp/motmetrics-sdist-test/bin/python -c "import motmetrics, os; assert motmetrics.__version__ == os.environ['RELEASE_VERSION']"
+                  /tmp/motmetrics-sdist-test/bin/python -c "import os; from importlib.metadata import version; assert version('motmetrics') == os.environ['RELEASE_VERSION']"
             - uses: actions/upload-artifact@v5
               with:
                   name: python-package-distributions
@@ -176,32 +162,16 @@ jobs:
                   fetch-depth: 0
                   persist-credentials: true
                   token: ${{ secrets.RELEASE_PAT || github.token }}
-            - name: Set release version
+            - name: Set release metadata
               env:
+                  RELEASE_DATE: ${{ needs.metadata.outputs.release_date }}
                   RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
-              run: |
-                  python - <<'PY'
-                  import os
-                  import re
-                  from pathlib import Path
-
-                  path = Path("pyproject.toml")
-                  content = path.read_text(encoding="utf-8")
-                  updated, count = re.subn(
-                      r'^version = "\d+\.\d+\.\d+"$',
-                      f'version = "{os.environ["RELEASE_VERSION"]}"',
-                      content,
-                      count=1,
-                      flags=re.MULTILINE,
-                  )
-                  if count != 1:
-                      raise SystemExit("Could not update project.version")
-                  path.write_text(updated, encoding="utf-8")
-                  PY
+              run: python .github/set_release_metadata.py
             - name: Commit production version
               id: source
               env:
                   BASE_SHA: ${{ needs.metadata.outputs.base_sha }}
+                  RELEASE_DATE: ${{ needs.metadata.outputs.release_date }}
                   RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
               run: |
                   git fetch --no-tags origin develop
@@ -209,20 +179,31 @@ jobs:
                   if [ "$remote_sha" = "$BASE_SHA" ]; then
                       git config user.name "github-actions[bot]"
                       git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-                      git add pyproject.toml
+                      git add CITATION.cff pyproject.toml
                       git commit -m "release: prepare ${RELEASE_VERSION}"
                       git push origin HEAD:develop
                       release_sha=$(git rev-parse HEAD)
                   else
                       parent_sha=$(git rev-parse "${remote_sha}^")
                       changed_files=$(git diff --name-only "$parent_sha" "$remote_sha")
-                      if [ "$parent_sha" != "$BASE_SHA" ] || [ "$changed_files" != "pyproject.toml" ]; then
+                      expected_files=$(printf 'CITATION.cff\npyproject.toml')
+                      if [ "$parent_sha" != "$BASE_SHA" ] || [ "$changed_files" != "$expected_files" ]; then
                           echo "develop moved after this release started; run the workflow again"
                           exit 1
                       fi
-                      expected_line="version = \"${RELEASE_VERSION}\""
-                      if ! git show "${remote_sha}:pyproject.toml" | grep --fixed-strings --line-regexp --quiet "$expected_line"; then
+                      expected_project_version="version = \"${RELEASE_VERSION}\""
+                      expected_citation_version="version: \"${RELEASE_VERSION}\""
+                      expected_citation_date="date-released: \"${RELEASE_DATE}\""
+                      if ! git show "${remote_sha}:pyproject.toml" | grep --fixed-strings --line-regexp --quiet "$expected_project_version"; then
                           echo "develop contains a different release version; run the workflow again"
+                          exit 1
+                      fi
+                      if ! git show "${remote_sha}:CITATION.cff" | grep --fixed-strings --line-regexp --quiet "$expected_citation_version"; then
+                          echo "develop contains a different citation version; run the workflow again"
+                          exit 1
+                      fi
+                      if ! git show "${remote_sha}:CITATION.cff" | grep --fixed-strings --line-regexp --quiet "$expected_citation_date"; then
+                          echo "develop contains a different citation release date; run the workflow again"
                           exit 1
                       fi
                       git checkout --detach "$remote_sha"

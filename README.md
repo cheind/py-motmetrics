@@ -12,6 +12,13 @@ pip install motmetrics
 
 Python 3.8 through 3.14 is supported.
 
+To materialize results as a pandas dataframe through `summary.df`, install the
+optional dataframe extra:
+
+```bash
+pip install "motmetrics[dataframe]"
+```
+
 For development:
 
 ```bash
@@ -30,7 +37,8 @@ summary = mm.evaluate_motchallenge("path/to/gt.txt", "path/to/pred.txt")
 print(summary)
 ```
 
-`summary` displays as a MOTChallenge-style table and keeps the raw pandas data available:
+`summary` displays as a MOTChallenge-style table. With the dataframe extra
+installed, the raw pandas data is available on demand:
 
 ```python
 summary.df["mota"]

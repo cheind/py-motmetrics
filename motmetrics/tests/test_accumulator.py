@@ -8,7 +8,7 @@ from motmetrics._accumulator import _Accumulator
 
 
 def _metric_values(accumulator, names):
-    return metrics._METRIC_HOST.compute(accumulator, metrics=names)
+    return metrics._compute_metrics(accumulator, metric_names=names)
 
 
 def test_consecutive_matches_preserve_identity():

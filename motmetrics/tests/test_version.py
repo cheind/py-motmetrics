@@ -1,10 +1,4 @@
-from importlib.metadata import distribution, version
-
-import motmetrics as mm
-
-
-def test_package_version_matches_distribution_metadata():
-    assert mm.__version__ == version("motmetrics")
+from importlib.metadata import distribution
 
 
 def test_distribution_has_no_command_entrypoints():

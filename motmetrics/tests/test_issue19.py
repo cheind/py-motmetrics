@@ -33,5 +33,4 @@ def test_issue19():
     acc.update(np.asarray(g0), np.asarray(p0), d0, np.isfinite(d0))
     acc.update(np.asarray(g1), np.asarray(p1), d1, np.isfinite(d1))
 
-    mh = metrics._METRIC_HOST
-    mh.compute(acc)
+    metrics._compute_metrics(acc)

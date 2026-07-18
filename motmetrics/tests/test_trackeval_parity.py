@@ -98,7 +98,6 @@ def _to_trackeval_data(ground_truth, tracker):
 
 
 def _compute_py_motmetrics(sequences):
-    metric_host = metrics._METRIC_HOST
     names = list(sequences)
     requested_metrics = [
         *CLEAR_FIELD_MAP.values(),
@@ -109,17 +108,17 @@ def _compute_py_motmetrics(sequences):
     hota_summaries = {}
     for name, (ground_truth, tracker) in sequences.items():
         prepared = evaluation._prepare_iou_sequence_data(ground_truth, tracker, 0.5)
-        metric_partials[name] = metric_host.compute(
+        metric_partials[name] = metrics._compute_metrics(
             prepared.accumulator,
-            metrics=requested_metrics,
+            metric_names=requested_metrics,
         )
         hota_summaries[name] = evaluation._compute_prepared_hota_sequence_summary(
             prepared,
             HOTA_ALPHAS,
         )
-    metric_partials["OVERALL"] = metric_host.compute_overall(
+    metric_partials["OVERALL"] = metrics._compute_overall(
         list(metric_partials.values()),
-        metrics=requested_metrics,
+        metric_names=requested_metrics,
     )
     hota_summaries["OVERALL"] = evaluation._combine_hota_sequence_summaries(
         hota_summaries.values()

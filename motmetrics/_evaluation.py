@@ -159,7 +159,6 @@ def evaluate_motchallenge(
     progress_enabled = _progress_is_enabled(progress)
 
     metric_names = _prepare_metrics(metrics, exclude_id)
-    metric_host = metrics_module._METRIC_HOST
     if hota_alphas is None:
         hota_alphas = HOTA_ALPHAS
     summary = _evaluate_iou_paths(
@@ -174,13 +173,12 @@ def evaluate_motchallenge(
         hota_alphas,
         generate_overall and not gt_path.is_file(),
         n_jobs,
-        metric_host,
         progress_enabled,
     )
 
     return _MOTChallengeSummary(
         *summary,
-        formatters=_summary_formatters(metric_host),
+        formatters=_summary_formatters(),
         namemap=_summary_namemap(),
     )
 
@@ -197,7 +195,6 @@ def _evaluate_iou_paths(
     hota_alphas,
     generate_overall,
     n_jobs,
-    metric_host,
     progress,
 ):
     """Evaluate every input through the canonical state-only IoU engine."""
@@ -256,9 +253,9 @@ def _evaluate_iou_paths(
     result_names = list(names)
     if generate_overall:
         rows.append(
-            metric_host.compute_overall(
+            metrics_module._compute_overall(
                 partials,
-                metrics=metric_names,
+                metric_names=metric_names,
             )
         )
         result_names.append("OVERALL")
@@ -306,9 +303,9 @@ def _evaluate_iou_sequence_file(task):
 
         if sequence_progress is not None:
             sequence_progress.stage(_PROGRESS_METRICS)
-        partial = metrics_module._METRIC_HOST.compute(
+        partial = metrics_module._compute_metrics(
             prepared.accumulator,
-            metrics=metric_names,
+            metric_names=metric_names,
         )
         if sequence_progress is not None:
             sequence_progress.stage(_PROGRESS_HOTA)
@@ -404,7 +401,7 @@ class _SequenceProgressDisplay(object):
         self.thread.start()
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback):
+    def __exit__(self, *_):
         if not self.enabled:
             return False
         self.stop_event.set()
@@ -522,7 +519,10 @@ def _compute_prepared_hota_sequence_summary(prepared, hota_alphas, progress=None
         ).reshape(num_alphas, num_gt_ids, num_tracker_ids)
 
     false_positives = num_predictions - true_positives
-    deta = _quiet_divide(true_positives, np.maximum(1, num_objects + false_positives))
+    deta = metrics_module._quiet_divide(
+        true_positives,
+        np.maximum(1, num_objects + false_positives),
+    )
     assa = _compute_hota_assa(match_counts, gt_id_counts, tracker_id_counts, true_positives)
     hota = np.sqrt(deta * assa)
     return {
@@ -575,7 +575,7 @@ def _prepare_iou_sequence_data(gt, test, distth, distfields=None, progress=None)
             frame_tracker_indices,
         ] += similarity_iou
 
-    alignment_scores = _quiet_divide(
+    alignment_scores = metrics_module._quiet_divide(
         potential_matches,
         np.maximum(1, gt_id_counts[:, np.newaxis] + tracker_id_counts[np.newaxis, :] - potential_matches),
     )
@@ -617,10 +617,19 @@ def _group_frame_arrays(data, unique_ids, fields):
 
 def _compute_hota_assa(match_counts, gt_id_counts, tracker_id_counts, true_positives):
     if match_counts.shape[1] == 0 or match_counts.shape[2] == 0:
-        return _quiet_divide(np.zeros_like(true_positives), np.maximum(1, true_positives))
+        return metrics_module._quiet_divide(
+            np.zeros_like(true_positives),
+            np.maximum(1, true_positives),
+        )
     assa_denominator = gt_id_counts[np.newaxis, :, np.newaxis] + tracker_id_counts[np.newaxis, np.newaxis, :] - match_counts
-    assa_per_pair = _quiet_divide(match_counts, np.maximum(1, assa_denominator))
-    return _quiet_divide((assa_per_pair * match_counts).sum(axis=(1, 2)), np.maximum(1, true_positives))
+    assa_per_pair = metrics_module._quiet_divide(
+        match_counts,
+        np.maximum(1, assa_denominator),
+    )
+    return metrics_module._quiet_divide(
+        (assa_per_pair * match_counts).sum(axis=(1, 2)),
+        np.maximum(1, true_positives),
+    )
 
 
 def _combine_hota_sequence_summaries(summaries):
@@ -628,8 +637,11 @@ def _combine_hota_sequence_summaries(summaries):
     true_positives = np.sum([summary["num_detections"] for summary in summaries], axis=0)
     num_objects = sum(summary["num_objects"] for summary in summaries)
     false_positives = np.sum([summary["num_false_positives"] for summary in summaries], axis=0)
-    deta = _quiet_divide(true_positives, np.maximum(1, num_objects + false_positives))
-    assa = _quiet_divide(
+    deta = metrics_module._quiet_divide(
+        true_positives,
+        np.maximum(1, num_objects + false_positives),
+    )
+    assa = metrics_module._quiet_divide(
         np.sum([summary["assa_alpha"] * summary["num_detections"] for summary in summaries], axis=0),
         np.maximum(1, true_positives),
     )
@@ -644,14 +656,9 @@ def _combine_hota_sequence_summaries(summaries):
     }
 
 
-def _quiet_divide(numerator, denominator):
-    with np.errstate(divide="ignore", invalid="ignore"):
-        return np.true_divide(numerator, denominator)
-
-
 def _prepare_metrics(metric_names, exclude_id):
     if metric_names is None:
-        metric_names = list(metrics_module.motchallenge_metrics)
+        metric_names = list(metrics_module._MOTCHALLENGE_METRICS)
     elif isinstance(metric_names, str):
         metric_names = [metric_names]
     else:
@@ -662,8 +669,8 @@ def _prepare_metrics(metric_names, exclude_id):
     return metric_names
 
 
-def _summary_formatters(metric_host):
-    formatters = dict(metric_host.formatters)
+def _summary_formatters():
+    formatters = dict(metrics_module._FORMATTERS)
     formatters.update({"hota": "{:.1%}".format, "deta": "{:.1%}".format, "assa": "{:.1%}".format})
     return formatters
 
