@@ -7,10 +7,16 @@
 
 """Fast MOTChallenge evaluation."""
 
-from importlib.metadata import version as _distribution_version
-
 from motmetrics._evaluation import evaluate_motchallenge
 
 __all__ = ["evaluate_motchallenge"]
 
-__version__ = _distribution_version("motmetrics")
+
+def __getattr__(name):
+    if name == "__version__":
+        from importlib.metadata import version
+
+        value = version("motmetrics")
+        globals()[name] = value
+        return value
+    raise AttributeError("module {!r} has no attribute {!r}".format(__name__, name))

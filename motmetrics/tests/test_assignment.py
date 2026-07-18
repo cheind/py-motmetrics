@@ -1,4 +1,4 @@
-"""Tests for the single SciPy assignment path."""
+"""Tests for the single LapX assignment path."""
 
 import numpy as np
 import pytest

@@ -52,30 +52,26 @@ def _load_sequence(sequence_name):
     )
 
 
-def _frame_data(dataframe, frame_id, id_map):
-    try:
-        frame = dataframe.xs(frame_id, level="FrameId")
-    except KeyError:
+def _frame_data(data, frame_id, id_map):
+    mask = data.frame_ids == frame_id
+    if not np.any(mask):
         return np.empty(0, dtype=int), np.empty((0, 4), dtype=float)
 
-    ids = np.asarray([id_map[value] for value in frame.index], dtype=int)
-    boxes = frame[BOX_COLUMNS].to_numpy(dtype=float)
+    ids = np.asarray([id_map[value] for value in data.ids[mask]], dtype=int)
+    boxes = data.values(BOX_COLUMNS)[mask]
     return ids, boxes
 
 
 def _to_trackeval_data(ground_truth, tracker):
     ground_truth_ids = {
         value: index
-        for index, value in enumerate(sorted(ground_truth.index.get_level_values("Id").unique()))
+        for index, value in enumerate(np.unique(ground_truth.ids))
     }
     tracker_ids = {
         value: index
-        for index, value in enumerate(sorted(tracker.index.get_level_values("Id").unique()))
+        for index, value in enumerate(np.unique(tracker.ids))
     }
-    frame_ids = sorted(
-        set(ground_truth.index.get_level_values("FrameId"))
-        | set(tracker.index.get_level_values("FrameId"))
-    )
+    frame_ids = np.union1d(ground_truth.frame_ids, tracker.frame_ids)
 
     gt_ids = []
     tracker_ids_by_frame = []

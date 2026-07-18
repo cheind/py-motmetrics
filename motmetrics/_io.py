@@ -8,13 +8,10 @@
 """Functions for loading data and writing summaries."""
 
 import io
-import shlex
-import xml.etree.ElementTree
 from enum import Enum
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
 
 
 class Format(Enum):
@@ -45,6 +42,37 @@ class Format(Enum):
     """
 
 
+class _SequenceData(object):
+    """Compact columnar detections consumed directly by the metric engine."""
+
+    __slots__ = ("frame_ids", "ids", "_fields")
+
+    def __init__(self, frame_ids, ids, fields):
+        self.frame_ids = np.asarray(frame_ids, dtype=np.int64)
+        self.ids = np.asarray(ids, dtype=np.int64)
+        self._fields = {name: np.asarray(values) for name, values in fields.items()}
+        row_count = len(self.frame_ids)
+        if len(self.ids) != row_count or any(len(values) != row_count for values in self._fields.values()):
+            raise ValueError("Every sequence column must have the same length.")
+
+    def __len__(self):
+        return len(self.frame_ids)
+
+    def column(self, name):
+        """Return one stored column without copying it."""
+        return self._fields[name]
+
+    def values(self, names):
+        """Return selected fields as the floating matrix used for distances."""
+        try:
+            columns = [self._fields[name] for name in names]
+        except KeyError as exc:
+            raise ValueError("Unknown distance field: {}".format(exc.args[0])) from exc
+        if not columns:
+            return np.empty((len(self), 0), dtype=float)
+        return np.column_stack(columns).astype(float, copy=False)
+
+
 def load_motchallenge(fname, **kwargs):
     r"""Load MOT challenge data.
 
@@ -64,56 +92,87 @@ def load_motchallenge(fname, **kwargs):
         the ground truth are not considered during matching.
 
     Returns
-    ------
-    df : pandas.DataFrame
-        The returned dataframe has the following columns
-            'X', 'Y', 'Width', 'Height', 'Confidence', 'ClassId', 'Visibility'
-        The dataframe is indexed by ('FrameId', 'Id')
+    -------
+    _SequenceData
+        Compact columns indexed by frame and identity arrays.
     """
 
     sep = kwargs.pop('sep', None)
     min_confidence = kwargs.pop('min_confidence', -1)
-    read_sep, engine = _motchallenge_read_options(fname, sep)
-    df = pd.read_csv(
-        fname,
-        sep=read_sep,
-        index_col=[0, 1],
-        skipinitialspace=True,
-        header=None,
-        names=['FrameId', 'Id', 'X', 'Y', 'Width', 'Height', 'Confidence', 'ClassId', 'Visibility', 'unused'],
-        engine=engine,
-    )
+    text = _read_text(fname)
+    first_line = next((line for line in text.splitlines() if line.strip()), '')
+    if not first_line:
+        return _empty_mot_sequence()
 
-    # Account for matlab convention.
-    df['X'] -= 1
-    df['Y'] -= 1
-
-    # Removed trailing column
-    del df['unused']
-
-    # Remove all rows without sufficient confidence
-    return df[df['Confidence'] >= min_confidence]
-
-
-def _motchallenge_read_options(fname, sep):
     if sep is None:
-        return (_infer_motchallenge_separator(fname), 'c')
-    if sep in (',', r'\s+'):
-        return (sep, 'c')
-    return (sep, 'python')
-
-
-def _infer_motchallenge_separator(fname):
-    if hasattr(fname, 'read'):
-        position = fname.tell()
-        first_line = next((line for line in fname if line.strip()), '')
-        fname.seek(position)
+        sep = ',' if ',' in first_line else r'\s+'
+    if sep == ',':
+        normalized = text.replace(',', ' ')
+        width = len(first_line.split(','))
+    elif sep in (r'\s+', ' ', '\t'):
+        normalized = text
+        width = len(first_line.split())
     else:
-        with io.open(fname, encoding='utf-8', errors='ignore') as file:
-            first_line = next((line for line in file if line.strip()), '')
-    if isinstance(first_line, bytes):
-        first_line = first_line.decode('utf-8', errors='ignore')
-    return ',' if ',' in first_line else r'\s+'
+        import re
+
+        normalized = re.sub(sep, ' ', text)
+        width = len(re.split(sep, first_line.strip()))
+
+    flat = np.fromstring(normalized, sep=' ', dtype=float)
+    if width < 2 or flat.size % width:
+        raise ValueError("Invalid MOTChallenge rows in {}".format(fname))
+    raw = flat.reshape(-1, width)
+    if width >= 9:
+        data = raw[:, :9]
+    else:
+        data = np.full((len(raw), 9), np.nan, dtype=float)
+        data[:, :width] = raw
+
+    data[:, 2:4] -= 1
+    keep = data[:, 6] >= min_confidence
+    if not keep.all():
+        data = data[keep]
+    fields = {
+        name: data[:, column]
+        for name, column in {
+            'X': 2,
+            'Y': 3,
+            'Width': 4,
+            'Height': 5,
+            'Confidence': 6,
+            'ClassId': 7,
+            'Visibility': 8,
+        }.items()
+    }
+    return _SequenceData(data[:, 0], data[:, 1], fields)
+
+
+def _read_text(source):
+    if hasattr(source, 'read'):
+        data = source.read()
+    else:
+        with io.open(source, encoding='utf-8', errors='ignore') as file:
+            data = file.read()
+    if isinstance(data, bytes):
+        return data.decode('utf-8', errors='ignore')
+    return data
+
+
+def _empty_mot_sequence():
+    empty = np.empty(0, dtype=float)
+    return _SequenceData(
+        np.empty(0, dtype=np.int64),
+        np.empty(0, dtype=np.int64),
+        {
+            'X': empty,
+            'Y': empty,
+            'Width': empty,
+            'Height': empty,
+            'Confidence': empty,
+            'ClassId': empty,
+            'Visibility': empty,
+        },
+    )
 
 
 def load_vatictxt(fname, **kwargs):
@@ -139,71 +198,39 @@ def load_vatictxt(fname, **kwargs):
         Filename to load data from
 
     Returns
-    ------
-    df : pandas.DataFrame
-        The returned dataframe has the following columns
-            'X', 'Y', 'Width', 'Height', 'Lost', 'Occluded', 'Generated', 'ClassId', '<Attr1>', '<Attr2>', ...
-        where <Attr1> is placeholder for the actual attribute name capitalized (first letter). The order of attribute
-        columns is sorted in attribute name. The dataframe is indexed by ('FrameId', 'Id')
+    -------
+    _SequenceData
+        Compact detection columns consumed by the metric engine.
     """
-    # pylint: disable=too-many-locals
+    import shlex
 
-    sep = kwargs.pop('sep', ' ')
+    kwargs.pop('sep', ' ')
+    rows = [shlex.split(line) for line in _read_text(fname).splitlines() if line.strip()]
+    activities = sorted({activity for row in rows for activity in row[10:]})
 
-    with io.open(fname) as f:
-        # First time going over file, we collect the set of all variable activities
-        activities = set()
-        for line in f:
-            for c in line.rstrip().split(sep)[10:]:
-                activities.add(c)
-        activitylist = sorted(list(activities))
-
-        # Second time we construct artificial binary columns for each activity
-        data = []
-        f.seek(0)
-        for line in f:
-            fields = line.rstrip().split()
-            attrs = ['0'] * len(activitylist)
-            for a in fields[10:]:
-                attrs[activitylist.index(a)] = '1'
-            fields = fields[:10]
-            fields.extend(attrs)
-            data.append(' '.join(fields))
-
-        strdata = '\n'.join(data)
-
-        dtype = {
-            'Id': np.int64,
-            'X': np.float32,
-            'Y': np.float32,
-            'Width': np.float32,
-            'Height': np.float32,
-            'FrameId': np.int64,
-            'Lost': bool,
-            'Occluded': bool,
-            'Generated': bool,
-            'ClassId': str,
-        }
-
-        # Remove quotes from activities
-        activitylist = [a.replace('\"', '').capitalize() for a in activitylist]
-
-        # Add dtypes for activities
-        for a in activitylist:
-            dtype[a] = bool
-
-        # Read from CSV
-        names = ['Id', 'X', 'Y', 'Width', 'Height', 'FrameId', 'Lost', 'Occluded', 'Generated', 'ClassId']
-        names.extend(activitylist)
-        df = pd.read_csv(io.StringIO(strdata), names=names, index_col=['FrameId', 'Id'], header=None, sep=' ')
-
-        # Correct Width and Height which are actually XMax, Ymax in files.
-        w = df['Width'] - df['X']
-        h = df['Height'] - df['Y']
-        df['Width'] = w
-        df['Height'] = h
-
-        return df
+    frame_ids = np.fromiter((int(row[5]) for row in rows), dtype=np.int64, count=len(rows))
+    ids = np.fromiter((int(row[0]) for row in rows), dtype=np.int64, count=len(rows))
+    x = np.fromiter((float(row[1]) for row in rows), dtype=float, count=len(rows))
+    y = np.fromiter((float(row[2]) for row in rows), dtype=float, count=len(rows))
+    xmax = np.fromiter((float(row[3]) for row in rows), dtype=float, count=len(rows))
+    ymax = np.fromiter((float(row[4]) for row in rows), dtype=float, count=len(rows))
+    fields = {
+        'X': x,
+        'Y': y,
+        'Width': xmax - x,
+        'Height': ymax - y,
+        'Lost': np.fromiter((bool(int(row[6])) for row in rows), dtype=bool, count=len(rows)),
+        'Occluded': np.fromiter((bool(int(row[7])) for row in rows), dtype=bool, count=len(rows)),
+        'Generated': np.fromiter((bool(int(row[8])) for row in rows), dtype=bool, count=len(rows)),
+        'ClassId': np.asarray([row[9] for row in rows], dtype=object),
+    }
+    for activity in activities:
+        fields[activity.capitalize()] = np.fromiter(
+            (activity in row[10:] for row in rows),
+            dtype=bool,
+            count=len(rows),
+        )
+    return _SequenceData(frame_ids, ids, fields)
 
 
 def load_detrac_mat(fname, **kwargs):
@@ -224,11 +251,9 @@ def load_detrac_mat(fname, **kwargs):
     Currently none of these arguments used.
 
     Returns
-    ------
-    df : pandas.DataFrame
-        The returned dataframe has the following columns
-            'X', 'Y', 'Width', 'Height', 'Confidence', 'ClassId', 'Visibility'
-        The dataframe is indexed by ('FrameId', 'Id')
+    -------
+    _SequenceData
+        Compact detection columns consumed by the metric engine.
     """
 
     from scipy.io import loadmat
@@ -243,32 +268,21 @@ def load_detrac_mat(fname, **kwargs):
 
     parsed_gt = []
     for f in frame_list:
+        f = int(f)
         ids = [i + 1 for i, v in enumerate(left_array[f - 1]) if v > 0]
         for i in ids:
-            row = []
-            row.append(f)
-            row.append(i)
-            row.append(left_array[f - 1, i - 1] - width_array[f - 1, i - 1] / 2)
-            row.append(top_array[f - 1, i - 1] - height_array[f - 1, i - 1])
-            row.append(width_array[f - 1, i - 1])
-            row.append(height_array[f - 1, i - 1])
-            row.append(1)
-            row.append(-1)
-            row.append(-1)
-            row.append(-1)
-            parsed_gt.append(row)
-
-    df = pd.DataFrame(parsed_gt,
-                      columns=['FrameId', 'Id', 'X', 'Y', 'Width', 'Height', 'Confidence', 'ClassId', 'Visibility', 'unused'])
-    df.set_index(['FrameId', 'Id'], inplace=True)
-
-    # Account for matlab convention.
-    df[['X', 'Y']] -= (1, 1)
-
-    # Removed trailing column
-    del df['unused']
-
-    return df
+            parsed_gt.append((
+                f,
+                i,
+                left_array[f - 1, i - 1] - width_array[f - 1, i - 1] / 2 - 1,
+                top_array[f - 1, i - 1] - height_array[f - 1, i - 1] - 1,
+                width_array[f - 1, i - 1],
+                height_array[f - 1, i - 1],
+                1,
+                -1,
+                -1,
+            ))
+    return _sequence_from_mot_rows(parsed_gt)
 
 
 def load_detrac_xml(fname, **kwargs):
@@ -286,12 +300,12 @@ def load_detrac_xml(fname, **kwargs):
     Currently none of these arguments used.
 
     Returns
-    ------
-    df : pandas.DataFrame
-        The returned dataframe has the following columns
-            'X', 'Y', 'Width', 'Height', 'Confidence', 'ClassId', 'Visibility'
-        The dataframe is indexed by ('FrameId', 'Id')
+    -------
+    _SequenceData
+        Compact detection columns consumed by the metric engine.
     """
+    import xml.etree.ElementTree
+
     root = xml.etree.ElementTree.parse(fname).getroot()
     frame_list = root.findall('frame')
 
@@ -306,30 +320,37 @@ def load_detrac_xml(fname, **kwargs):
             box = target.find('box')
             if box is None:
                 continue
-            row = []
-            row.append(fid)
-            row.append(int(target.attrib['id']))
-            row.append(float(box.attrib['left']))
-            row.append(float(box.attrib['top']))
-            row.append(float(box.attrib['width']))
-            row.append(float(box.attrib['height']))
-            row.append(1)
-            row.append(-1)
-            row.append(-1)
-            row.append(-1)
-            parsed_gt.append(row)
+            parsed_gt.append((
+                fid,
+                int(target.attrib['id']),
+                float(box.attrib['left']) - 1,
+                float(box.attrib['top']) - 1,
+                float(box.attrib['width']),
+                float(box.attrib['height']),
+                1,
+                -1,
+                -1,
+            ))
+    return _sequence_from_mot_rows(parsed_gt)
 
-    df = pd.DataFrame(parsed_gt,
-                      columns=['FrameId', 'Id', 'X', 'Y', 'Width', 'Height', 'Confidence', 'ClassId', 'Visibility', 'unused'])
-    df.set_index(['FrameId', 'Id'], inplace=True)
 
-    # Account for matlab convention.
-    df[['X', 'Y']] -= (1, 1)
-
-    # Removed trailing column
-    del df['unused']
-
-    return df
+def _sequence_from_mot_rows(rows):
+    if not rows:
+        return _empty_mot_sequence()
+    matrix = np.asarray(rows, dtype=float)
+    return _SequenceData(
+        matrix[:, 0],
+        matrix[:, 1],
+        {
+            'X': matrix[:, 2],
+            'Y': matrix[:, 3],
+            'Width': matrix[:, 4],
+            'Height': matrix[:, 5],
+            'Confidence': matrix[:, 6],
+            'ClassId': matrix[:, 7],
+            'Visibility': matrix[:, 8],
+        },
+    )
 
 
 def infer_format(fname):
@@ -376,10 +397,7 @@ def loadtxt(fname, fmt=Format.MOT15_2D, **kwargs):
 
 
 def _split_text_fields(line):
-    try:
-        return shlex.split(line.replace(',', ' '))
-    except ValueError:
-        return line.replace(',', ' ').split()
+    return line.replace(',', ' ').split()
 
 
 def _looks_like_vatic_fields(fields):
@@ -396,13 +414,17 @@ def _is_number(value):
     return True
 
 
-def render_summary(summary, formatters=None, namemap=None, buf=None):
+def render_summary(rows, index, columns, formatters=None, namemap=None, buf=None):
     """Render metrics summary to console friendly tabular output.
 
     Params
     ------
-    summary : pd.DataFrame
-        Dataframe containing summaries in rows.
+    rows : sequence of mappings
+        Metric values in display order.
+    index : sequence of str
+        Row labels.
+    columns : sequence of str
+        Metric names in display order.
 
     Kwargs
     ------
@@ -421,16 +443,33 @@ def render_summary(summary, formatters=None, namemap=None, buf=None):
         Formatted string
     """
 
-    if namemap is not None:
-        summary = summary.rename(columns=namemap)
-        if formatters is not None:
-            formatters = {namemap.get(c, c): f for c, f in formatters.items()}
-
-    output = summary.to_string(
-        buf=buf,
-        formatters=formatters,
+    formatters = formatters or {}
+    namemap = namemap or {}
+    headers = [namemap.get(column, column) for column in columns]
+    formatted_rows = [
+        [formatters[column](row[column]) if column in formatters else str(row[column]) for column in columns]
+        for row in rows
+    ]
+    index_strings = [str(value) for value in index]
+    index_width = max([len(value) for value in index_strings] or [0])
+    column_widths = [
+        max([len(header)] + [len(row[column_index]) for row in formatted_rows])
+        for column_index, header in enumerate(headers)
+    ]
+    lines = [
+        " " * (index_width + 1)
+        + " ".join(header.rjust(width) for header, width in zip(headers, column_widths))
+    ]
+    lines.extend(
+        row_name.ljust(index_width)
+        + " "
+        + " ".join(value.rjust(width) for value, width in zip(row, column_widths))
+        for row_name, row in zip(index_strings, formatted_rows)
     )
-
+    output = "\n".join(lines)
+    if buf is not None:
+        buf.write(output)
+        return None
     return output
 
 

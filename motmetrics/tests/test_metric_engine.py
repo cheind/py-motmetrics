@@ -246,6 +246,24 @@ def test_assignment_metrics_with_both_empty():
     assert metr["num_frames"] == 4
 
 
+def test_sparse_identity_assignment_uses_independent_components():
+    object_codes = np.asarray([0, 0, 1, 2])
+    prediction_codes = np.asarray([0, 1, 1, 2])
+    weights = np.asarray([3, 4, 5, 2])
+
+    rows, columns, total = metrics._max_weight_matching(
+        5000,
+        5000,
+        object_codes,
+        prediction_codes,
+        weights,
+    )
+
+    np.testing.assert_equal(rows, [0, 1, 2])
+    np.testing.assert_equal(columns, [0, 1, 2])
+    assert total == 10
+
+
 def test_benchmark_all_metrics(benchmark):
     """Benchmarks the only supported, accumulator-native metric path."""
     rand = np.random.RandomState(0)

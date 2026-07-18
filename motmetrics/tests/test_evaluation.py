@@ -1,4 +1,6 @@
 import importlib.util
+import subprocess
+import sys
 from pathlib import Path
 from shutil import copyfile
 
@@ -18,6 +20,23 @@ def test_package_has_one_supported_metrics_entrypoint():
     assert {name for name in vars(mm) if not name.startswith("_")} == {
         "evaluate_motchallenge"
     }
+
+
+def test_default_evaluation_does_not_import_pandas_or_scipy():
+    script = """
+import sys
+import motmetrics as mm
+assert 'pandas' not in sys.modules
+assert not any(name == 'scipy' or name.startswith('scipy.') for name in sys.modules)
+summary = mm.evaluate_motchallenge({ground_truth!r}, {tracker!r})
+str(summary)
+assert 'pandas' not in sys.modules
+assert not any(name == 'scipy' or name.startswith('scipy.') for name in sys.modules)
+""".format(
+        ground_truth=str(DATA_DIR / "TUD-Campus" / "gt.txt"),
+        tracker=str(DATA_DIR / "TUD-Campus" / "test.txt"),
+    )
+    subprocess.run([sys.executable, "-c", script], check=True)
 
 
 def test_legacy_metric_modules_are_absent():
@@ -162,9 +181,11 @@ def test_hota_is_invariant_to_zero_tracker_id():
         [7, 2, 33.467693823950185, -3.0529934174098985, 10, 10],
     ])
 
-    shifted_test = test.reset_index()
-    shifted_test["Id"] += 100
-    shifted_test = shifted_test.set_index(["FrameId", "Id"]).sort_index()
+    shifted_test = evaluation.io._SequenceData(
+        test.frame_ids,
+        test.ids + 100,
+        test._fields,
+    )
 
     original = evaluation._compute_prepared_hota_sequence_summary(
         evaluation._prepare_iou_sequence_data(gt, test, 0.5),
@@ -186,12 +207,27 @@ def test_frame_array_grouping_handles_duplicate_id_counts():
         [2, -1, 20, 20, 10, 10],
     ])
 
-    groups, counts = evaluation._group_frame_arrays(tracker, pd.Index([-1]))
+    groups, counts = evaluation._group_frame_arrays(
+        tracker,
+        np.asarray([-1]),
+        ["X", "Y", "Width", "Height"],
+    )
 
     assert len(groups) == 2
     np.testing.assert_array_equal(counts, [4])
 
 
 def _mot_dataframe(rows):
-    df = pd.DataFrame(rows, columns=["FrameId", "Id", "X", "Y", "Width", "Height"])
-    return df.set_index(["FrameId", "Id"]).sort_index()
+    values = np.asarray(rows, dtype=float)
+    order = np.argsort(values[:, 0], kind="stable")
+    values = values[order]
+    return evaluation.io._SequenceData(
+        values[:, 0],
+        values[:, 1],
+        {
+            "X": values[:, 2],
+            "Y": values[:, 3],
+            "Width": values[:, 4],
+            "Height": values[:, 5],
+        },
+    )

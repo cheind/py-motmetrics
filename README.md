@@ -39,6 +39,10 @@ summary.df["hota"]
 summary.df.to_csv("metrics.csv")
 ```
 
+The evaluation and text rendering path does not import pandas. The dataframe is
+materialized only when `.df` is accessed; SciPy is likewise loaded only for
+UA-DETRAC `.mat` input.
+
 By default, `evaluate_motchallenge` uses `fmt="auto"`. It detects MOTChallenge text, VATIC text, and UA-DETRAC `.mat`/`.xml` files. For ambiguous text files, pass the format explicitly:
 
 ```python

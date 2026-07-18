@@ -7,22 +7,17 @@
 
 """High-level helpers for common tracker evaluation workflows."""
 
-import multiprocessing
 import os
-import shutil
 import sys
-import threading
 from collections import OrderedDict
-from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
-from scipy.optimize import linear_sum_assignment as _dense_assignment
 
 import motmetrics._io as io
 import motmetrics._metrics as metrics_module
 from motmetrics._accumulator import _Accumulator
+from motmetrics._assignment import _dense_linear_sum_assignment
 from motmetrics._distances import iou_matrix
 
 HOTA_ALPHAS = np.arange(0.05, 0.99, 0.05)
@@ -57,17 +52,35 @@ _PROGRESS_FLUSH_FRAMES = 32
 
 
 class _MOTChallengeSummary(object):
-    """MOTChallenge metric results with both dataframe and rendered views."""
+    """MOTChallenge results with a native text view and lazy dataframe."""
 
-    def __init__(self, df, formatters=None, namemap=None):
-        self.df = df
+    def __init__(self, rows, index, columns, formatters=None, namemap=None):
+        self._rows = rows
+        self.index = index
+        self.columns = columns
         self.formatters = formatters
         self.namemap = namemap
+        self._df = None
+
+    @property
+    def df(self):
+        """Materialize a pandas dataframe only when explicitly requested."""
+        if self._df is None:
+            import pandas as pd
+
+            self._df = pd.DataFrame(self._rows, index=self.index, columns=self.columns)
+        return self._df
 
     @property
     def text(self):
         """Human-readable MOTChallenge-style table."""
-        return io.render_summary(self.df, formatters=self.formatters, namemap=self.namemap)
+        return io.render_summary(
+            self._rows,
+            self.index,
+            self.columns,
+            formatters=self.formatters,
+            namemap=self.namemap,
+        )
 
     def __str__(self):
         return self.text
@@ -139,8 +152,8 @@ def evaluate_motchallenge(
     Returns
     -------
     _MOTChallengeSummary
-        Wrapper around the raw pandas DataFrame. ``print(summary)`` displays a
-        MOTChallenge-style table, while ``summary.df`` exposes the dataframe.
+        Native MOTChallenge-style results. ``print(summary)`` does not import
+        pandas; ``summary.df`` materializes a dataframe on demand.
     """
     gt_path = Path(groundtruths)
     test_path = Path(tests)
@@ -170,7 +183,7 @@ def evaluate_motchallenge(
     )
 
     return _MOTChallengeSummary(
-        summary,
+        *summary,
         formatters=_summary_formatters(metric_host, include_hota),
         namemap=_summary_namemap(include_hota),
     )
@@ -223,7 +236,7 @@ def _evaluate_iou_paths(
         raise ValueError("No matching ground-truth and tracker result files found.")
 
     workers = min(n_jobs, len(tasks))
-    context = _fast_process_context()
+    context = _fast_process_context() if workers > 1 or progress else None
     progress_arrays = _create_progress_arrays(context, len(tasks)) if progress else (None, None, None)
     _initialize_evaluation_worker(*progress_arrays)
     progress_names = [task[1] for task in tasks]
@@ -232,17 +245,16 @@ def _evaluate_iou_paths(
         with display:
             results = [_evaluate_iou_sequence_file(task) for task in tasks]
     else:
-        with ProcessPoolExecutor(
-            max_workers=workers,
-            mp_context=context,
+        with context.Pool(
+            processes=workers,
             initializer=_initialize_evaluation_worker,
             initargs=progress_arrays,
-        ) as executor:
+        ) as pool:
             # Submitting before the renderer thread starts ensures POSIX workers
             # are forked from a single-threaded parent.
-            futures = [executor.submit(_evaluate_iou_sequence_file, task) for task in tasks]
+            pending_results = pool.map_async(_evaluate_iou_sequence_file, tasks)
             with display:
-                results = [future.result() for future in futures]
+                results = pending_results.get()
 
     names = [result[0] for result in results]
     partials = [result[1] for result in results]
@@ -256,19 +268,21 @@ def _evaluate_iou_paths(
             )
         )
         result_names.append("OVERALL")
-    summary = pd.DataFrame(rows, index=result_names, columns=metric_names)
-
     if include_hota:
         sequence_summaries = OrderedDict((result[0], result[2]) for result in results)
         if generate_overall:
             sequence_summaries["OVERALL"] = _combine_hota_sequence_summaries(
                 sequence_summaries.values()
             )
-        summary = pd.concat(
-            [summary, _hota_summary_frame(sequence_summaries, summary.index)],
-            axis=1,
-        )
-    return summary
+        for row_name, row in zip(result_names, rows):
+            row.update(
+                (summary_metric, np.mean(sequence_summaries[row_name][alpha_metric]))
+                for alpha_metric, summary_metric in HOTA_SUMMARY_METRICS.items()
+            )
+    columns = list(metric_names)
+    if include_hota:
+        columns.extend(HOTA_SUMMARY_METRICS.values())
+    return rows, result_names, columns
 
 
 def _evaluate_iou_sequence_file(task):
@@ -381,15 +395,23 @@ class _SequenceProgressDisplay(object):
         self.current, self.total, self.stage = arrays
         self.enabled = enabled
         self.stream = stream or sys.stderr
-        self.stop_event = threading.Event()
         self.thread = None
         self.name_width = min(30, max(len(name) for name in names))
-        columns = shutil.get_terminal_size(fallback=(80, 24)).columns
-        self.bar_width = max(8, min(30, columns - self.name_width - 22))
+        self.stop_event = None
+        self.bar_width = 8
+        if enabled:
+            import shutil
+            import threading
+
+            self.stop_event = threading.Event()
+            columns = shutil.get_terminal_size(fallback=(80, 24)).columns
+            self.bar_width = max(8, min(30, columns - self.name_width - 22))
 
     def __enter__(self):
         if not self.enabled:
             return self
+        import threading
+
         self.stream.write("\x1b[?25l" + "\n" * len(self.names))
         self._render()
         self.thread = threading.Thread(target=self._run, name="motmetrics-progress", daemon=True)
@@ -462,21 +484,12 @@ def _progress_is_enabled(progress):
 
 
 def _fast_process_context():
-    """Prefer copy-on-write workers on POSIX to avoid dataframe serialization."""
+    """Prefer copy-on-write workers on POSIX for low startup overhead."""
+    import multiprocessing
+
     if os.name == "posix" and "fork" in multiprocessing.get_all_start_methods():
         return multiprocessing.get_context("fork")
     return multiprocessing.get_context()
-
-
-def _hota_summary_frame(sequence_summaries, index):
-    """Convert per-alpha sequence results into displayed scalar means."""
-    rows = []
-    for row_name in index:
-        row = OrderedDict()
-        for alpha_metric, summary_metric in HOTA_SUMMARY_METRICS.items():
-            row[summary_metric] = np.mean(sequence_summaries[row_name][alpha_metric])
-        rows.append(row)
-    return pd.DataFrame(rows, index=index)
 
 
 def _compute_prepared_hota_sequence_summary(prepared, hota_alphas, progress=None):
@@ -501,7 +514,7 @@ def _compute_prepared_hota_sequence_summary(prepared, hota_alphas, progress=None
         if similarities.size == 0:
             continue
         weighted_similarities = similarities * alignment_scores[gt_indices[:, None], tracker_indices]
-        row_indices, col_indices = _dense_assignment(1 - weighted_similarities)
+        row_indices, col_indices = _dense_linear_sum_assignment(1 - weighted_similarities)
         if len(row_indices) == 0:
             continue
         matched_gt_indices.append(gt_indices[row_indices])
@@ -540,13 +553,11 @@ def _prepare_iou_sequence_data(gt, test, distth, distfields=None, progress=None)
     if distfields is None:
         distfields = ["X", "Y", "Width", "Height"]
 
-    gt = gt[distfields]
-    test = test[distfields]
-    gt_ids = pd.Index(np.sort(gt.index.get_level_values("Id").unique()))
-    tracker_ids = pd.Index(np.sort(test.index.get_level_values("Id").unique()))
-    gt_groups, gt_id_counts = _group_frame_arrays(gt, gt_ids)
-    test_groups, tracker_id_counts = _group_frame_arrays(test, tracker_ids)
-    frame_ids = pd.Index(gt_groups).union(pd.Index(test_groups)).sort_values()
+    gt_ids = np.unique(gt.ids)
+    tracker_ids = np.unique(test.ids)
+    gt_groups, gt_id_counts = _group_frame_arrays(gt, gt_ids, distfields)
+    test_groups, tracker_id_counts = _group_frame_arrays(test, tracker_ids, distfields)
+    frame_ids = np.union1d(gt.frame_ids, test.frame_ids)
 
     potential_matches = np.zeros((len(gt_ids), len(tracker_ids)))
     accumulator = _Accumulator(gt_id_counts, tracker_id_counts)
@@ -593,13 +604,13 @@ def _prepare_iou_sequence_data(gt, test, distth, distfields=None, progress=None)
     )
 
 
-def _group_frame_arrays(dataframe, id_index):
-    """Group MOT rows into array views with one dataframe conversion."""
-    frame_ids = dataframe.index.get_level_values("FrameId").to_numpy()
-    id_codes = id_index.get_indexer(dataframe.index.get_level_values("Id"))
-    values = dataframe.to_numpy(dtype=float, copy=False)
+def _group_frame_arrays(data, unique_ids, fields):
+    """Group compact MOT columns into per-frame array views."""
+    frame_ids = data.frame_ids
+    id_codes = np.searchsorted(unique_ids, data.ids)
+    values = data.values(fields)
     if len(frame_ids) == 0:
-        return {}, np.zeros(len(id_index))
+        return {}, np.zeros(len(unique_ids))
 
     if np.any(frame_ids[1:] < frame_ids[:-1]):
         order = np.argsort(frame_ids, kind="stable")
@@ -611,7 +622,7 @@ def _group_frame_arrays(dataframe, id_index):
     starts = np.concatenate(([0], boundaries))
     ends = np.concatenate((boundaries, [len(frame_ids)]))
     groups = {}
-    id_counts = np.bincount(id_codes, minlength=len(id_index)).astype(float, copy=False)
+    id_counts = np.bincount(id_codes, minlength=len(unique_ids)).astype(float, copy=False)
     for start, end in zip(starts, ends):
         frame_id_codes = id_codes[start:end]
         groups[frame_ids[start]] = (frame_id_codes, values[start:end])

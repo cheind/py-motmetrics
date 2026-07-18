@@ -9,12 +9,9 @@
 
 # pylint: disable=redefined-outer-name
 
-import inspect
 from collections import OrderedDict
 
 import numpy as np
-from scipy.sparse import coo_matrix
-from scipy.sparse.csgraph import connected_components
 
 import motmetrics._math_util as math_util
 from motmetrics._accumulator import _Accumulator
@@ -68,31 +65,19 @@ class _MetricsHost:
 
         assert fnc is not None, "No function given for metric {}".format(name)
 
-        fnc_spec = inspect.getfullargspec(fnc)
         if deps is None:
             deps = []
         elif deps == "auto":
-            if fnc_spec.defaults is not None:
-                k = -len(fnc_spec.defaults)
-            else:
-                k = len(fnc_spec.args)
-            deps = fnc_spec.args[1:k]  # first argument is the incremental engine
+            deps = _required_arguments(fnc)[1:]  # first argument is the incremental engine
 
         if name is None:
-            name = (
-                fnc.__name__
-            )  # Relies on meaningful function names, i.e don't use for lambdas
+            name = fnc.__name__
 
         if fnc_m is not None:
-            fnc_m_spec = inspect.getfullargspec(fnc_m)
             if deps_m is None:
                 deps_m = []
             elif deps_m == "auto":
-                if fnc_m_spec.defaults is not None:
-                    k = -len(fnc_m_spec.defaults)
-                else:
-                    k = len(fnc_m_spec.args)
-                deps_m = fnc_m_spec.args[1:k]  # first argument contains per-sequence partials
+                deps_m = _required_arguments(fnc_m)[1:]  # first argument contains per-sequence partials
         else:
             deps_m = None
 
@@ -211,6 +196,13 @@ class _MetricsHost:
             vals.append(v)
         assert minfo["fnc_m"] is not None, "merge function for metric %s is None" % name
         return minfo["fnc_m"](partials, *vals)
+
+
+def _required_arguments(function):
+    """Return positional argument names without importing ``inspect``."""
+    code = function.__code__
+    optional_count = len(function.__defaults__ or ())
+    return code.co_varnames[: code.co_argcount - optional_count]
 
 
 def num_frames(engine):
@@ -420,14 +412,12 @@ def _max_weight_matching(num_objects, num_predictions, object_codes, prediction_
         cids = cids[positive]
         return rids, cids, int(-costs[rids, cids].sum(dtype=np.int64))
 
-    graph_rows = np.concatenate((object_codes, num_objects + prediction_codes))
-    graph_cols = np.concatenate((num_objects + prediction_codes, object_codes))
-    graph = coo_matrix(
-        (np.ones(len(graph_rows), dtype=np.int8), (graph_rows, graph_cols)),
-        shape=(num_objects + num_predictions, num_objects + num_predictions),
+    edge_components = _bipartite_edge_components(
+        num_objects,
+        num_predictions,
+        object_codes,
+        prediction_codes,
     )
-    _, labels = connected_components(graph, directed=False, return_labels=True)
-    edge_components = labels[object_codes]
     order = np.argsort(edge_components, kind="stable")
     boundaries = np.flatnonzero(edge_components[order][1:] != edge_components[order][:-1]) + 1
 
@@ -466,6 +456,40 @@ def _max_weight_matching(num_objects, num_predictions, object_codes, prediction_
         np.concatenate(selected_objects).astype(int, copy=False),
         np.concatenate(selected_predictions).astype(int, copy=False),
         true_positives,
+    )
+
+
+def _bipartite_edge_components(
+    num_objects,
+    num_predictions,
+    object_codes,
+    prediction_codes,
+):
+    """Label sparse bipartite edges with a compact union-find."""
+    parent = np.arange(num_objects + num_predictions, dtype=np.intp)
+    sizes = np.ones(len(parent), dtype=np.intp)
+
+    def find(node):
+        while parent[node] != node:
+            parent[node] = parent[parent[node]]
+            node = parent[node]
+        return node
+
+    prediction_offset = num_objects
+    for object_code, prediction_code in zip(object_codes, prediction_codes):
+        object_root = find(int(object_code))
+        prediction_root = find(prediction_offset + int(prediction_code))
+        if object_root == prediction_root:
+            continue
+        if sizes[object_root] < sizes[prediction_root]:
+            object_root, prediction_root = prediction_root, object_root
+        parent[prediction_root] = object_root
+        sizes[object_root] += sizes[prediction_root]
+
+    return np.fromiter(
+        (find(int(object_code)) for object_code in object_codes),
+        dtype=np.intp,
+        count=len(object_codes),
     )
 
 
