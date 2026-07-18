@@ -8,7 +8,7 @@ of its lifetime in the evaluated frames.
 
 Run this example with either two MOTChallenge files or two evaluation roots:
 
-    python examples/track_coverage.py path/to/gt path/to/predictions
+    python examples/custom_metric_track_coverage.py path/to/gt path/to/predictions
 """
 
 import argparse
