@@ -264,7 +264,7 @@ print(summary)
 ```
 
 The runnable version is
-[`examples/custom_metric_track_coverage.py`](examples/custom_metric_track_coverage.py).
+[`examples/custom_metrics/from_shared_statistics.py`](examples/custom_metrics/from_shared_statistics.py).
 
 For example, a raw `TCOV` value of `0.8` (displayed as `80.0%`) means that,
 on average, the tracker sees and processes a ground-truth object for 80% of the
@@ -305,7 +305,7 @@ configuration so serial and process-parallel runs behave identically.
 
 For a metric that replaces the built-in assignment semantics and constructs
 intermediate state absent from the fast path, see
-[`examples/custom_metric_detection_average_precision.py`](examples/custom_metric_detection_average_precision.py).
+[`examples/custom_metrics/with_custom_matching.py`](examples/custom_metrics/with_custom_matching.py).
 It performs confidence-ranked greedy matching and combines its own
 precision-recall state without changing the evaluator.
 

@@ -8,7 +8,7 @@ own precision-recall state, which the fast MOTChallenge path does not produce.
 Run this example with MOTChallenge files or evaluation roots whose prediction
 rows contain meaningful confidence values:
 
-    python examples/custom_metric_detection_average_precision.py path/to/gt path/to/predictions
+    python examples/custom_metrics/with_custom_matching.py path/to/gt path/to/predictions
 """
 
 import argparse
