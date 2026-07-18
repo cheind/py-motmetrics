@@ -195,14 +195,68 @@ End-to-end median runtime on an Apple M3 Max across seven fresh runs per
 setting, including imports, file loading, IoU, CLEAR, Identity, and HOTA. One
 sequence worker is used per requested core, capped by the sequence count:
 
-| Dataset | Backend | 1 core | 2 cores | 4 cores | 8 cores |
-|---|---|---:|---:|---:|---:|
-| TUD (2 sequences) | py-motmetrics | 0.117 s | 0.146 s | 0.164 s | 0.151 s |
-| TUD (2 sequences) | TrackEval 1.3.0 | 0.573 s | 0.492 s | 0.498 s | 0.495 s |
-| TUD (2 sequences) | Speedup | **4.90x** | **3.37x** | **3.04x** | **3.28x** |
-| MOT17 (7 sequences) | py-motmetrics | 0.374 s | 0.284 s | 0.248 s | 0.263 s |
-| MOT17 (7 sequences) | TrackEval 1.3.0 | 1.006 s | 0.753 s | 0.679 s | 0.696 s |
-| MOT17 (7 sequences) | Speedup | **2.69x** | **2.65x** | **2.74x** | **2.65x** |
+<table align="center">
+  <thead>
+    <tr>
+      <th>Dataset</th>
+      <th>Backend</th>
+      <th align="right">1 core</th>
+      <th align="right">2 cores</th>
+      <th align="right">4 cores</th>
+      <th align="right">8 cores</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>TUD (2 sequences)</td>
+      <td>py-motmetrics</td>
+      <td align="right">0.117 s</td>
+      <td align="right">0.146 s</td>
+      <td align="right">0.164 s</td>
+      <td align="right">0.151 s</td>
+    </tr>
+    <tr>
+      <td>TUD (2 sequences)</td>
+      <td>TrackEval 1.3.0</td>
+      <td align="right">0.573 s</td>
+      <td align="right">0.492 s</td>
+      <td align="right">0.498 s</td>
+      <td align="right">0.495 s</td>
+    </tr>
+    <tr>
+      <td>TUD (2 sequences)</td>
+      <td>Speedup</td>
+      <td align="right"><strong>4.90x</strong></td>
+      <td align="right"><strong>3.37x</strong></td>
+      <td align="right"><strong>3.04x</strong></td>
+      <td align="right"><strong>3.28x</strong></td>
+    </tr>
+    <tr>
+      <td>MOT17 (7 sequences)</td>
+      <td>py-motmetrics</td>
+      <td align="right">0.374 s</td>
+      <td align="right">0.284 s</td>
+      <td align="right">0.248 s</td>
+      <td align="right">0.263 s</td>
+    </tr>
+    <tr>
+      <td>MOT17 (7 sequences)</td>
+      <td>TrackEval 1.3.0</td>
+      <td align="right">1.006 s</td>
+      <td align="right">0.753 s</td>
+      <td align="right">0.679 s</td>
+      <td align="right">0.696 s</td>
+    </tr>
+    <tr>
+      <td>MOT17 (7 sequences)</td>
+      <td>Speedup</td>
+      <td align="right"><strong>2.69x</strong></td>
+      <td align="right"><strong>2.65x</strong></td>
+      <td align="right"><strong>2.74x</strong></td>
+      <td align="right"><strong>2.65x</strong></td>
+    </tr>
+  </tbody>
+</table>
 
 ## References
 
