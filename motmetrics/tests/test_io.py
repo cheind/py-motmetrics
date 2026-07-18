@@ -11,6 +11,7 @@ import os
 from io import StringIO
 
 import numpy as np
+from pytest import raises
 
 import motmetrics._io as io
 
@@ -21,8 +22,16 @@ def test_infer_format():
     """Tests format inference from extension and text contents."""
     assert io.infer_format(os.path.join(DATA_DIR, 'iotest/motchallenge.txt')) == io.Format.MOT15_2D
     assert io.infer_format(os.path.join(DATA_DIR, 'iotest/vatic.txt')) == io.Format.VATIC_TXT
-    assert io.infer_format(os.path.join(DATA_DIR, 'iotest/detrac.mat')) == io.Format.DETRAC_MAT
     assert io.infer_format(os.path.join(DATA_DIR, 'iotest/detrac.xml')) == io.Format.DETRAC_XML
+
+
+def test_infer_format_rejects_binary_input(tmp_path):
+    """Tests that unsupported binary formats do not fall through to a text parser."""
+    path = tmp_path / 'detections.bin'
+    path.write_bytes(b'unsupported\x00binary')
+
+    with raises(ValueError, match='binary file'):
+        io.infer_format(path)
 
 
 def test_loadtxt_auto():
@@ -30,7 +39,6 @@ def test_loadtxt_auto():
     cases = [
         ('iotest/motchallenge.txt', io.Format.MOT15_2D),
         ('iotest/vatic.txt', io.Format.VATIC_TXT),
-        ('iotest/detrac.mat', io.Format.DETRAC_MAT),
         ('iotest/detrac.xml', io.Format.DETRAC_XML),
     ]
     for filename, fmt in cases:
@@ -94,23 +102,6 @@ def test_load_motchallenge_infers_separator_for_file_object():
     data = io.load_motchallenge(source)
 
     assert data.values(['X', 'Y', 'Width', 'Height'])[0].tolist() == [10, 20, 30, 40]
-
-
-def test_load_detrac_mat():
-    """Tests DETRAC_MAT format."""
-    data = io.loadtxt(os.path.join(DATA_DIR, 'iotest/detrac.mat'), fmt=io.Format.DETRAC_MAT)
-
-    expected = np.asarray([
-        (1., 1., 745., 356., 148., 115., 1., -1., -1.),
-        (2., 1., 738., 350., 145., 111., 1., -1., -1.),
-        (3., 1., 732., 343., 142., 107., 1., -1., -1.),
-        (4., 1., 725., 336., 139., 104., 1., -1., -1.)
-    ])
-
-    np.testing.assert_equal(
-        _sequence_rows(data, ['X', 'Y', 'Width', 'Height', 'Confidence', 'ClassId', 'Visibility']).astype(float),
-        expected,
-    )
 
 
 def test_load_detrac_xml():

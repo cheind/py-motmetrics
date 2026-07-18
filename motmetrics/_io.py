@@ -31,11 +31,6 @@ class Format(Enum):
     https://github.com/cvondrick/vatic
     """
 
-    DETRAC_MAT = 'detrac-mat'
-    """Wen, Longyin et al. "UA-DETRAC: A New Benchmark and Protocol for Multi-Object Detection and Tracking." arXiv preprint arXiv:arXiv:1511.04136 (2016).
-    http://detrac-db.rit.albany.edu/download
-    """
-
     DETRAC_XML = 'detrac-xml'
     """Wen, Longyin et al. "UA-DETRAC: A New Benchmark and Protocol for Multi-Object Detection and Tracking." arXiv preprint arXiv:arXiv:1511.04136 (2016).
     http://detrac-db.rit.albany.edu/download
@@ -233,58 +228,6 @@ def load_vatictxt(fname, **kwargs):
     return _SequenceData(frame_ids, ids, fields)
 
 
-def load_detrac_mat(fname, **kwargs):
-    """Loads UA-DETRAC annotations data from mat files
-
-    Competition Site: http://detrac-db.rit.albany.edu/download
-
-    File contains a nested structure of 2d arrays for indexed by frame id
-    and Object ID. Separate arrays for top, left, width and height are given.
-
-    Params
-    ------
-    fname : str
-        Filename to load data from
-
-    Kwargs
-    ------
-    Currently none of these arguments used.
-
-    Returns
-    -------
-    _SequenceData
-        Compact detection columns consumed by the metric engine.
-    """
-
-    from scipy.io import loadmat
-
-    mat_data = loadmat(fname)
-
-    frame_list = mat_data['gtInfo'][0][0][4][0]
-    left_array = mat_data['gtInfo'][0][0][0].astype(np.float32)
-    top_array = mat_data['gtInfo'][0][0][1].astype(np.float32)
-    width_array = mat_data['gtInfo'][0][0][3].astype(np.float32)
-    height_array = mat_data['gtInfo'][0][0][2].astype(np.float32)
-
-    parsed_gt = []
-    for f in frame_list:
-        f = int(f)
-        ids = [i + 1 for i, v in enumerate(left_array[f - 1]) if v > 0]
-        for i in ids:
-            parsed_gt.append((
-                f,
-                i,
-                left_array[f - 1, i - 1] - width_array[f - 1, i - 1] / 2 - 1,
-                top_array[f - 1, i - 1] - height_array[f - 1, i - 1] - 1,
-                width_array[f - 1, i - 1],
-                height_array[f - 1, i - 1],
-                1,
-                -1,
-                -1,
-            ))
-    return _sequence_from_mot_rows(parsed_gt)
-
-
 def load_detrac_xml(fname, **kwargs):
     """Loads UA-DETRAC annotations data from xml files
 
@@ -357,13 +300,13 @@ def infer_format(fname):
     """Infer a supported file format from the path and a small data sample."""
     path = Path(fname)
     suffix = path.suffix.lower()
-    if suffix == '.mat':
-        return Format.DETRAC_MAT
     if suffix == '.xml':
         return Format.DETRAC_XML
 
     with io.open(fname, encoding='utf-8', errors='ignore') as file:
         sample = file.read(4096)
+    if '\0' in sample:
+        raise ValueError('Cannot infer format from binary file: {}'.format(fname))
 
     stripped = sample.lstrip()
     if stripped.startswith('<'):
@@ -389,7 +332,6 @@ def loadtxt(fname, fmt=Format.MOT15_2D, **kwargs):
         Format.MOT16: load_motchallenge,
         Format.MOT15_2D: load_motchallenge,
         Format.VATIC_TXT: load_vatictxt,
-        Format.DETRAC_MAT: load_detrac_mat,
         Format.DETRAC_XML: load_detrac_xml
     }
     func = switcher.get(fmt)

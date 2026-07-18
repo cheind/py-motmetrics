@@ -40,10 +40,9 @@ summary.df.to_csv("metrics.csv")
 ```
 
 The evaluation and text rendering path does not import pandas. The dataframe is
-materialized only when `.df` is accessed; SciPy is likewise loaded only for
-UA-DETRAC `.mat` input.
+materialized only when `.df` is accessed.
 
-By default, `evaluate_motchallenge` uses `fmt="auto"`. It detects MOTChallenge text, VATIC text, and UA-DETRAC `.mat`/`.xml` files. For ambiguous text files, pass the format explicitly:
+By default, `evaluate_motchallenge` uses `fmt="auto"`. It detects MOTChallenge text, VATIC text, and UA-DETRAC XML files. For ambiguous text files, pass the format explicitly:
 
 ```python
 summary = mm.evaluate_motchallenge(gt, pred, fmt="mot16")

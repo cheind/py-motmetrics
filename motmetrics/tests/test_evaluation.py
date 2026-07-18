@@ -22,16 +22,14 @@ def test_package_has_one_supported_metrics_entrypoint():
     }
 
 
-def test_default_evaluation_does_not_import_pandas_or_scipy():
+def test_default_evaluation_does_not_import_pandas():
     script = """
 import sys
 import motmetrics as mm
 assert 'pandas' not in sys.modules
-assert not any(name == 'scipy' or name.startswith('scipy.') for name in sys.modules)
 summary = mm.evaluate_motchallenge({ground_truth!r}, {tracker!r})
 str(summary)
 assert 'pandas' not in sys.modules
-assert not any(name == 'scipy' or name.startswith('scipy.') for name in sys.modules)
 """.format(
         ground_truth=str(DATA_DIR / "TUD-Campus" / "gt.txt"),
         tracker=str(DATA_DIR / "TUD-Campus" / "test.txt"),
