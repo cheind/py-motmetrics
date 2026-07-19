@@ -13,7 +13,7 @@
 
 ## Why MOTMetrics
 
-- **Fast:** 2.65–4.90x faster than TrackEval 1.3.0 in measured end-to-end benchmarks.
+- **Fast:** 2.82–4.90x faster than TrackEval 1.3.0 in measured end-to-end benchmarks.
 - **Complete:** CLEAR, Identity, and HOTA metrics with TrackEval parity.
 - **Simple:** one evaluation API, sequence parallelism, and two runtime dependencies.
 - **Extensible:** custom metrics can reuse shared statistics or define their own matching.
@@ -35,7 +35,9 @@ uv pip install --group dev
 
 ## Quick Start
 
-For MOTChallenge-style text files, compute and print metrics in one call. Supported file formats are detected automatically.
+For MOTChallenge-style text files, compute and print metrics in one call. File
+formats and built-in MOT15/16/17/20, SportsMOT, and VisDrone preprocessing are
+detected from their paths; pass `benchmark=` when the input path is ambiguous.
 
 ```python
 import motmetrics as mm
@@ -50,6 +52,22 @@ Expected folder layout:
 gt_root/<SEQUENCE>/gt/gt.txt
 preds_root/<SEQUENCE>.txt
 ```
+
+Override benchmark class rules per evaluation when needed:
+
+```python
+summary = mm.evaluate_motchallenge(
+    gt,
+    predictions,
+    target_classes=(1,),
+    distractor_classes=(2, 7, 8, 12),
+    distractor_iou_threshold=0.5,
+)
+```
+
+Class IDs are arbitrary integers, multiple target classes are supported, and
+`distractor_classes=()` disables distractor suppression. Built-in benchmark
+defaults are defined in the YAML profiles under [`motmetrics/configs`](motmetrics/configs).
 
 ## Metrics
 
@@ -192,8 +210,9 @@ Extend `evaluate_motchallenge` with `extra_metric_families=`. See examples using
 ## Performance
 
 End-to-end median runtime on an Apple M3 Max across seven fresh runs per
-setting, including imports, file loading, IoU, CLEAR, Identity, and HOTA. One
-sequence worker is used per requested core, capped by the sequence count:
+setting, including imports, file loading, official MOTChallenge preprocessing,
+IoU, CLEAR, Identity, and HOTA. One sequence worker is used per requested core,
+capped by the sequence count:
 
 <table align="center">
   <thead>
@@ -234,26 +253,26 @@ sequence worker is used per requested core, capped by the sequence count:
     <tr>
       <td>MOT17 (7 sequences)</td>
       <td>py-motmetrics</td>
-      <td align="right">0.374 s</td>
-      <td align="right">0.284 s</td>
-      <td align="right">0.248 s</td>
-      <td align="right">0.263 s</td>
+      <td align="right">0.544 s</td>
+      <td align="right">0.380 s</td>
+      <td align="right">0.369 s</td>
+      <td align="right">0.361 s</td>
     </tr>
     <tr>
       <td>MOT17 (7 sequences)</td>
       <td>TrackEval 1.3.0</td>
-      <td align="right">1.006 s</td>
-      <td align="right">0.753 s</td>
-      <td align="right">0.679 s</td>
-      <td align="right">0.696 s</td>
+      <td align="right">1.532 s</td>
+      <td align="right">1.618 s</td>
+      <td align="right">1.463 s</td>
+      <td align="right">1.539 s</td>
     </tr>
     <tr>
       <td>MOT17 (7 sequences)</td>
       <td>Speedup</td>
-      <td align="right"><strong>2.69x</strong></td>
-      <td align="right"><strong>2.65x</strong></td>
-      <td align="right"><strong>2.74x</strong></td>
-      <td align="right"><strong>2.65x</strong></td>
+      <td align="right"><strong>2.82x</strong></td>
+      <td align="right"><strong>4.25x</strong></td>
+      <td align="right"><strong>3.96x</strong></td>
+      <td align="right"><strong>4.27x</strong></td>
     </tr>
   </tbody>
 </table>

@@ -363,3 +363,138 @@ def test_metrics_match_trackeval_on_bundled_tud_sequences():
                 trackeval_results[sequence_name][trackeval_name],
                 abs=PARITY_TOLERANCE,
             )
+
+
+def test_public_evaluator_matches_full_trackeval_mot17_protocol(tmp_path):
+    sequence_name = "MOT17-SYNTH"
+    tracker_name = "synthetic-tracker"
+    ground_truth_root = tmp_path / "ground-truth"
+    ground_truth_file = ground_truth_root / sequence_name / "gt" / "gt.txt"
+    tracker_root = tmp_path / "trackers"
+    tracker_data = tracker_root / tracker_name / "data"
+    tracker_file = tracker_data / "{}.txt".format(sequence_name)
+    ground_truth_file.parent.mkdir(parents=True)
+    tracker_data.mkdir(parents=True)
+    ground_truth_file.write_text(
+        "\n".join((
+            "1,1,1,1,10,10,1,1,1",
+            "1,90,101,1,10,10,0,8,1",
+            "2,1,2,1,10,10,1,1,1",
+            "2,91,201,1,10,10,0,7,1",
+            "2,3,301,1,10,10,0,1,1",
+            "3,2,401,1,10,10,1,1,1",
+            "3,92,501,1,10,10,0,2,1",
+            "3,93,601,1,10,10,0,12,1",
+            "3,94,701,1,10,10,0,3,1",
+        )),
+        encoding="utf-8",
+    )
+    tracker_file.write_text(
+        "\n".join((
+            "1,10,1,1,10,10,1,1,1",
+            "1,20,101,1,10,10,1,1,1",
+            "1,90,801,1,10,10,1,1,1",
+            "2,10,2,1,10,10,1,1,1",
+            "2,20,201,1,10,10,1,1,1",
+            "2,30,301,1,10,10,1,1,1",
+            "3,40,401,1,10,10,1,1,1",
+            "3,50,501,1,10,10,1,1,1",
+            "3,60,601,1,10,10,1,1,1",
+            "3,70,701,1,10,10,1,1,1",
+        )),
+        encoding="utf-8",
+    )
+
+    dataset = trackeval.datasets.MotChallenge2DBox({
+        "GT_FOLDER": str(ground_truth_root),
+        "TRACKERS_FOLDER": str(tracker_root),
+        "OUTPUT_FOLDER": str(tmp_path / "output"),
+        "TRACKERS_TO_EVAL": [tracker_name],
+        "TRACKER_SUB_FOLDER": "data",
+        "CLASSES_TO_EVAL": ["pedestrian"],
+        "BENCHMARK": "MOT17",
+        "SPLIT_TO_EVAL": "train",
+        "DO_PREPROC": True,
+        "SEQ_INFO": {sequence_name: 3},
+        "SKIP_SPLIT_FOL": True,
+        "PRINT_CONFIG": False,
+    })
+    preprocessed = dataset.get_preprocessed_seq_data(
+        dataset.get_raw_seq_data(tracker_name, sequence_name),
+        "pedestrian",
+    )
+    metric_objects = {
+        "HOTA": trackeval.metrics.HOTA({"PRINT_CONFIG": False}),
+        "CLEAR": trackeval.metrics.CLEAR({"THRESHOLD": 0.5, "PRINT_CONFIG": False}),
+        "Identity": trackeval.metrics.Identity({"THRESHOLD": 0.5, "PRINT_CONFIG": False}),
+        "Count": trackeval.metrics.Count({"PRINT_CONFIG": False}),
+    }
+    trackeval_sequence = {
+        family: metric.eval_sequence(preprocessed)
+        for family, metric in metric_objects.items()
+    }
+    trackeval_overall = {
+        family: metric.combine_sequences({sequence_name: trackeval_sequence[family]})
+        for family, metric in metric_objects.items()
+    }
+
+    summary = mm.evaluate_motchallenge(
+        ground_truth_root,
+        tracker_data,
+        progress=False,
+    )
+    for row_name, expected in (
+        (sequence_name, trackeval_sequence),
+        ("OVERALL", trackeval_overall),
+    ):
+        expected_values = _public_trackeval_values(expected)
+        assert set(expected_values) == set(summary.columns) - {
+            "num_transfer",
+            "num_ascend",
+            "num_migrate",
+        }
+        for metric_name, expected_value in expected_values.items():
+            assert summary[row_name, metric_name] == pytest.approx(
+                expected_value,
+                abs=PARITY_TOLERANCE,
+            )
+
+
+def _public_trackeval_values(results):
+    clear = results["CLEAR"]
+    identity = results["Identity"]
+    hota = results["HOTA"]
+    count = results["Count"]
+    return {
+        "idf1": identity["IDF1"],
+        "idp": identity["IDP"],
+        "idr": identity["IDR"],
+        "recall": clear["CLR_Re"],
+        "precision": clear["CLR_Pr"],
+        "num_unique_objects": count["GT_IDs"],
+        "mostly_tracked": clear["MT"],
+        "partially_tracked": clear["PT"],
+        "mostly_lost": clear["ML"],
+        "mtr": clear["MTR"],
+        "ptr": clear["PTR"],
+        "mlr": clear["MLR"],
+        "num_false_positives": clear["CLR_FP"],
+        "num_misses": clear["CLR_FN"],
+        "num_switches": clear["IDSW"],
+        "num_fragmentations": clear["Frag"],
+        "mota": clear["MOTA"],
+        "moda": clear["MODA"],
+        "motp": 1 - clear["MOTP"],
+        "smota": clear["sMOTA"],
+        "clr_f1": clear["CLR_F1"],
+        "fp_per_frame": clear["FP_per_frame"],
+        "hota": np.mean(hota["HOTA"]),
+        "deta": np.mean(hota["DetA"]),
+        "assa": np.mean(hota["AssA"]),
+        "detre": np.mean(hota["DetRe"]),
+        "detpr": np.mean(hota["DetPr"]),
+        "assre": np.mean(hota["AssRe"]),
+        "asspr": np.mean(hota["AssPr"]),
+        "loca": np.mean(hota["LocA"]),
+        "owta": np.mean(hota["OWTA"]),
+    }

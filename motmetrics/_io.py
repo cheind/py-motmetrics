@@ -72,6 +72,21 @@ class _SequenceData(object):
             return np.empty((len(self), 0), dtype=float)
         return np.column_stack(columns).astype(float, copy=False)
 
+    def _take(self, rows):
+        """Return a compact sequence containing only the selected rows."""
+        return _SequenceData(
+            self.frame_ids[rows],
+            self.ids[rows],
+            {
+                name: values[rows]
+                for name, values in self._fields.items()
+            },
+        )
+
+    def _with_ids(self, ids):
+        """Return a compact sequence with replacement identity values."""
+        return _SequenceData(self.frame_ids, ids, self._fields)
+
 
 def load_motchallenge(fname, **kwargs):
     r"""Load MOT challenge data.

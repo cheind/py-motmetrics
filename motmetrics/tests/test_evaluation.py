@@ -281,6 +281,223 @@ def test_evaluate_motchallenge_files_returns_rich_summary():
     assert "HOTA" in summary.text
 
 
+def test_motchallenge_preprocessing_suppresses_distractor_matches(tmp_path):
+    ground_truth = tmp_path / "ground-truth.txt"
+    tracker = tmp_path / "tracker.txt"
+    ground_truth.write_text(
+        "\n".join((
+            "1,1,1,1,10,10,1,1,1",
+            "1,2,21,1,10,10,0,8,1",
+            "1,3,41,1,10,10,0,6,1",
+        )),
+        encoding="utf-8",
+    )
+    tracker.write_text(
+        "\n".join((
+            "1,10,1,1,10,10,1,1,1",
+            "1,20,21,1,10,10,1,1,1",
+            "1,30,41,1,10,10,1,1,1",
+            "1,40,61,1,10,10,1,1,1",
+        )),
+        encoding="utf-8",
+    )
+
+    mot17 = mm.evaluate_motchallenge(ground_truth, tracker)
+    mot20 = mm.evaluate_motchallenge(
+        ground_truth,
+        tracker,
+        benchmark="MOT20",
+    )
+    without_preprocessing = mm.evaluate_motchallenge(
+        ground_truth,
+        tracker,
+        benchmark="MOT15",
+    )
+
+    assert mot17[mot17.index[0], "num_unique_objects"] == 1
+    assert mot17[mot17.index[0], "num_false_positives"] == 2
+    assert mot20[mot20.index[0], "num_false_positives"] == 1
+    assert without_preprocessing[
+        without_preprocessing.index[0],
+        "num_false_positives",
+    ] == 3
+
+
+def test_motchallenge_benchmark_defaults_are_loaded_from_yaml():
+    mot15 = evaluation._load_benchmark_config("MOT15")
+    mot17 = evaluation._load_benchmark_config("MOT17")
+    mot20 = evaluation._load_benchmark_config("MOT20")
+    sportsmot = evaluation._load_benchmark_config("SPORTSMOT")
+    visdrone = evaluation._load_benchmark_config("VISDRONE")
+
+    assert mot15["target_classes"] is None
+    assert mot17["target_classes"] == (1,)
+    assert mot17["distractor_classes"] == (2, 7, 8, 12)
+    assert mot17["distractor_threshold"] == 0.5
+    assert mot17["valid_classes"] == tuple(range(1, 14))
+    assert mot17["tracker_max_class"] == 1
+    assert mot20["distractor_classes"] == (2, 6, 7, 8, 12)
+    assert sportsmot["target_classes"] == (1,)
+    assert sportsmot["distractor_classes"] == ()
+    assert visdrone["target_classes"] == (1, 4, 5, 6, 9)
+    assert visdrone["distractor_classes"] == (0, 11)
+    assert visdrone["class_aware"] is True
+    assert visdrone["filter_tracker_classes"] is True
+    assert visdrone["distractor_mode"] == "prediction_coverage"
+    assert visdrone["suppress_target_ground_truth"] is True
+
+
+def test_visdrone_profile_uses_class_aware_ignore_region_preprocessing(tmp_path):
+    ground_truth = tmp_path / "visdrone-ground-truth.txt"
+    tracker = tmp_path / "visdrone-tracker.txt"
+    ground_truth.write_text(
+        "\n".join((
+            "1,1,1,1,10,10,1,1,0,0",
+            "1,2,21,1,10,10,1,6,0,0",
+            "1,90,21,1,10,10,0,0,0,0",
+            "1,91,41,1,10,10,1,2,0,0",
+            "2,1,1,1,10,10,1,4,0,0",
+            "3,3,1,1,10,10,1,9,0,0",
+            "4,4,1,1,10,10,1,5,0,0",
+            "4,92,1,1,10,10,0,11,0,0",
+        )),
+        encoding="utf-8",
+    )
+    tracker.write_text(
+        "\n".join((
+            "1,10,1,1,10,10,1,1,-1,-1",
+            "1,20,21,1,10,10,1,4,-1,-1",
+            "1,30,41,1,10,10,1,2,-1,-1",
+            "2,10,1,1,10,10,1,1,-1,-1",
+            "3,30,1,1,10,10,1,9,-1,-1",
+        )),
+        encoding="utf-8",
+    )
+
+    summary = mm.evaluate_motchallenge(
+        ground_truth,
+        tracker,
+        benchmark="VISDRONE",
+        metrics=(
+            "num_unique_objects",
+            "num_detections",
+            "num_misses",
+            "num_false_positives",
+        ),
+    )
+    row = summary.index[0]
+    assert summary[row, "num_unique_objects"] == 3
+    assert summary[row, "num_detections"] == 2
+    assert summary[row, "num_misses"] == 1
+    assert summary[row, "num_false_positives"] == 1
+
+
+def test_sportsmot_profile_accepts_standard_single_class_data(tmp_path):
+    ground_truth = tmp_path / "sportsmot-ground-truth.txt"
+    tracker = tmp_path / "sportsmot-tracker.txt"
+    ground_truth.write_text(
+        "1,1,1,1,10,10,1,1,1\n",
+        encoding="utf-8",
+    )
+    tracker.write_text(
+        "1,10,1,1,10,10,1,-1,-1\n",
+        encoding="utf-8",
+    )
+
+    summary = mm.evaluate_motchallenge(
+        ground_truth,
+        tracker,
+        benchmark="SPORTSMOT",
+        metrics=(
+            "num_detections",
+            "num_misses",
+            "num_false_positives",
+        ),
+    )
+    row = summary.index[0]
+    assert summary[row, "num_detections"] == 1
+    assert summary[row, "num_misses"] == 0
+    assert summary[row, "num_false_positives"] == 0
+
+
+def test_custom_class_preprocessing_supports_benchmark_specific_ids(tmp_path):
+    ground_truth = tmp_path / "custom-ground-truth.txt"
+    tracker = tmp_path / "custom-tracker.txt"
+    ground_truth.write_text(
+        "\n".join((
+            "1,1,1,1,10,10,1,42,1",
+            "1,2,21,1,10,10,1,43,1",
+            "1,3,41,1,10,10,0,99,1",
+            "1,4,61,1,10,10,0,100,1",
+        )),
+        encoding="utf-8",
+    )
+    tracker.write_text(
+        "\n".join((
+            "1,10,1,1,10,10,1,42,1",
+            "1,20,21,1,10,10,1,43,1",
+            "1,30,43,1,10,10,1,99,1",
+            "1,40,61,1,10,10,1,100,1",
+        )),
+        encoding="utf-8",
+    )
+
+    custom = mm.evaluate_motchallenge(
+        ground_truth,
+        tracker,
+        target_classes=(42, 43),
+        distractor_classes=99,
+    )
+    no_suppression = mm.evaluate_motchallenge(
+        ground_truth,
+        tracker,
+        target_classes=(42, 43),
+        distractor_classes=(),
+    )
+    high_threshold = mm.evaluate_motchallenge(
+        ground_truth,
+        tracker,
+        target_classes=(42, 43),
+        distractor_classes=99,
+        distractor_iou_threshold=0.75,
+    )
+
+    row = custom.index[0]
+    assert custom[row, "num_unique_objects"] == 2
+    assert custom[row, "num_false_positives"] == 1
+    assert no_suppression[row, "num_false_positives"] == 2
+    assert high_threshold[row, "num_false_positives"] == 2
+
+
+def test_evaluate_motchallenge_rejects_invalid_benchmark():
+    ground_truth = DATA_DIR / "TUD-Campus" / "gt.txt"
+    tracker = DATA_DIR / "TUD-Campus" / "test.txt"
+
+    with pytest.raises(ValueError, match="SPORTSMOT, or VISDRONE"):
+        mm.evaluate_motchallenge(ground_truth, tracker, benchmark="MOT19")
+    with pytest.raises(TypeError, match="benchmark must be"):
+        mm.evaluate_motchallenge(ground_truth, tracker, benchmark=17)
+    with pytest.raises(ValueError, match="must not overlap"):
+        mm.evaluate_motchallenge(
+            ground_truth,
+            tracker,
+            target_classes=(1, 2),
+            distractor_classes=(2, 3),
+        )
+    with pytest.raises(TypeError, match="integer class IDs"):
+        mm.evaluate_motchallenge(
+            ground_truth,
+            tracker,
+            target_classes=(1, "person"),
+        )
+    with pytest.raises(ValueError, match="between 0 and 1"):
+        mm.evaluate_motchallenge(
+            ground_truth,
+            tracker,
+            distractor_iou_threshold=1.1,
+        )
+
+
 def test_summary_supports_native_metric_access():
     summary = mm.evaluate_motchallenge(DATA_DIR, DATA_DIR, progress=False)
 

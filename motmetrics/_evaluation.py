@@ -11,7 +11,7 @@ import os
 import sys
 from collections import OrderedDict
 from collections.abc import Collection, Mapping, Sequence
-from numbers import Number
+from numbers import Integral, Number
 from pathlib import Path
 
 import numpy as np
@@ -31,6 +31,11 @@ from motmetrics._extensions import (
 
 HOTA_ALPHAS = np.arange(0.05, 0.99, 0.05)
 _FLOAT_EPS = np.finfo(float).eps
+_BOX_FIELDS = ("X", "Y", "Width", "Height")
+_BENCHMARK_CONFIG_DIR = Path(__file__).with_name("configs")
+_BENCHMARK_CONFIG_CACHE = {}
+_BENCHMARK_NAMES = None
+_DISTRACTOR_MODES = frozenset(("iou_assignment", "prediction_coverage"))
 HOTA_SUMMARY_METRICS = OrderedDict([
     ("hota_alpha", "hota"),
     ("deta_alpha", "deta"),
@@ -177,6 +182,10 @@ def evaluate_motchallenge(
     n_jobs=1,
     progress=None,
     extra_metric_families=None,
+    benchmark=None,
+    target_classes=None,
+    distractor_classes=None,
+    distractor_iou_threshold=None,
 ):
     """Evaluate MOTChallenge files or folders and return a rich summary.
 
@@ -205,6 +214,19 @@ def evaluate_motchallenge(
         Explicit, per-call metric extensions. Each family owns its matching or
         aggregation semantics and declares any opt-in intermediate data it
         needs. Family instances must be picklable when ``n_jobs > 1``.
+    benchmark : {"MOT15", "MOT16", "MOT17", "MOT20", "SPORTSMOT", "VISDRONE"}, optional
+        Benchmark preprocessing profile. By default it is inferred from the
+        input path or labeled ground truth. Profiles define target classes,
+        distractors, class-aware matching, and ignore-region handling.
+    target_classes : int or iterable of int, optional
+        Ground-truth classes to score. Overrides the benchmark default.
+    distractor_classes : int or iterable of int, optional
+        Ground-truth classes whose matched predictions are ignored. Overrides
+        the benchmark default; pass an empty iterable to disable suppression.
+    distractor_iou_threshold : float, optional
+        Minimum overlap used for distractor preprocessing. This is IoU for
+        assignment profiles and prediction coverage for ignore-region profiles.
+        Overrides the benchmark profile; defaults to 0.5 without a profile.
 
     Returns
     -------
@@ -216,6 +238,17 @@ def evaluate_motchallenge(
     test_path = Path(tests)
     _validate_paths(gt_path, test_path)
     _validate_n_jobs(n_jobs)
+    benchmark = _normalize_benchmark(benchmark)
+    target_classes = _normalize_class_ids(target_classes, "target_classes")
+    distractor_classes = _normalize_class_ids(
+        distractor_classes,
+        "distractor_classes",
+        allow_empty=True,
+    )
+    if distractor_iou_threshold is not None:
+        distractor_iou_threshold = _normalize_iou_threshold(
+            distractor_iou_threshold
+        )
     progress_enabled = _progress_is_enabled(progress)
 
     metric_names, core_metric_names, hota_metric_names = _prepare_metrics(
@@ -244,6 +277,10 @@ def evaluate_motchallenge(
         n_jobs,
         progress_enabled,
         metric_families,
+        benchmark,
+        target_classes,
+        distractor_classes,
+        distractor_iou_threshold,
     )
 
     return _MOTChallengeSummary(
@@ -269,6 +306,10 @@ def _evaluate_iou_paths(
     n_jobs,
     progress,
     metric_families,
+    benchmark,
+    target_classes,
+    distractor_classes,
+    distractor_iou_threshold,
 ):
     """Evaluate every input through the canonical state-only IoU engine."""
     if gt_root.is_file():
@@ -289,6 +330,10 @@ def _evaluate_iou_paths(
             test_path,
             fmt,
             gt_min_confidence,
+            benchmark,
+            target_classes,
+            distractor_classes,
+            distractor_iou_threshold,
             distfields,
             distth,
             core_metric_names,
@@ -368,6 +413,10 @@ def _evaluate_iou_sequence_file(task):
         test_path,
         fmt,
         gt_min_confidence,
+        benchmark,
+        target_classes,
+        distractor_classes,
+        distractor_iou_threshold,
         distfields,
         distth,
         core_metric_names,
@@ -379,8 +428,18 @@ def _evaluate_iou_sequence_file(task):
     if sequence_progress is not None:
         sequence_progress.stage(_PROGRESS_LOADING)
     try:
-        ground_truth = io.loadtxt(gt_path, fmt=fmt, min_confidence=gt_min_confidence)
+        ground_truth = io.loadtxt(gt_path, fmt=fmt, min_confidence=-np.inf)
         tracker = io.loadtxt(test_path, fmt=fmt)
+        ground_truth, tracker, preprocessing_ious = _preprocess_motchallenge_inputs(
+            ground_truth,
+            tracker,
+            gt_path,
+            benchmark,
+            gt_min_confidence,
+            target_classes,
+            distractor_classes,
+            distractor_iou_threshold,
+        )
         event_recorder = _create_clear_event_recorder(
             metric_families,
             ground_truth,
@@ -400,6 +459,11 @@ def _evaluate_iou_sequence_file(task):
             event_recorder=event_recorder,
             compute_hota=compute_hota,
             retain_frame_iou=retain_frame_iou,
+            precomputed_similarities=(
+                preprocessing_ious
+                if _uses_box_fields(distfields)
+                else None
+            ),
         )
 
         if sequence_progress is not None:
@@ -730,6 +794,457 @@ def _compute_prepared_hota_sequence_summary(prepared, hota_alphas, progress=None
     }
 
 
+def _preprocess_motchallenge_inputs(
+    ground_truth,
+    tracker,
+    ground_truth_path,
+    benchmark,
+    gt_min_confidence,
+    target_classes,
+    distractor_classes,
+    distractor_iou_threshold,
+):
+    """Apply benchmark defaults or caller-supplied class preprocessing."""
+    confidence_keep = _ground_truth_confidence_mask(
+        ground_truth,
+        gt_min_confidence,
+    )
+    resolved_benchmark = _resolve_motchallenge_benchmark(
+        benchmark,
+        ground_truth_path,
+        ground_truth,
+    )
+    protocol = _resolve_class_protocol(
+        resolved_benchmark,
+        target_classes,
+        distractor_classes,
+        distractor_iou_threshold,
+    )
+    if protocol is None:
+        return ground_truth._take(confidence_keep), tracker, None
+    target_classes = protocol["target_classes"]
+    distractor_classes = protocol["distractor_classes"]
+    distractor_iou_threshold = protocol["distractor_threshold"]
+
+    ground_truth_classes = _numeric_class_ids(ground_truth)
+    if ground_truth_classes is None:
+        raise ValueError(
+            "Class preprocessing requires integer ground-truth ClassId values."
+        )
+    tracker_classes = _numeric_class_ids(tracker)
+    _validate_preprocessing_classes(
+        protocol,
+        resolved_benchmark,
+        ground_truth_classes,
+        tracker_classes,
+    )
+
+    ground_truth_keep = confidence_keep & np.isin(
+        ground_truth_classes,
+        target_classes,
+    )
+    tracker_keep = np.ones(len(tracker), dtype=np.bool_)
+    if protocol["filter_tracker_classes"]:
+        tracker_keep &= np.isin(tracker_classes, target_classes)
+
+    ground_truth_rows = _group_frame_row_indices(ground_truth.frame_ids)
+    tracker_rows = _group_frame_row_indices(tracker.frame_ids)
+    ground_truth_boxes = ground_truth.values(_BOX_FIELDS)
+    tracker_boxes = tracker.values(_BOX_FIELDS)
+    retained_ious = {}
+    empty_rows = np.empty(0, dtype=np.intp)
+    for frame_id in ground_truth_rows.keys() | tracker_rows.keys():
+        frame_ground_truth_rows = ground_truth_rows.get(frame_id, empty_rows)
+        frame_tracker_rows = tracker_rows.get(frame_id, empty_rows)
+        frame_classes = ground_truth_classes[frame_ground_truth_rows]
+        frame_ground_truth_keep = ground_truth_keep[frame_ground_truth_rows]
+        frame_tracker_keep = tracker_keep[frame_tracker_rows].copy()
+        frame_distractor_rows = np.isin(
+            frame_classes,
+            distractor_classes,
+        )
+        if np.any(frame_distractor_rows):
+            if protocol["distractor_mode"] == "iou_assignment":
+                _suppress_iou_assignment_matches(
+                    ground_truth_boxes[frame_ground_truth_rows],
+                    frame_classes,
+                    tracker_boxes[frame_tracker_rows],
+                    frame_tracker_keep,
+                    distractor_classes,
+                    distractor_iou_threshold,
+                )
+                tracker_keep[frame_tracker_rows] = frame_tracker_keep
+            else:
+                _suppress_prediction_coverage_matches(
+                    ground_truth_boxes,
+                    tracker_boxes,
+                    frame_ground_truth_rows,
+                    frame_tracker_rows,
+                    frame_distractor_rows,
+                    frame_ground_truth_keep,
+                    frame_tracker_keep,
+                    ground_truth_keep,
+                    tracker_keep,
+                    distractor_iou_threshold,
+                    protocol["suppress_target_ground_truth"],
+                )
+
+        frame_ground_truth_rows = frame_ground_truth_rows[
+            frame_ground_truth_keep
+        ]
+        frame_tracker_rows = frame_tracker_rows[frame_tracker_keep]
+        similarities = iou_matrix(
+            ground_truth_boxes[frame_ground_truth_rows],
+            tracker_boxes[frame_tracker_rows],
+            return_dist=False,
+        )
+        if protocol["class_aware"] and similarities.size:
+            similarities[
+                ground_truth_classes[frame_ground_truth_rows, None]
+                != tracker_classes[frame_tracker_rows]
+            ] = 0
+        retained_ious[frame_id] = similarities
+
+    ground_truth = ground_truth._take(ground_truth_keep)
+    tracker = tracker._take(tracker_keep)
+    if protocol["class_aware"]:
+        ground_truth = _with_class_aware_ids(ground_truth)
+        tracker = _with_class_aware_ids(tracker)
+    return ground_truth, tracker, retained_ious
+
+
+def _validate_preprocessing_classes(
+    protocol,
+    benchmark,
+    ground_truth_classes,
+    tracker_classes,
+):
+    valid_classes = protocol["valid_classes"]
+    if valid_classes is not None:
+        invalid_classes = np.setdiff1d(
+            np.unique(ground_truth_classes),
+            valid_classes,
+        )
+        if len(invalid_classes):
+            raise ValueError(
+                "Invalid {} ground-truth class IDs: {}".format(
+                    benchmark,
+                    ", ".join(str(value) for value in invalid_classes),
+                )
+            )
+
+    requires_tracker_classes = (
+        protocol["valid_tracker_classes"] is not None
+        or protocol["filter_tracker_classes"]
+        or protocol["class_aware"]
+    )
+    if requires_tracker_classes and tracker_classes is None:
+        raise ValueError(
+            "{} preprocessing requires integer tracker ClassId values.".format(
+                benchmark,
+            )
+        )
+    valid_tracker_classes = protocol["valid_tracker_classes"]
+    if valid_tracker_classes is not None and len(tracker_classes):
+        invalid_tracker_classes = np.setdiff1d(
+            np.unique(tracker_classes),
+            valid_tracker_classes,
+        )
+        if len(invalid_tracker_classes):
+            raise ValueError(
+                "Invalid {} tracker class IDs: {}".format(
+                    benchmark,
+                    ", ".join(str(value) for value in invalid_tracker_classes),
+                )
+            )
+    tracker_max_class = protocol["tracker_max_class"]
+    if (
+        tracker_max_class is not None
+        and tracker_classes is not None
+        and len(tracker_classes)
+        and np.max(tracker_classes) > tracker_max_class
+    ):
+        raise ValueError(
+            "{} evaluation does not accept tracker class IDs greater than {}.".format(
+                benchmark,
+                tracker_max_class,
+            )
+        )
+
+
+def _suppress_prediction_coverage_matches(
+    ground_truth_boxes,
+    tracker_boxes,
+    frame_ground_truth_rows,
+    frame_tracker_rows,
+    frame_distractor_rows,
+    frame_ground_truth_keep,
+    frame_tracker_keep,
+    ground_truth_keep,
+    tracker_keep,
+    threshold,
+    suppress_target_ground_truth,
+):
+    distractor_boxes = ground_truth_boxes[
+        frame_ground_truth_rows[frame_distractor_rows]
+    ]
+    if suppress_target_ground_truth:
+        target_positions = np.flatnonzero(frame_ground_truth_keep)
+        target_suppressed = _covered_by_regions(
+            ground_truth_boxes[frame_ground_truth_rows[target_positions]],
+            distractor_boxes,
+            threshold,
+        )
+        suppressed_positions = target_positions[target_suppressed]
+        frame_ground_truth_keep[suppressed_positions] = False
+        ground_truth_keep[frame_ground_truth_rows[suppressed_positions]] = False
+
+    tracker_positions = np.flatnonzero(frame_tracker_keep)
+    tracker_suppressed = _covered_by_regions(
+        tracker_boxes[frame_tracker_rows[tracker_positions]],
+        distractor_boxes,
+        threshold,
+    )
+    suppressed_positions = tracker_positions[tracker_suppressed]
+    frame_tracker_keep[suppressed_positions] = False
+    tracker_keep[frame_tracker_rows[suppressed_positions]] = False
+
+
+def _suppress_iou_assignment_matches(
+    ground_truth_boxes,
+    ground_truth_classes,
+    tracker_boxes,
+    tracker_keep,
+    distractor_classes,
+    threshold,
+):
+    tracker_positions = np.flatnonzero(tracker_keep)
+    if not len(tracker_positions):
+        return
+    distractor_rows = np.isin(ground_truth_classes, distractor_classes)
+    distractor_similarities = iou_matrix(
+        ground_truth_boxes[distractor_rows],
+        tracker_boxes[tracker_positions],
+        return_dist=False,
+    )
+    if not np.any(distractor_similarities >= threshold - _FLOAT_EPS):
+        return
+
+    matching_scores = iou_matrix(
+        ground_truth_boxes,
+        tracker_boxes[tracker_positions],
+        return_dist=False,
+    )
+    matching_scores[matching_scores < threshold - _FLOAT_EPS] = 0
+    matched_rows, matched_columns = _dense_linear_sum_assignment(
+        -matching_scores
+    )
+    actually_matched = matching_scores[matched_rows, matched_columns] > _FLOAT_EPS
+    matched_rows = matched_rows[actually_matched]
+    matched_columns = matched_columns[actually_matched]
+    distractor_matches = np.isin(
+        ground_truth_classes[matched_rows],
+        distractor_classes,
+    )
+    tracker_keep[tracker_positions[matched_columns[distractor_matches]]] = False
+
+
+def _covered_by_regions(boxes, regions, threshold):
+    """Return boxes whose area is covered by the union of ignore regions."""
+    covered = np.zeros(len(boxes), dtype=np.bool_)
+    for index, (x, y, width, height) in enumerate(boxes):
+        area = width * height
+        if area <= _FLOAT_EPS:
+            continue
+        left = np.maximum(x, regions[:, 0])
+        top = np.maximum(y, regions[:, 1])
+        right = np.minimum(x + width, regions[:, 0] + regions[:, 2])
+        bottom = np.minimum(y + height, regions[:, 1] + regions[:, 3])
+        intersections = np.column_stack((left, top, right, bottom))
+        intersections = intersections[
+            (right > left) & (bottom > top)
+        ]
+        if len(intersections):
+            covered[index] = (
+                _rectangle_union_area(intersections)
+                >= threshold * area - _FLOAT_EPS
+            )
+    return covered
+
+
+def _rectangle_union_area(rectangles):
+    x_coordinates = np.unique(rectangles[:, (0, 2)])
+    area = 0.0
+    for left, right in zip(x_coordinates[:-1], x_coordinates[1:]):
+        if right <= left:
+            continue
+        active = rectangles[
+            (rectangles[:, 0] < right) & (rectangles[:, 2] > left)
+        ]
+        intervals = active[np.argsort(active[:, 1]), 1:4:2]
+        covered_height = 0.0
+        start = end = None
+        for top, bottom in intervals:
+            if start is None:
+                start, end = top, bottom
+            elif top > end:
+                covered_height += end - start
+                start, end = top, bottom
+            else:
+                end = max(end, bottom)
+        if start is not None:
+            covered_height += end - start
+        area += (right - left) * covered_height
+    return area
+
+
+def _with_class_aware_ids(data):
+    classes = _numeric_class_ids(data)
+    pairs = np.column_stack((classes, data.ids))
+    _, ids = np.unique(pairs, axis=0, return_inverse=True)
+    return data._with_ids(ids)
+
+
+def _ground_truth_confidence_mask(ground_truth, min_confidence):
+    if "Confidence" not in ground_truth.field_names:
+        return np.ones(len(ground_truth), dtype=np.bool_)
+    return ground_truth.column("Confidence") >= min_confidence
+
+
+def _resolve_motchallenge_benchmark(benchmark, ground_truth_path, ground_truth):
+    if benchmark is not None:
+        return benchmark
+
+    upper_path = str(ground_truth_path).upper()
+    for candidate in _benchmark_names():
+        if candidate in upper_path:
+            return candidate
+
+    if _looks_like_labeled_motchallenge(ground_truth):
+        return "MOT17"
+    return None
+
+
+def _resolve_class_protocol(
+    benchmark,
+    target_classes,
+    distractor_classes,
+    distractor_iou_threshold,
+):
+    config = _load_benchmark_config(benchmark) if benchmark is not None else None
+    default_target_classes = config["target_classes"] if config is not None else None
+    default_distractor_classes = config["distractor_classes"] if config is not None else None
+    if (
+        default_target_classes is None
+        and target_classes is None
+        and distractor_classes is None
+    ):
+        return None
+
+    if target_classes is None:
+        target_classes = default_target_classes or (1,)
+    if distractor_classes is None:
+        distractor_classes = default_distractor_classes or ()
+    if distractor_iou_threshold is None:
+        distractor_iou_threshold = (
+            config["distractor_threshold"]
+            if config is not None
+            else 0.5
+        )
+    overlap = set(target_classes) & set(distractor_classes)
+    if overlap:
+        raise ValueError(
+            "target_classes and distractor_classes must not overlap: {}".format(
+                ", ".join(str(value) for value in sorted(overlap))
+            )
+        )
+    uses_benchmark_classes = (
+        config is not None
+        and target_classes == default_target_classes
+        and distractor_classes == default_distractor_classes
+    )
+    return {
+        "target_classes": target_classes,
+        "distractor_classes": distractor_classes,
+        "distractor_threshold": distractor_iou_threshold,
+        "valid_classes": (
+            config["valid_classes"] if uses_benchmark_classes else None
+        ),
+        "tracker_max_class": (
+            config["tracker_max_class"] if uses_benchmark_classes else None
+        ),
+        "valid_tracker_classes": (
+            config["valid_tracker_classes"] if uses_benchmark_classes else None
+        ),
+        "class_aware": config["class_aware"] if config is not None else False,
+        "filter_tracker_classes": (
+            config["filter_tracker_classes"] if config is not None else False
+        ),
+        "distractor_mode": (
+            config["distractor_mode"]
+            if config is not None
+            else "iou_assignment"
+        ),
+        "suppress_target_ground_truth": (
+            config["suppress_target_ground_truth"]
+            if config is not None
+            else False
+        ),
+    }
+
+
+def _looks_like_labeled_motchallenge(ground_truth):
+    classes = _numeric_class_ids(ground_truth)
+    if classes is None or not len(classes):
+        return False
+    valid_classes = _load_benchmark_config("MOT17")["valid_classes"]
+    if valid_classes is None or not np.all(np.isin(classes, valid_classes)):
+        return False
+    if "Confidence" not in ground_truth.field_names:
+        return False
+    marks = ground_truth.column("Confidence")
+    if not np.all((marks == 0) | (marks == 1)):
+        return False
+    if "Visibility" not in ground_truth.field_names:
+        return False
+    visibility = ground_truth.column("Visibility")
+    return np.all((visibility >= 0) & (visibility <= 1))
+
+
+def _numeric_class_ids(data):
+    if "ClassId" not in data.field_names:
+        return None
+    try:
+        values = np.asarray(data.column("ClassId"), dtype=float)
+    except (TypeError, ValueError):
+        return None
+    if not np.all(np.isfinite(values)) or not np.all(values == np.rint(values)):
+        return None
+    return values.astype(np.int64, copy=False)
+
+
+def _group_frame_row_indices(frame_ids):
+    if len(frame_ids) == 0:
+        return {}
+    if np.any(frame_ids[1:] < frame_ids[:-1]):
+        order = np.argsort(frame_ids, kind="stable")
+        sorted_frame_ids = frame_ids[order]
+    else:
+        order = np.arange(len(frame_ids), dtype=np.intp)
+        sorted_frame_ids = frame_ids
+    boundaries = np.flatnonzero(sorted_frame_ids[1:] != sorted_frame_ids[:-1]) + 1
+    starts = np.concatenate(([0], boundaries))
+    ends = np.concatenate((boundaries, [len(sorted_frame_ids)]))
+    return {
+        sorted_frame_ids[start]: order[start:end]
+        for start, end in zip(starts, ends)
+    }
+
+
+def _uses_box_fields(distfields):
+    return distfields is None or tuple(distfields) == _BOX_FIELDS
+
+
 def _prepare_iou_sequence_data(
     gt,
     test,
@@ -739,9 +1254,10 @@ def _prepare_iou_sequence_data(
     event_recorder=None,
     compute_hota=True,
     retain_frame_iou=True,
+    precomputed_similarities=None,
 ):
     if distfields is None:
-        distfields = ["X", "Y", "Width", "Height"]
+        distfields = list(_BOX_FIELDS)
 
     gt_ids = np.unique(gt.ids)
     tracker_ids = np.unique(test.ids)
@@ -768,7 +1284,10 @@ def _prepare_iou_sequence_data(
             progress.advance()
         frame_gt_indices, frame_gt_values = gt_groups.get(frame_id, (empty_indices, empty_values))
         frame_tracker_indices, frame_tracker_values = test_groups.get(frame_id, (empty_indices, empty_values))
-        similarities = iou_matrix(frame_gt_values, frame_tracker_values, return_dist=False)
+        if precomputed_similarities is not None and frame_id in precomputed_similarities:
+            similarities = precomputed_similarities[frame_id]
+        else:
+            similarities = iou_matrix(frame_gt_values, frame_tracker_values, return_dist=False)
         if retain_frame_iou:
             frame_data.append((
                 frame_gt_indices,
@@ -1249,6 +1768,210 @@ def _validate_paths(gt_path, test_path):
 def _validate_n_jobs(n_jobs):
     if n_jobs < 1:
         raise ValueError("n_jobs must be at least 1.")
+
+
+def _normalize_benchmark(benchmark):
+    if benchmark is None:
+        return None
+    if not isinstance(benchmark, str):
+        raise TypeError("benchmark must be a MOTChallenge benchmark name or None.")
+    benchmark = benchmark.upper()
+    benchmark_names = _benchmark_names()
+    if benchmark not in benchmark_names:
+        raise ValueError(
+            "benchmark must be one of {}.".format(
+                _format_choices(benchmark_names)
+            )
+        )
+    return benchmark
+
+
+def _benchmark_names():
+    global _BENCHMARK_NAMES
+    if _BENCHMARK_NAMES is None:
+        _BENCHMARK_NAMES = tuple(
+            path.stem.upper()
+            for path in sorted(_BENCHMARK_CONFIG_DIR.glob("*.yaml"))
+        )
+    return _BENCHMARK_NAMES
+
+
+def _load_benchmark_config(benchmark):
+    """Load and validate one bundled JSON-compatible YAML profile."""
+    cached = _BENCHMARK_CONFIG_CACHE.get(benchmark)
+    if cached is not None:
+        return cached
+
+    import json
+
+    path = _BENCHMARK_CONFIG_DIR / "{}.yaml".format(benchmark.lower())
+    try:
+        with path.open("r", encoding="utf-8") as stream:
+            raw = json.load(stream)
+    except (OSError, ValueError) as error:
+        raise RuntimeError(
+            "Could not load benchmark profile {}: {}".format(path, error)
+        ) from error
+
+    expected_fields = {
+        "class_aware",
+        "target_classes",
+        "distractor_classes",
+        "distractor_threshold",
+        "distractor_mode",
+        "filter_tracker_classes",
+        "suppress_target_ground_truth",
+        "valid_classes",
+        "valid_tracker_classes",
+        "tracker_max_class",
+    }
+    if not isinstance(raw, Mapping) or set(raw) != expected_fields:
+        raise ValueError(
+            "Benchmark profile {} must define exactly: {}.".format(
+                path,
+                ", ".join(sorted(expected_fields)),
+            )
+        )
+
+    target_classes = _normalize_class_ids(
+        raw["target_classes"],
+        "target_classes",
+    )
+    distractor_classes = _normalize_class_ids(
+        raw["distractor_classes"],
+        "distractor_classes",
+        allow_empty=True,
+    )
+    valid_classes = _normalize_class_ids(
+        raw["valid_classes"],
+        "valid_classes",
+    )
+    valid_tracker_classes = _normalize_class_ids(
+        raw["valid_tracker_classes"],
+        "valid_tracker_classes",
+    )
+    tracker_max_class = raw["tracker_max_class"]
+    if tracker_max_class is not None and (
+        not isinstance(tracker_max_class, Integral)
+        or isinstance(tracker_max_class, (bool, np.bool_))
+    ):
+        raise TypeError("tracker_max_class must be an integer or null.")
+    distractor_mode = raw["distractor_mode"]
+    _validate_benchmark_config_values(
+        raw,
+        target_classes,
+        distractor_classes,
+        valid_classes,
+        distractor_mode,
+    )
+
+    config = {
+        "target_classes": target_classes,
+        "distractor_classes": distractor_classes,
+        "distractor_threshold": _normalize_iou_threshold(
+            raw["distractor_threshold"]
+        ),
+        "valid_classes": valid_classes,
+        "valid_tracker_classes": valid_tracker_classes,
+        "tracker_max_class": (
+            int(tracker_max_class) if tracker_max_class is not None else None
+        ),
+        "class_aware": raw["class_aware"],
+        "filter_tracker_classes": raw["filter_tracker_classes"],
+        "distractor_mode": distractor_mode,
+        "suppress_target_ground_truth": raw["suppress_target_ground_truth"],
+    }
+    _BENCHMARK_CONFIG_CACHE[benchmark] = config
+    return config
+
+
+def _validate_benchmark_config_values(
+    raw,
+    target_classes,
+    distractor_classes,
+    valid_classes,
+    distractor_mode,
+):
+    for field in (
+        "class_aware",
+        "filter_tracker_classes",
+        "suppress_target_ground_truth",
+    ):
+        if not isinstance(raw[field], bool):
+            raise TypeError("{} must be a boolean.".format(field))
+    if distractor_mode not in _DISTRACTOR_MODES:
+        raise ValueError(
+            "distractor_mode must be one of {}.".format(
+                _format_choices(tuple(sorted(_DISTRACTOR_MODES)))
+            )
+        )
+    overlap = (
+        set(target_classes) & set(distractor_classes)
+        if target_classes is not None
+        else set()
+    )
+    if overlap:
+        raise ValueError(
+            "Benchmark target and distractor classes overlap: {}.".format(
+                ", ".join(str(value) for value in sorted(overlap))
+            )
+        )
+    configured_classes = set(distractor_classes)
+    if target_classes is not None:
+        configured_classes.update(target_classes)
+    unknown_classes = (
+        configured_classes - set(valid_classes)
+        if valid_classes is not None
+        else set()
+    )
+    if unknown_classes:
+        raise ValueError(
+            "Benchmark classes are absent from valid_classes: {}.".format(
+                ", ".join(str(value) for value in sorted(unknown_classes))
+            )
+        )
+
+
+def _format_choices(values):
+    if len(values) == 1:
+        return values[0]
+    return "{}, or {}".format(", ".join(values[:-1]), values[-1])
+
+
+def _normalize_class_ids(values, name, allow_empty=False):
+    if values is None:
+        return None
+    if isinstance(values, Integral) and not isinstance(values, (bool, np.bool_)):
+        values = (int(values),)
+    else:
+        if isinstance(values, (str, bytes)):
+            raise TypeError("{} must contain integer class IDs.".format(name))
+        try:
+            values = tuple(values)
+        except TypeError:
+            raise TypeError(
+                "{} must be an integer or iterable of integers.".format(name)
+            ) from None
+        if any(
+            not isinstance(value, Integral)
+            or isinstance(value, (bool, np.bool_))
+            for value in values
+        ):
+            raise TypeError("{} must contain integer class IDs.".format(name))
+        values = tuple(int(value) for value in values)
+    values = tuple(sorted(set(values)))
+    if not values and not allow_empty:
+        raise ValueError("{} must contain at least one class ID.".format(name))
+    return values
+
+
+def _normalize_iou_threshold(value):
+    if not isinstance(value, Number) or isinstance(value, (bool, np.bool_)):
+        raise TypeError("distractor_iou_threshold must be a number.")
+    value = float(value)
+    if not np.isfinite(value) or value < 0 or value > 1:
+        raise ValueError("distractor_iou_threshold must be between 0 and 1.")
+    return value
 
 
 def _default_sequence_name(path):

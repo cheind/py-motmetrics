@@ -64,6 +64,7 @@ include = [
     "README.md",
     "pyproject.toml",
     "motmetrics/*.py",
+    "motmetrics/configs/*.yaml",
 ]
 
 [tool.ruff]
