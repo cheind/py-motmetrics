@@ -2,14 +2,14 @@
   <img src=".github/assets/logo.png" alt="py-motmetrics logo" width="500">
 </p>
 
+<p align="center"><strong>Fast, extensible multi-object tracking evaluation.</strong></p>
+
 <p align="center">
   <a href="https://badge.fury.io/py/motmetrics"><img src="https://badge.fury.io/py/motmetrics.svg" alt="PyPI version"></a>
   <a href="https://github.com/cheind/py-motmetrics/actions/workflows/python-package.yml"><img src="https://github.com/cheind/py-motmetrics/actions/workflows/python-package.yml/badge.svg" alt="Build status"></a>
   <a href="https://github.com/cheind/py-motmetrics/actions/workflows/python-package.yml"><img src="https://img.shields.io/badge/TrackEval%201.3.0-parity-brightgreen" alt="TrackEval parity"></a>
   <a href="https://doi.org/10.5281/zenodo.14014773"><img src="https://zenodo.org/badge/87559569.svg" alt="DOI"></a>
 </p>
-
-**motmetrics** provides Python tools for evaluating multiple object tracking (MOT) results. It implements MOTChallenge-aligned CLEAR MOT, Identity, and HOTA-related metrics, including MOTA, MOTP, IDF1, precision, recall, and track quality counts.
 
 ## Why MOTMetrics
 
