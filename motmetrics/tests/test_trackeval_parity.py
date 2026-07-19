@@ -386,6 +386,8 @@ def test_public_evaluator_matches_full_trackeval_mot17_protocol(tmp_path):
             "3,92,501,1,10,10,0,2,1",
             "3,93,601,1,10,10,0,12,1",
             "3,94,701,1,10,10,0,3,1",
+            "4,2,402,1,10,10,1,1,1",
+            "5,2,403,1,10,10,1,1,1",
         )),
         encoding="utf-8",
     )
@@ -401,6 +403,7 @@ def test_public_evaluator_matches_full_trackeval_mot17_protocol(tmp_path):
             "3,50,501,1,10,10,1,1,1",
             "3,60,601,1,10,10,1,1,1",
             "3,70,701,1,10,10,1,1,1",
+            "5,40,403,1,10,10,1,1,1",
         )),
         encoding="utf-8",
     )
@@ -415,7 +418,7 @@ def test_public_evaluator_matches_full_trackeval_mot17_protocol(tmp_path):
         "BENCHMARK": "MOT17",
         "SPLIT_TO_EVAL": "train",
         "DO_PREPROC": True,
-        "SEQ_INFO": {sequence_name: 3},
+        "SEQ_INFO": {sequence_name: 5},
         "SKIP_SPLIT_FOL": True,
         "PRINT_CONFIG": False,
     })

@@ -45,9 +45,19 @@ class _MetricsEngine(object):
         num_transfer=0,
         num_ascend=0,
         num_migrate=0,
+        advances_previous_frame=False,
     ):
         """Batch all matched-object state changes for one frame."""
         count = len(object_codes)
+        if count:
+            self.fragmentations += int(
+                np.count_nonzero(
+                    self._ever_tracked[object_codes]
+                    & ~self._last_tracked[object_codes]
+                )
+            )
+        if advances_previous_frame:
+            self._last_tracked.fill(False)
         if count == 0:
             return
 
@@ -59,12 +69,6 @@ class _MetricsEngine(object):
         self.type_counts["MIGRATE"] += int(num_migrate)
 
         self.tracked_counts[object_codes] += 1
-        self.fragmentations += int(
-            np.count_nonzero(
-                self._ever_tracked[object_codes]
-                & ~self._last_tracked[object_codes]
-            )
-        )
         self._ever_tracked[object_codes] = True
         self._last_tracked[object_codes] = True
         self.distance_sum += float(np.sum(distances))
@@ -75,7 +79,6 @@ class _MetricsEngine(object):
         if count == 0:
             return
         self.type_counts["MISS"] += count
-        self._last_tracked[object_codes] = False
 
     def record_false_positives(self, count):
         """Record false positives for one frame."""

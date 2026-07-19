@@ -385,7 +385,7 @@ def test_track_quality_boundary_matches_trackeval():
     assert metr["mostly_lost"] == 0
 
 
-def test_num_fragmentations_ignores_leading_and_trailing_misses():
+def test_empty_tracker_frames_do_not_fragment_trackeval_tracks():
     acc = _accumulate([
         ([1, 2], [], []),
         ([1, 2], [1], [[0.1], [np.nan]]),
@@ -396,4 +396,32 @@ def test_num_fragmentations_ignores_leading_and_trailing_misses():
 
     summary = _compute(acc, metric_names=["num_fragmentations"])
 
-    assert summary['num_fragmentations'] == 1
+    assert summary["num_fragmentations"] == 0
+
+
+def test_partial_misses_fragment_trackeval_tracks():
+    acc = _accumulate([
+        ([1, 2], [1, 2], [[0.1, np.nan], [np.nan, 0.1]]),
+        ([1, 2], [2], [[np.nan], [0.1]]),
+        ([1, 2], [1, 2], [[0.1, np.nan], [np.nan, 0.1]]),
+    ])
+
+    summary = _compute(acc, metric_names=["num_fragmentations"])
+
+    assert summary["num_fragmentations"] == 1
+
+
+def test_empty_tracker_frames_preserve_trackeval_match_continuity():
+    acc = _accumulate([
+        ([1], [10], [[0.4]]),
+        ([1], [], []),
+        ([1], [10, 11], [[0.4, 0.1]]),
+    ])
+
+    summary = _compute(
+        acc,
+        metric_names=["num_switches", "num_fragmentations"],
+    )
+
+    assert summary["num_switches"] == 0
+    assert summary["num_fragmentations"] == 0

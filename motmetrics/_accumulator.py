@@ -54,6 +54,9 @@ class _Accumulator(object):
             )
         object_mask = np.zeros(len(object_codes), dtype=np.bool_)
         hypothesis_mask = np.zeros(len(hypothesis_codes), dtype=np.bool_)
+        advances_previous_frame = bool(
+            len(object_codes) and len(hypothesis_codes)
+        )
 
         finite_rows, finite_columns = np.nonzero(finite)
         self._metrics_engine.record_frame(
@@ -170,6 +173,7 @@ class _Accumulator(object):
             num_transfer=np.count_nonzero(transfer_mask),
             num_ascend=ascend_count,
             num_migrate=migrate_count,
+            advances_previous_frame=advances_previous_frame,
         )
 
         missed_objects = object_codes[~object_mask]
@@ -189,9 +193,10 @@ class _Accumulator(object):
                 np.count_nonzero(~hypothesis_mask)
             )
 
-        self._matched_previous[self._previous_matched_objects] = False
-        self._matched_previous[matched_objects] = True
-        self._previous_matched_objects = matched_objects
+        if advances_previous_frame:
+            self._matched_previous[self._previous_matched_objects] = False
+            self._matched_previous[matched_objects] = True
+            self._previous_matched_objects = matched_objects
 
     @property
     def metrics_engine(self):
