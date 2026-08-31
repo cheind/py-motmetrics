@@ -793,14 +793,22 @@ def test_evaluate_motchallenge_rejects_mixed_file_and_folder_inputs():
         raise AssertionError("Expected mixed file/folder inputs to fail.")
 
 
-def test_validate_n_jobs_caps_exceeding_cpus(monkeypatch):
+def test_validate_n_jobs_defaults_and_flag_overrides(monkeypatch):
     monkeypatch.setattr(evaluation.os, "cpu_count", lambda: 8)
-    assert evaluation._validate_n_jobs(12) == 6
-    assert evaluation._validate_n_jobs(8) == 8
-    assert evaluation._validate_n_jobs(4) == 4
+    # Default for folder evaluation when n_jobs is None -> max(1, cpu_count - 2) = 6
+    assert evaluation._validate_n_jobs(None, is_folder=True) == 6
+    # Default for file evaluation when n_jobs is None -> 1
+    assert evaluation._validate_n_jobs(None, is_folder=False) == 1
+
+    # Explicit flag overrides default behavior
+    assert evaluation._validate_n_jobs(12, is_folder=True) == 12
+    assert evaluation._validate_n_jobs(8, is_folder=True) == 8
+    assert evaluation._validate_n_jobs(4, is_folder=True) == 4
+    assert evaluation._validate_n_jobs(1, is_folder=True) == 1
 
     monkeypatch.setattr(evaluation.os, "cpu_count", lambda: 2)
-    assert evaluation._validate_n_jobs(4) == 1
+    assert evaluation._validate_n_jobs(None, is_folder=True) == 1
+    assert evaluation._validate_n_jobs(4, is_folder=True) == 4
 
 
 def test_hota_is_invariant_to_zero_tracker_id():

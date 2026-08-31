@@ -19,8 +19,8 @@ def main():
     parser.add_argument(
         "--jobs",
         type=int,
-        default=1,
-        help="Sequence worker processes (default: 1)",
+        default=None,
+        help="Sequence worker processes (default: max(1, CPU count - 2) for folder evaluation)",
     )
     parser.add_argument(
         "--runs",
@@ -34,10 +34,13 @@ def main():
         help="Optional metric names to calculate",
     )
     args = parser.parse_args()
-    if args.jobs < 1:
+    if args.jobs is not None and args.jobs < 1:
         parser.error("--jobs must be at least 1")
     if args.runs < 1:
         parser.error("--runs must be at least 1")
+
+    from pathlib import Path
+    actual_jobs = mm._evaluation._validate_n_jobs(args.jobs, is_folder=not Path(args.ground_truth).is_file())
 
     timings = []
     summary = None
@@ -57,7 +60,7 @@ def main():
         print(
             "\nevaluate_motchallenge: {:.3f}s (n_jobs={})".format(
                 timings[0],
-                args.jobs,
+                actual_jobs,
             )
         )
         return
@@ -69,7 +72,7 @@ def main():
             min(timings),
             max(timings),
             args.runs,
-            args.jobs,
+            actual_jobs,
         )
     )
 

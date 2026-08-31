@@ -179,7 +179,7 @@ def evaluate_motchallenge(
     gt_min_confidence=1,
     exclude_id=False,
     hota_alphas=None,
-    n_jobs=1,
+    n_jobs=None,
     progress=None,
     extra_metric_families=None,
     benchmark=None,
@@ -237,7 +237,7 @@ def evaluate_motchallenge(
     gt_path = Path(groundtruths)
     test_path = Path(tests)
     _validate_paths(gt_path, test_path)
-    n_jobs = _validate_n_jobs(n_jobs)
+    n_jobs = _validate_n_jobs(n_jobs, is_folder=not gt_path.is_file())
     benchmark = _normalize_benchmark(benchmark)
     target_classes = _normalize_class_ids(target_classes, "target_classes")
     distractor_classes = _normalize_class_ids(
@@ -1765,12 +1765,17 @@ def _validate_paths(gt_path, test_path):
         raise ValueError("Ground-truth and tracker result paths must both be files or both be folders.")
 
 
-def _validate_n_jobs(n_jobs):
+def _validate_n_jobs(n_jobs, is_folder=False):
+    if n_jobs is None:
+        if is_folder:
+            cpu_count = getattr(os, "process_cpu_count", os.cpu_count)() or 1
+            return max(1, cpu_count - 2)
+        return 1
+    if not isinstance(n_jobs, (int, np.integer)):
+        raise TypeError("n_jobs must be an integer or None.")
+    n_jobs = int(n_jobs)
     if n_jobs < 1:
         raise ValueError("n_jobs must be at least 1.")
-    cpu_count = getattr(os, "process_cpu_count", os.cpu_count)() or 1
-    if n_jobs > cpu_count:
-        return max(1, cpu_count - 2)
     return n_jobs
 
 
