@@ -794,7 +794,13 @@ def test_evaluate_motchallenge_rejects_mixed_file_and_folder_inputs():
 
 
 def test_validate_n_jobs_defaults_and_flag_overrides(monkeypatch):
-    monkeypatch.setattr(evaluation.os, "cpu_count", lambda: 8)
+    def mock_cpu_count(value):
+        monkeypatch.setattr(evaluation.os, "cpu_count", lambda: value)
+        # Python 3.13+ exposes process_cpu_count(), which _validate_n_jobs
+        # intentionally prefers because it respects process/CI CPU limits.
+        monkeypatch.setattr(evaluation.os, "process_cpu_count", lambda: value, raising=False)
+
+    mock_cpu_count(8)
     # Default for multi-sequence evaluation when n_jobs is None -> min(num_tasks, max(1, cpu_count - 2))
     assert evaluation._validate_n_jobs(None, num_tasks=10) == 6
     assert evaluation._validate_n_jobs(None, num_tasks=4) == 4
@@ -808,7 +814,7 @@ def test_validate_n_jobs_defaults_and_flag_overrides(monkeypatch):
     assert evaluation._validate_n_jobs(4, num_tasks=4) == 4
     assert evaluation._validate_n_jobs(1, num_tasks=4) == 1
 
-    monkeypatch.setattr(evaluation.os, "cpu_count", lambda: 2)
+    mock_cpu_count(2)
     assert evaluation._validate_n_jobs(None, num_tasks=10) == 1
     assert evaluation._validate_n_jobs(4, num_tasks=10) == 4
 
