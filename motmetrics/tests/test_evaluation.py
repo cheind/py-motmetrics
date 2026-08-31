@@ -793,6 +793,16 @@ def test_evaluate_motchallenge_rejects_mixed_file_and_folder_inputs():
         raise AssertionError("Expected mixed file/folder inputs to fail.")
 
 
+def test_validate_n_jobs_caps_exceeding_cpus(monkeypatch):
+    monkeypatch.setattr(evaluation.os, "cpu_count", lambda: 8)
+    assert evaluation._validate_n_jobs(12) == 6
+    assert evaluation._validate_n_jobs(8) == 8
+    assert evaluation._validate_n_jobs(4) == 4
+
+    monkeypatch.setattr(evaluation.os, "cpu_count", lambda: 2)
+    assert evaluation._validate_n_jobs(4) == 1
+
+
 def test_hota_is_invariant_to_zero_tracker_id():
     hota_alphas = np.array([0.25, 0.5, 0.75])
     gt = _mot_dataframe([

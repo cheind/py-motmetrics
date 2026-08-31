@@ -237,7 +237,7 @@ def evaluate_motchallenge(
     gt_path = Path(groundtruths)
     test_path = Path(tests)
     _validate_paths(gt_path, test_path)
-    _validate_n_jobs(n_jobs)
+    n_jobs = _validate_n_jobs(n_jobs)
     benchmark = _normalize_benchmark(benchmark)
     target_classes = _normalize_class_ids(target_classes, "target_classes")
     distractor_classes = _normalize_class_ids(
@@ -1768,6 +1768,10 @@ def _validate_paths(gt_path, test_path):
 def _validate_n_jobs(n_jobs):
     if n_jobs < 1:
         raise ValueError("n_jobs must be at least 1.")
+    cpu_count = getattr(os, "process_cpu_count", os.cpu_count)() or 1
+    if n_jobs > cpu_count:
+        return max(1, cpu_count - 2)
+    return n_jobs
 
 
 def _normalize_benchmark(benchmark):
