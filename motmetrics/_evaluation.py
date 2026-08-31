@@ -1768,6 +1768,16 @@ def _validate_paths(gt_path, test_path):
 
 
 def _validate_n_jobs(n_jobs, num_tasks=1, is_folder=False):
+    # Auto-scaling worker count when n_jobs is None:
+    # n_jobs = min(num_tasks, max(1, cpu_count - 2))
+    #
+    # Examples across datasets (assuming C=14 system CPUs):
+    # 1. 2 sequences (e.g. TUD-Campus & TUD-Stadtmitte): N=2 -> min(2, 12) = 2 workers (no idle processes).
+    # 2. 4 sequences (e.g. MOT20): N=4 -> min(4, 12) = 4 workers.
+    # 3. 7 sequences (e.g. MOT17): N=7 -> min(7, 12) = 7 workers.
+    # 4. 20 sequences: N=20 -> min(20, 12) = 12 workers (leaving 2 CPUs free for OS tasks).
+    # 5. Single sequence file: N=1 -> 1 worker (executes in main process without IPC/spawn overhead).
+    # 6. Explicit n_jobs=N or --jobs N overrides auto-scaling.
     if n_jobs is None:
         if num_tasks <= 1 and not is_folder:
             return 1
