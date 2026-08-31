@@ -40,7 +40,8 @@ def main():
         parser.error("--runs must be at least 1")
 
     from pathlib import Path
-    actual_jobs = mm._evaluation._validate_n_jobs(args.jobs, is_folder=not Path(args.ground_truth).is_file())
+    matched_files = mm._evaluation._match_input_files(Path(args.ground_truth), Path(args.predictions))
+    actual_jobs = mm._evaluation._validate_n_jobs(args.jobs, num_tasks=len(matched_files))
 
     timings = []
     summary = None

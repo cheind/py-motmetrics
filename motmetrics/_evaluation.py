@@ -237,7 +237,11 @@ def evaluate_motchallenge(
     gt_path = Path(groundtruths)
     test_path = Path(tests)
     _validate_paths(gt_path, test_path)
-    n_jobs = _validate_n_jobs(n_jobs, is_folder=not gt_path.is_file())
+    matched_files = _match_input_files(gt_path, test_path, name)
+    if not matched_files:
+        raise ValueError("No matching ground-truth and tracker result files found.")
+
+    n_jobs = _validate_n_jobs(n_jobs, num_tasks=len(matched_files))
     benchmark = _normalize_benchmark(benchmark)
     target_classes = _normalize_class_ids(target_classes, "target_classes")
     distractor_classes = _normalize_class_ids(
@@ -262,9 +266,7 @@ def evaluate_motchallenge(
     if hota_alphas is None:
         hota_alphas = HOTA_ALPHAS
     summary = _evaluate_iou_paths(
-        gt_path,
-        test_path,
-        name,
+        matched_files,
         fmt,
         gt_min_confidence,
         distfields,
@@ -290,10 +292,20 @@ def evaluate_motchallenge(
     )
 
 
+def _match_input_files(gt_root, test_root, sequence_name=None):
+    if gt_root.is_file():
+        return [(sequence_name or _default_sequence_name(test_root), gt_root, test_root)]
+    gt_files = _find_groundtruth_files(gt_root)
+    test_files = _find_test_files(test_root)
+    return [
+        (name, gt_files[name], test_path)
+        for name, test_path in test_files.items()
+        if name in gt_files
+    ]
+
+
 def _evaluate_iou_paths(
-    gt_root,
-    test_root,
-    sequence_name,
+    matched_files,
     fmt,
     gt_min_confidence,
     distfields,
@@ -312,16 +324,6 @@ def _evaluate_iou_paths(
     distractor_iou_threshold,
 ):
     """Evaluate every input through the canonical state-only IoU engine."""
-    if gt_root.is_file():
-        matched_files = [(sequence_name or _default_sequence_name(test_root), gt_root, test_root)]
-    else:
-        gt_files = _find_groundtruth_files(gt_root)
-        test_files = _find_test_files(test_root)
-        matched_files = [
-            (name, gt_files[name], test_path)
-            for name, test_path in test_files.items()
-            if name in gt_files
-        ]
     tasks = [
         (
             task_index,
@@ -1765,12 +1767,15 @@ def _validate_paths(gt_path, test_path):
         raise ValueError("Ground-truth and tracker result paths must both be files or both be folders.")
 
 
-def _validate_n_jobs(n_jobs, is_folder=False):
+def _validate_n_jobs(n_jobs, num_tasks=1, is_folder=False):
     if n_jobs is None:
-        if is_folder:
-            cpu_count = getattr(os, "process_cpu_count", os.cpu_count)() or 1
-            return max(1, cpu_count - 2)
-        return 1
+        if num_tasks <= 1 and not is_folder:
+            return 1
+        cpu_count = getattr(os, "process_cpu_count", os.cpu_count)() or 1
+        max_cpus = max(1, cpu_count - 2)
+        if num_tasks > 1:
+            return min(num_tasks, max_cpus)
+        return max_cpus
     if not isinstance(n_jobs, (int, np.integer)):
         raise TypeError("n_jobs must be an integer or None.")
     n_jobs = int(n_jobs)

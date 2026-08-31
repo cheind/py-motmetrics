@@ -795,20 +795,22 @@ def test_evaluate_motchallenge_rejects_mixed_file_and_folder_inputs():
 
 def test_validate_n_jobs_defaults_and_flag_overrides(monkeypatch):
     monkeypatch.setattr(evaluation.os, "cpu_count", lambda: 8)
-    # Default for folder evaluation when n_jobs is None -> max(1, cpu_count - 2) = 6
-    assert evaluation._validate_n_jobs(None, is_folder=True) == 6
-    # Default for file evaluation when n_jobs is None -> 1
-    assert evaluation._validate_n_jobs(None, is_folder=False) == 1
+    # Default for multi-sequence evaluation when n_jobs is None -> min(num_tasks, max(1, cpu_count - 2))
+    assert evaluation._validate_n_jobs(None, num_tasks=10) == 6
+    assert evaluation._validate_n_jobs(None, num_tasks=4) == 4
+    assert evaluation._validate_n_jobs(None, num_tasks=2) == 2
+    # Default for single-sequence evaluation when n_jobs is None -> 1
+    assert evaluation._validate_n_jobs(None, num_tasks=1) == 1
 
     # Explicit flag overrides default behavior
-    assert evaluation._validate_n_jobs(12, is_folder=True) == 12
-    assert evaluation._validate_n_jobs(8, is_folder=True) == 8
-    assert evaluation._validate_n_jobs(4, is_folder=True) == 4
-    assert evaluation._validate_n_jobs(1, is_folder=True) == 1
+    assert evaluation._validate_n_jobs(12, num_tasks=4) == 12
+    assert evaluation._validate_n_jobs(8, num_tasks=4) == 8
+    assert evaluation._validate_n_jobs(4, num_tasks=4) == 4
+    assert evaluation._validate_n_jobs(1, num_tasks=4) == 1
 
     monkeypatch.setattr(evaluation.os, "cpu_count", lambda: 2)
-    assert evaluation._validate_n_jobs(None, is_folder=True) == 1
-    assert evaluation._validate_n_jobs(4, is_folder=True) == 4
+    assert evaluation._validate_n_jobs(None, num_tasks=10) == 1
+    assert evaluation._validate_n_jobs(4, num_tasks=10) == 4
 
 
 def test_hota_is_invariant_to_zero_tracker_id():
