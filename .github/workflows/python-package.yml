@@ -33,12 +33,6 @@ jobs:
                   uv venv --python ${{ matrix.python-version }}
                   uv pip install --group dev
                   uv pip install --editable .
-                  # lapsolver is unmaintained and no longer builds with the C++
-                  # toolchain on current GitHub-hosted runners. The test suite
-                  # discovers optional solvers dynamically, so exercise the
-                  # maintained LAP backends here instead.
-                  uv pip install lap scipy munkres
-                  uv pip install "ortools<9.12; python_version < '3.9'" "ortools; python_version >= '3.9'"
             - name: Lint with Ruff
               run: |
                   # stop the build if there are Python syntax errors or undefined names
@@ -68,3 +62,6 @@ jobs:
             - name: Compare py-motmetrics with TrackEval
               run: |
                   uv run --no-project pytest -q -s motmetrics/tests/test_trackeval_parity.py
+            - name: Compare end-to-end metrics runtime
+              run: |
+                  uv run --no-project python motmetrics/tests/benchmark_trackeval_runtime.py --runs 7

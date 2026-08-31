@@ -1,9 +1,6 @@
 [build-system]
-requires = [
-    "setuptools>=75.3.4,<76; python_version == '3.8'",
-    "setuptools>=77.0.3; python_version >= '3.9'",
-]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
 
 [project]
 name = "motmetrics"
@@ -11,7 +8,8 @@ version = "1.4.0"
 description = "Metrics for multiple object tracker benchmarking."
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.8,<3.15"
-license = { file = "LICENSE" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
     { name = "Christoph Heindl" },
     { name = "Jack Valmadre" },
@@ -29,16 +27,18 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
+    "lapx>=0.9.4",
     "numpy>=1.23.2",
-    "pandas>=1.5.0",
-    "scipy>=1.9.3",
 ]
+
+[project.optional-dependencies]
+dataframe = ["pandas>=1.5.0"]
 
 [dependency-groups]
 dev = [
+    "lapx>=0.9.4",
     "numpy>=1.23.2",
     "pandas>=1.5.0",
-    "scipy>=1.9.3",
     "ruff>=0.12.0",
     "pytest>=7.4.4,<8.4.0; python_version < '3.9'",
     "pytest>=8.4.1; python_version >= '3.9'",
@@ -50,19 +50,22 @@ dev = [
 Homepage = "https://github.com/cheind/py-motmetrics"
 Issues = "https://github.com/cheind/py-motmetrics/issues"
 
-[tool.setuptools]
-include-package-data = true
-
-[tool.setuptools.package-data]
-motmetrics = [
-    "data/**/*.mat",
-    "data/**/*.txt",
-    "data/**/*.xml",
-    "etc/*.png",
+[tool.hatch.build.targets.wheel]
+packages = ["motmetrics"]
+exclude = [
+    "motmetrics/data",
+    "motmetrics/tests",
 ]
 
-[tool.setuptools.packages.find]
-include = ["motmetrics*"]
+[tool.hatch.build.targets.sdist]
+include = [
+    "CITATION.cff",
+    "LICENSE",
+    "README.md",
+    "pyproject.toml",
+    "motmetrics/*.py",
+    "motmetrics/configs/*.yaml",
+]
 
 [tool.ruff]
 line-length = 127

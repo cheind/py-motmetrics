@@ -1,0 +1,12 @@
+{
+  "target_classes": [1],
+  "distractor_classes": [],
+  "distractor_threshold": 0.5,
+  "valid_classes": [1],
+  "tracker_max_class": 1,
+  "valid_tracker_classes": null,
+  "class_aware": false,
+  "filter_tracker_classes": false,
+  "distractor_mode": "iou_assignment",
+  "suppress_target_ground_truth": false
+}

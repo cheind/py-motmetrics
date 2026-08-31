@@ -1,0 +1,37 @@
+cff-version: 1.2.0
+
+message: >-
+  If you use this software, please cite it using the metadata
+  from this file.
+
+title: "py-motmetrics: Metrics for multiple object tracker benchmarking"
+
+abstract: >-
+  py-motmetrics is a Python library for evaluating multiple-object
+  tracking results. It provides MOTChallenge-aligned CLEAR MOT,
+  Identity, and HOTA metrics, including sequence-level parallel
+  evaluation.
+
+authors:
+  - given-names: Christoph
+    family-names: Heindl
+  - given-names: Jack
+    family-names: Valmadre
+  - given-names: Mikel
+    family-names: Broström
+
+keywords:
+  - multiple object tracking
+  - MOTChallenge
+  - CLEAR MOT
+  - identity metrics
+  - HOTA
+  - evaluation
+
+repository-code: "https://github.com/cheind/py-motmetrics"
+url: "https://pypi.org/project/motmetrics/"
+doi: "10.5281/zenodo.14014773"
+license: MIT
+version: "1.4.0"
+date-released: "2022-12-26"
+type: software

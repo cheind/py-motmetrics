@@ -4,9 +4,9 @@ Releases are built on demand from the current `develop` branch by GitHub
 Actions. A maintainer chooses the version bump. Building, publishing, committing
 the production version, tagging, and creating the GitHub release are automated.
 
-The current version is stored only in `[project].version` in `pyproject.toml`.
-The workflow reads that value and calculates the selected patch, minor, or major
-bump.
+The canonical version is stored in `[project].version` in `pyproject.toml`.
+The workflow reads that value, calculates the selected patch, minor, or major
+bump, and synchronizes the version and release date in `CITATION.cff`.
 
 PyPI uses Trusted Publishing, so no package index token is stored in GitHub.
 
@@ -39,8 +39,9 @@ PyPI uses Trusted Publishing, so no package index token is stored in GitHub.
    distribution, and smoke-tests both artifacts. The regular Python package CI
    workflow remains responsible for pytest coverage.
 4. Approve the protected `pypi` environment deployment. The workflow
-   commits the selected version to `develop`, publishes the tested artifacts,
-   creates the `vX.Y.Z` tag and GitHub release, and attaches both distributions.
+   commits the selected package and citation metadata to `develop`, publishes
+   the tested artifacts, creates the `vX.Y.Z` tag and GitHub release, and
+   attaches both distributions.
 
 If `develop` changes while the release is being tested, production publishing
 stops before committing or uploading anything. Start a new workflow run from
@@ -56,7 +57,7 @@ creation.
 Install the new version without using a local package cache:
 
     python -m pip install --no-cache-dir motmetrics==X.Y.Z
-    python -c "import motmetrics; print(motmetrics.__version__)"
+    python -c "from importlib.metadata import version; print(version('motmetrics'))"
 
 PyPI files are immutable. If publishing fails after an artifact was accepted,
 increment the version and publish a new release; never reuse or move a release

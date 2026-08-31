@@ -5,6 +5,10 @@ import numpy as np
 import pytest
 
 import motmetrics as mm
+import motmetrics._distances as distances
+import motmetrics._evaluation as evaluation
+import motmetrics._io as io
+import motmetrics._metrics as metrics
 
 trackeval = pytest.importorskip(
     "trackeval",
@@ -20,8 +24,15 @@ PARITY_TOLERANCE = 1e-6
 
 CLEAR_FIELD_MAP = {
     "MOTA": "mota",
+    "MODA": "moda",
     "CLR_Re": "recall",
     "CLR_Pr": "precision",
+    "MTR": "mtr",
+    "PTR": "ptr",
+    "MLR": "mlr",
+    "sMOTA": "smota",
+    "CLR_F1": "clr_f1",
+    "FP_per_frame": "fp_per_frame",
     "CLR_TP": "num_detections",
     "CLR_FN": "num_misses",
     "CLR_FP": "num_false_positives",
@@ -30,6 +41,17 @@ CLEAR_FIELD_MAP = {
     "PT": "partially_tracked",
     "ML": "mostly_lost",
     "Frag": "num_fragmentations",
+}
+HOTA_FIELD_MAP = {
+    "HOTA": "hota_alpha",
+    "DetA": "deta_alpha",
+    "AssA": "assa_alpha",
+    "DetRe": "detre_alpha",
+    "DetPr": "detpr_alpha",
+    "AssRe": "assre_alpha",
+    "AssPr": "asspr_alpha",
+    "LocA": "loca_alpha",
+    "OWTA": "owta_alpha",
 }
 IDENTITY_FIELD_MAP = {
     "IDF1": "idf1",
@@ -44,35 +66,31 @@ IDENTITY_FIELD_MAP = {
 def _load_sequence(sequence_name):
     sequence_dir = DATA_DIR / sequence_name
     return (
-        mm.io.loadtxt(sequence_dir / "gt.txt"),
-        mm.io.loadtxt(sequence_dir / "test.txt"),
+        io.loadtxt(sequence_dir / "gt.txt"),
+        io.loadtxt(sequence_dir / "test.txt"),
     )
 
 
-def _frame_data(dataframe, frame_id, id_map):
-    try:
-        frame = dataframe.xs(frame_id, level="FrameId")
-    except KeyError:
+def _frame_data(data, frame_id, id_map):
+    mask = data.frame_ids == frame_id
+    if not np.any(mask):
         return np.empty(0, dtype=int), np.empty((0, 4), dtype=float)
 
-    ids = np.asarray([id_map[value] for value in frame.index], dtype=int)
-    boxes = frame[BOX_COLUMNS].to_numpy(dtype=float)
+    ids = np.asarray([id_map[value] for value in data.ids[mask]], dtype=int)
+    boxes = data.values(BOX_COLUMNS)[mask]
     return ids, boxes
 
 
 def _to_trackeval_data(ground_truth, tracker):
     ground_truth_ids = {
         value: index
-        for index, value in enumerate(sorted(ground_truth.index.get_level_values("Id").unique()))
+        for index, value in enumerate(np.unique(ground_truth.ids))
     }
     tracker_ids = {
         value: index
-        for index, value in enumerate(sorted(tracker.index.get_level_values("Id").unique()))
+        for index, value in enumerate(np.unique(tracker.ids))
     }
-    frame_ids = sorted(
-        set(ground_truth.index.get_level_values("FrameId"))
-        | set(tracker.index.get_level_values("FrameId"))
-    )
+    frame_ids = np.union1d(ground_truth.frame_ids, tracker.frame_ids)
 
     gt_ids = []
     tracker_ids_by_frame = []
@@ -83,7 +101,7 @@ def _to_trackeval_data(ground_truth, tracker):
         gt_ids.append(gt_ids_t)
         tracker_ids_by_frame.append(tracker_ids_t)
         similarity_scores.append(
-            mm.distances.iou_matrix(gt_boxes_t, tracker_boxes_t, return_dist=False)
+            distances.iou_matrix(gt_boxes_t, tracker_boxes_t, return_dist=False)
         )
 
     return {
@@ -99,61 +117,49 @@ def _to_trackeval_data(ground_truth, tracker):
 
 
 def _compute_py_motmetrics(sequences):
-    metric_host = mm.metrics.create()
     names = list(sequences)
-    clear_accumulators = [
-        mm.utils.compare_to_groundtruth(ground_truth, tracker, "iou", distth=0.5)
-        for ground_truth, tracker in sequences.values()
+    requested_metrics = [
+        *CLEAR_FIELD_MAP.values(),
+        "motp",
+        *IDENTITY_FIELD_MAP.values(),
     ]
-    clear_and_identity = metric_host.compute_many(
-        clear_accumulators,
-        metrics=[
-            *CLEAR_FIELD_MAP.values(),
-            "motp",
-            *IDENTITY_FIELD_MAP.values(),
-        ],
-        names=names,
-        generate_overall=True,
+    metric_partials = {}
+    hota_summaries = {}
+    for name, (ground_truth, tracker) in sequences.items():
+        prepared = evaluation._prepare_iou_sequence_data(ground_truth, tracker, 0.5)
+        metric_partials[name] = metrics._compute_metrics(
+            prepared.accumulator,
+            metric_names=requested_metrics,
+        )
+        hota_summaries[name] = evaluation._compute_prepared_hota_sequence_summary(
+            prepared,
+            HOTA_ALPHAS,
+        )
+    metric_partials["OVERALL"] = metrics._compute_overall(
+        list(metric_partials.values()),
+        metric_names=requested_metrics,
     )
-
-    hota_by_alpha = []
-    hota_accumulators = {
-        name: mm.utils.compare_to_groundtruth_reweighting(
-            ground_truth,
-            tracker,
-            "iou",
-            distth=HOTA_ALPHAS,
-        )
-        for name, (ground_truth, tracker) in sequences.items()
-    }
-    for alpha_index in range(len(HOTA_ALPHAS)):
-        hota_by_alpha.append(
-            metric_host.compute_many(
-                [hota_accumulators[name][alpha_index] for name in names],
-                metrics=["hota_alpha", "deta_alpha", "assa_alpha"],
-                names=names,
-                generate_overall=True,
-            )
-        )
+    hota_summaries["OVERALL"] = evaluation._combine_hota_sequence_summaries(
+        hota_summaries.values()
+    )
 
     results = {}
     for name in [*names, "OVERALL"]:
         result = {
-            trackeval_name: clear_and_identity.loc[name, py_motmetrics_name]
+            trackeval_name: metric_partials[name][py_motmetrics_name]
             for trackeval_name, py_motmetrics_name in CLEAR_FIELD_MAP.items()
         }
-        result["MOTP"] = 1.0 - clear_and_identity.loc[name, "motp"]
+        result["MOTP"] = 1.0 - metric_partials[name]["motp"]
         result.update(
             {
-                trackeval_name: clear_and_identity.loc[name, py_motmetrics_name]
+                trackeval_name: metric_partials[name][py_motmetrics_name]
                 for trackeval_name, py_motmetrics_name in IDENTITY_FIELD_MAP.items()
             }
         )
         result.update(
             {
-                "HOTA": np.asarray([summary.loc[name, "hota_alpha"] for summary in hota_by_alpha]),
-                "DetA": np.asarray([summary.loc[name, "deta_alpha"] for summary in hota_by_alpha]),
-                "AssA": np.asarray([summary.loc[name, "assa_alpha"] for summary in hota_by_alpha]),
+                trackeval_name: hota_summaries[name][py_motmetrics_name]
+                for trackeval_name, py_motmetrics_name in HOTA_FIELD_MAP.items()
             }
         )
         results[name] = result
@@ -239,7 +245,7 @@ def _render_comparison_table(rows):
     return "\n".join(
         [
             f"TrackEval parity (absolute tolerance: {PARITY_TOLERANCE:.0e})",
-            "HOTA, DetA, and AssA values are alpha means; their difference is the maximum over all alphas.",
+            "HOTA-family values are alpha means; their difference is the maximum over all alphas.",
             *table,
         ]
     )
@@ -254,7 +260,7 @@ def _write_github_summary(rows):
         "## TrackEval parity",
         "",
         f"Maximum permitted absolute difference: `{PARITY_TOLERANCE:.0e}`.",
-        "HOTA, DetA, and AssA values are alpha means; their difference is the maximum over all alphas.",
+        "HOTA-family values are alpha means; their difference is the maximum over all alphas.",
         "",
         "| Dataset | Metric | py-motmetrics | TrackEval | max abs diff | Status |",
         "|---|---|---:|---:|---:|:---:|",
@@ -278,10 +284,23 @@ def test_metrics_match_trackeval_on_bundled_tud_sequences():
         "HOTA",
         "DetA",
         "AssA",
+        "DetRe",
+        "DetPr",
+        "AssRe",
+        "AssPr",
+        "LocA",
+        "OWTA",
         "MOTA",
         "MOTP",
+        "MODA",
         "CLR_Re",
         "CLR_Pr",
+        "MTR",
+        "PTR",
+        "MLR",
+        "sMOTA",
+        "CLR_F1",
+        "FP_per_frame",
         "CLR_TP",
         "CLR_FN",
         "CLR_FP",
@@ -321,3 +340,164 @@ def test_metrics_match_trackeval_on_bundled_tud_sequences():
             f"TrackEval parity exceeded {PARITY_TOLERANCE:.0e}:\n" + "\n".join(failures),
             pytrace=False,
         )
+
+    public_summary = mm.evaluate_motchallenge(DATA_DIR, DATA_DIR, progress=False)
+    public_rows = dict(zip(public_summary.index, public_summary._rows))
+    hota_public_names = {
+        trackeval_name: evaluation.HOTA_SUMMARY_METRICS[alpha_name]
+        for trackeval_name, alpha_name in HOTA_FIELD_MAP.items()
+    }
+    clear_public_names = {
+        trackeval_name: py_motmetrics_name
+        for trackeval_name, py_motmetrics_name in CLEAR_FIELD_MAP.items()
+        if py_motmetrics_name in public_summary.columns
+    }
+    for sequence_name in [*SEQUENCE_NAMES, "OVERALL"]:
+        for trackeval_name, public_name in hota_public_names.items():
+            assert public_rows[sequence_name][public_name] == pytest.approx(
+                np.mean(trackeval_results[sequence_name][trackeval_name]),
+                abs=PARITY_TOLERANCE,
+            )
+        for trackeval_name, public_name in clear_public_names.items():
+            assert public_rows[sequence_name][public_name] == pytest.approx(
+                trackeval_results[sequence_name][trackeval_name],
+                abs=PARITY_TOLERANCE,
+            )
+
+
+def test_public_evaluator_matches_full_trackeval_mot17_protocol(tmp_path):
+    sequence_name = "MOT17-SYNTH"
+    tracker_name = "synthetic-tracker"
+    ground_truth_root = tmp_path / "ground-truth"
+    ground_truth_file = ground_truth_root / sequence_name / "gt" / "gt.txt"
+    tracker_root = tmp_path / "trackers"
+    tracker_data = tracker_root / tracker_name / "data"
+    tracker_file = tracker_data / "{}.txt".format(sequence_name)
+    ground_truth_file.parent.mkdir(parents=True)
+    tracker_data.mkdir(parents=True)
+    ground_truth_file.write_text(
+        "\n".join((
+            "1,1,1,1,10,10,1,1,1",
+            "1,90,101,1,10,10,0,8,1",
+            "2,1,2,1,10,10,1,1,1",
+            "2,91,201,1,10,10,0,7,1",
+            "2,3,301,1,10,10,0,1,1",
+            "3,2,401,1,10,10,1,1,1",
+            "3,92,501,1,10,10,0,2,1",
+            "3,93,601,1,10,10,0,12,1",
+            "3,94,701,1,10,10,0,3,1",
+            "4,2,402,1,10,10,1,1,1",
+            "5,2,403,1,10,10,1,1,1",
+        )),
+        encoding="utf-8",
+    )
+    tracker_file.write_text(
+        "\n".join((
+            "1,10,1,1,10,10,1,1,1",
+            "1,20,101,1,10,10,1,1,1",
+            "1,90,801,1,10,10,1,1,1",
+            "2,10,2,1,10,10,1,1,1",
+            "2,20,201,1,10,10,1,1,1",
+            "2,30,301,1,10,10,1,1,1",
+            "3,40,401,1,10,10,1,1,1",
+            "3,50,501,1,10,10,1,1,1",
+            "3,60,601,1,10,10,1,1,1",
+            "3,70,701,1,10,10,1,1,1",
+            "5,40,403,1,10,10,1,1,1",
+        )),
+        encoding="utf-8",
+    )
+
+    dataset = trackeval.datasets.MotChallenge2DBox({
+        "GT_FOLDER": str(ground_truth_root),
+        "TRACKERS_FOLDER": str(tracker_root),
+        "OUTPUT_FOLDER": str(tmp_path / "output"),
+        "TRACKERS_TO_EVAL": [tracker_name],
+        "TRACKER_SUB_FOLDER": "data",
+        "CLASSES_TO_EVAL": ["pedestrian"],
+        "BENCHMARK": "MOT17",
+        "SPLIT_TO_EVAL": "train",
+        "DO_PREPROC": True,
+        "SEQ_INFO": {sequence_name: 5},
+        "SKIP_SPLIT_FOL": True,
+        "PRINT_CONFIG": False,
+    })
+    preprocessed = dataset.get_preprocessed_seq_data(
+        dataset.get_raw_seq_data(tracker_name, sequence_name),
+        "pedestrian",
+    )
+    metric_objects = {
+        "HOTA": trackeval.metrics.HOTA({"PRINT_CONFIG": False}),
+        "CLEAR": trackeval.metrics.CLEAR({"THRESHOLD": 0.5, "PRINT_CONFIG": False}),
+        "Identity": trackeval.metrics.Identity({"THRESHOLD": 0.5, "PRINT_CONFIG": False}),
+        "Count": trackeval.metrics.Count({"PRINT_CONFIG": False}),
+    }
+    trackeval_sequence = {
+        family: metric.eval_sequence(preprocessed)
+        for family, metric in metric_objects.items()
+    }
+    trackeval_overall = {
+        family: metric.combine_sequences({sequence_name: trackeval_sequence[family]})
+        for family, metric in metric_objects.items()
+    }
+
+    summary = mm.evaluate_motchallenge(
+        ground_truth_root,
+        tracker_data,
+        progress=False,
+    )
+    for row_name, expected in (
+        (sequence_name, trackeval_sequence),
+        ("OVERALL", trackeval_overall),
+    ):
+        expected_values = _public_trackeval_values(expected)
+        assert set(expected_values) == set(summary.columns) - {
+            "num_transfer",
+            "num_ascend",
+            "num_migrate",
+        }
+        for metric_name, expected_value in expected_values.items():
+            assert summary[row_name, metric_name] == pytest.approx(
+                expected_value,
+                abs=PARITY_TOLERANCE,
+            )
+
+
+def _public_trackeval_values(results):
+    clear = results["CLEAR"]
+    identity = results["Identity"]
+    hota = results["HOTA"]
+    count = results["Count"]
+    return {
+        "idf1": identity["IDF1"],
+        "idp": identity["IDP"],
+        "idr": identity["IDR"],
+        "recall": clear["CLR_Re"],
+        "precision": clear["CLR_Pr"],
+        "num_unique_objects": count["GT_IDs"],
+        "mostly_tracked": clear["MT"],
+        "partially_tracked": clear["PT"],
+        "mostly_lost": clear["ML"],
+        "mtr": clear["MTR"],
+        "ptr": clear["PTR"],
+        "mlr": clear["MLR"],
+        "num_false_positives": clear["CLR_FP"],
+        "num_misses": clear["CLR_FN"],
+        "num_switches": clear["IDSW"],
+        "num_fragmentations": clear["Frag"],
+        "mota": clear["MOTA"],
+        "moda": clear["MODA"],
+        "motp": 1 - clear["MOTP"],
+        "smota": clear["sMOTA"],
+        "clr_f1": clear["CLR_F1"],
+        "fp_per_frame": clear["FP_per_frame"],
+        "hota": np.mean(hota["HOTA"]),
+        "deta": np.mean(hota["DetA"]),
+        "assa": np.mean(hota["AssA"]),
+        "detre": np.mean(hota["DetRe"]),
+        "detpr": np.mean(hota["DetPr"]),
+        "assre": np.mean(hota["AssRe"]),
+        "asspr": np.mean(hota["AssPr"]),
+        "loca": np.mean(hota["LocA"]),
+        "owta": np.mean(hota["OWTA"]),
+    }

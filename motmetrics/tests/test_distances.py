@@ -2,62 +2,14 @@
 # https://github.com/cheind/py-motmetrics/
 #
 # MIT License
-# Copyright (c) 2017-2020 Christoph Heindl, Jack Valmadre and others.
+# Copyright (c) 2017-2020 Christoph Heindl, Jack Valmadre, Mikel Broström and others.
 # See LICENSE file for terms.
 
 """Tests distance computation."""
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import numpy as np
 
-import motmetrics as mm
-
-
-def test_norm2squared():
-    """Tests norm2squared_matrix."""
-    a = np.asarray([
-        [1, 2],
-        [2, 2],
-        [3, 2],
-    ], dtype=float)
-
-    b = np.asarray([
-        [0, 0],
-        [1, 1],
-    ], dtype=float)
-
-    C = mm.distances.norm2squared_matrix(a, b)
-    np.testing.assert_allclose(
-        C,
-        [
-            [5, 1],
-            [8, 2],
-            [13, 5]
-        ]
-    )
-
-    C = mm.distances.norm2squared_matrix(a, b, max_d2=5)
-    np.testing.assert_allclose(
-        C,
-        [
-            [5, 1],
-            [np.nan, 2],
-            [np.nan, 5]
-        ]
-    )
-
-
-def test_norm2squared_empty():
-    """Tests norm2squared_matrix with an empty input."""
-    a = []
-    b = np.asarray([[0, 0], [1, 1]], dtype=float)
-    C = mm.distances.norm2squared_matrix(a, b)
-    assert C.size == 0
-    C = mm.distances.norm2squared_matrix(b, a)
-    assert C.size == 0
+import motmetrics._distances as distance_functions
 
 
 def test_iou_matrix():
@@ -74,13 +26,13 @@ def test_iou_matrix():
         [0, 1, 1, 1],
     ])
     np.testing.assert_allclose(
-        mm.distances.iou_matrix(a, b),
+        distance_functions.iou_matrix(a, b),
         [[0, 0.5, 1, 0.8, 0.5]],
         atol=1e-4
     )
 
     np.testing.assert_allclose(
-        mm.distances.iou_matrix(a, b, max_iou=0.5),
+        distance_functions.iou_matrix(a, b, max_iou=0.5),
         [[0, 0.5, np.nan, np.nan, 0.5]],
         atol=1e-4
     )
