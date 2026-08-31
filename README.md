@@ -38,12 +38,12 @@ uv pip install --group dev
 
 For MOTChallenge-style text files, compute and print metrics in one call. File
 formats and built-in MOT15/16/17/20, SportsMOT, and VisDrone preprocessing are
-detected from their paths; pass `benchmark=` when the input path is ambiguous.
+detected automatically from input paths; pass `benchmark=` when paths are ambiguous.
 
 ```python
 import motmetrics as mm
 
-summary = mm.evaluate_motchallenge("path/to/gt.txt", "path/to/pred.txt")
+summary = mm.evaluate_motchallenge("path/to/gt_root", "path/to/preds_root")
 print(summary)
 ```
 
@@ -54,15 +54,52 @@ gt_root/<SEQUENCE>/gt/gt.txt
 preds_root/<SEQUENCE>.txt
 ```
 
-Override benchmark class rules per evaluation when needed:
+### Benchmark Profiles & Distractor Classes
+
+Built-in benchmark profiles configure target object classes, distractor classes, distractor overlap thresholds, and class-aware evaluation matching:
+
+- **MOT17** (`benchmark="MOT17"`): Targets class `1` (pedestrian) and treats classes `2, 7, 8, 12` (person on vehicle, static person, reflector, cut-out) as distractors with an IoU threshold of 0.5.
+- **VisDrone** (`benchmark="VisDrone"`): Targets vehicle and pedestrian classes (`1, 4, 5, 6, 9`) and treats classes `0, 11` (ignored regions and others) as distractors.
+- **MOT15 / MOT16 / MOT20 / SportsMOT**: Pre-configured profiles defined in [`motmetrics/configs`](motmetrics/configs).
+
+#### Evaluating MOT17 or VisDrone
+
+```python
+# Evaluate MOT17 sequence or dataset root
+summary = mm.evaluate_motchallenge(
+    "path/to/MOT17/train",
+    "path/to/predictions",
+    benchmark="MOT17",
+)
+print(summary)
+
+# Evaluate VisDrone dataset
+summary = mm.evaluate_motchallenge(
+    "path/to/VisDrone/gt",
+    "path/to/predictions",
+    benchmark="VisDrone",
+)
+print(summary)
+```
+
+#### Customizing Target & Distractor Classes
+
+Override benchmark rules per evaluation when needed:
 
 ```python
 summary = mm.evaluate_motchallenge(
-    gt,
-    predictions,
-    target_classes=(1,),
-    distractor_classes=(2, 7, 8, 12),
-    distractor_iou_threshold=0.5,
+    gt_path,
+    pred_path,
+    target_classes=(1, 4, 5),          # Evaluate specific target classes
+    distractor_classes=(2, 7, 8, 12),  # Distractor classes to suppress
+    distractor_iou_threshold=0.5,      # Suppression overlap threshold
+)
+
+# Disable distractor suppression completely
+summary = mm.evaluate_motchallenge(
+    gt_path,
+    pred_path,
+    distractor_classes=(),
 )
 ```
 
