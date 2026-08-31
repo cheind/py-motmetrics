@@ -47,12 +47,22 @@ summary = mm.evaluate_motchallenge("path/to/gt_root", "path/to/preds_root")
 print(summary)
 ```
 
+### Data Format & Folder Layout
+
+All supported benchmarks (MOT15–20, VisDrone, SportsMOT) use the standard 9-column MOTChallenge CSV format:
+
+```text
+<frame_id>, <object_id>, <x>, <y>, <width>, <height>, <confidence>, <class_id>, <visibility>
+```
+
 Expected folder layout:
 
 ```text
 gt_root/<SEQUENCE>/gt/gt.txt
 preds_root/<SEQUENCE>.txt
 ```
+
+Single sequence files (`gt.txt` and `pred.txt`) can also be evaluated directly.
 
 ### Benchmark Profiles & Distractor Classes
 
