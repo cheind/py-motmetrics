@@ -4,10 +4,3 @@
 # MIT License
 # Copyright (c) 2017-2020 Christoph Heindl, Jack Valmadre, Mikel Broström and others.
 # See LICENSE file for terms.
-
-"""Fast MOTChallenge evaluation."""
-
-from motmetrics._evaluation import evaluate_motchallenge
-from motmetrics._extensions import MetricFamily
-
-__all__ = ["evaluate_motchallenge", "MetricFamily"]

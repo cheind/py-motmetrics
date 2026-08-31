@@ -2,7 +2,7 @@
 # https://github.com/cheind/py-motmetrics/
 #
 # MIT License
-# Copyright (c) 2017-2020 Christoph Heindl, Jack Valmadre and others.
+# Copyright (c) 2017-2020 Christoph Heindl, Jack Valmadre, Mikel Broström and others.
 # See LICENSE file for terms.
 
 """Tests issue 19.
