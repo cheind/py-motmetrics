@@ -75,7 +75,7 @@ import motmetrics as mm
 print(mm.list_metrics_markdown())
 ```
 
-The default MOTChallenge summary includes the commonly reported CLEAR, Identity, and HOTA metrics.
+The default MOTChallenge summary includes the commonly reported CLEAR, Identity, and HOTA metrics. MOTChallenge column aliases (such as `IDs` for `num_switches`, `IDt` for `num_transfer`, `IDa` for `num_ascend`, `IDm` for `num_migrate`, and `GT` for `num_unique_objects`) are defined in `mm.io.motchallenge_metric_names`.
 
 ## Advanced Use
 

@@ -431,7 +431,7 @@ simple_add_func.append(num_matches)
 
 
 def num_switches(df):
-    """Total number of track switches."""
+    """Total number of track switches (MOTChallenge: IDs), where a matched object switches to a different hypothesis id."""
     return df.noraw.Type.isin(["SWITCH"]).sum()
 
 
@@ -439,7 +439,7 @@ simple_add_func.append(num_switches)
 
 
 def num_transfer(df):
-    """Total number of track transfer."""
+    """Total number of track transfers (MOTChallenge: IDt), where a matched hypothesis switches to a different object id."""
     return df.extra.Type.isin(["TRANSFER"]).sum()
 
 
@@ -447,7 +447,7 @@ simple_add_func.append(num_transfer)
 
 
 def num_ascend(df):
-    """Total number of track ascend."""
+    """Total number of track ascensions (MOTChallenge: IDa), where a track switch assigns an object to a newly seen hypothesis id."""
     return df.extra.Type.isin(["ASCEND"]).sum()
 
 
@@ -455,7 +455,7 @@ simple_add_func.append(num_ascend)
 
 
 def num_migrate(df):
-    """Total number of track migrate."""
+    """Total number of track migrations (MOTChallenge: IDm), where a track transfer assigns a previously seen hypothesis id to a new object id."""
     return df.extra.Type.isin(["MIGRATE"]).sum()
 
 
