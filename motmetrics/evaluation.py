@@ -83,7 +83,7 @@ def evaluate_motchallenge(
     metrics=None,
     name=None,
     generate_overall=True,
-    gt_min_confidence=1,
+    gt_min_confidence=None,
     solver=None,
     id_solver=None,
     exclude_id=False,
@@ -129,7 +129,7 @@ def evaluate_motchallenge(
 
     if gt_path.is_file() and test_path.is_file():
         sequence_name = name or _default_sequence_name(test_path)
-        gt = io.loadtxt(gt_path, fmt=fmt, min_confidence=gt_min_confidence)
+        gt = _load_groundtruth_file(gt_path, fmt=fmt, min_confidence=gt_min_confidence)
         test = io.loadtxt(test_path, fmt=fmt)
         acc = utils.compare_to_groundtruth(gt, test, dist, distfields=distfields, distth=distth)
 
@@ -186,17 +186,25 @@ def evaluate_motchallenge(
     )
 
 
-def load_motchallenge_groundtruths(root, fmt=io.Format.AUTO, min_confidence=1):
+def _load_groundtruth_file(path, fmt=io.Format.AUTO, min_confidence=None):
+    """Load a ground-truth file, excluding zero-confidence entries by default."""
+    df = io.loadtxt(path, fmt=fmt, min_confidence=min_confidence)
+    if min_confidence is None and "Confidence" in df.columns:
+        df = df[df["Confidence"] != 0]
+    return df
+
+
+def load_motchallenge_groundtruths(root, fmt=io.Format.AUTO, min_confidence=None):
     """Load MOTChallenge ground-truth dataframes from a file or folder."""
     root = Path(root)
     if root.is_file():
-        return OrderedDict([(_default_sequence_name(root), io.loadtxt(root, fmt=fmt, min_confidence=min_confidence))])
+        return OrderedDict([(_default_sequence_name(root), _load_groundtruth_file(root, fmt=fmt, min_confidence=min_confidence))])
 
     files = _find_groundtruth_files(root)
     if not files:
         raise ValueError("No ground-truth files found below {}.".format(root))
     logging.info("Found %d groundtruth files.", len(files))
-    return OrderedDict((name, io.loadtxt(path, fmt=fmt, min_confidence=min_confidence)) for name, path in files.items())
+    return OrderedDict((name, _load_groundtruth_file(path, fmt=fmt, min_confidence=min_confidence)) for name, path in files.items())
 
 
 def load_motchallenge_tests(root, fmt=io.Format.AUTO):
