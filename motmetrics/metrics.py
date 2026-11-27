@@ -331,13 +331,33 @@ class MetricsHost:
         ]
         if generate_overall:
             names = "OVERALL"
-            # merged, infomap = MOTAccumulator.merge_event_dataframes(dfs, return_mappings = True)
-            # dfs = merged
-            # anas = MOTAccumulator.merge_analysis(anas, infomap)
-            # partials.append(self.compute(dfs, ana=anas, metrics=metrics, name=names)[0])
-            partials.append(self.compute_overall(details, metrics=metrics, name=names))
+            if self._supports_overall_merge(metrics):
+                partials.append(self.compute_overall(details, metrics=metrics, name=names))
+            else:
+                merged, infomap = MOTAccumulator.merge_event_dataframes(
+                    dfs, return_mappings=True
+                )
+                merged_anas = MOTAccumulator.merge_analysis(anas, infomap)
+                partials.append(
+                    self.compute(merged, ana=merged_anas, metrics=metrics, name=names)
+                )
         logging.info("mergeOverall: %.3f seconds.", time.time() - st)
         return pd.concat(partials)
+
+    def _supports_overall_merge(self, metrics, seen=None):
+        """Return True if all requested metrics and merge dependencies define fnc_m."""
+        if seen is None:
+            seen = set()
+        for name in metrics:
+            if name in seen:
+                continue
+            seen.add(name)
+            minfo = self.metrics.get(name)
+            if minfo is None or minfo["fnc_m"] is None or minfo["deps_m"] is None:
+                return False
+            if not self._supports_overall_merge(minfo["deps_m"], seen):
+                return False
+        return True
 
     def _compute_many_one(self, job, metrics):
         acc, analysis, name = job
@@ -380,6 +400,7 @@ class MetricsHost:
         if already is not None:
             return already
         minfo = self.metrics[name]
+        assert minfo["fnc_m"] is not None, "merge function for metric %s is None" % name
         vals = []
         for depname in minfo["deps_m"]:
             v = cache.get(depname, None)
@@ -388,7 +409,6 @@ class MetricsHost:
                     partials, depname, cache, parent=name
                 )
             vals.append(v)
-        assert minfo["fnc_m"] is not None, "merge function for metric %s is None" % name
         return minfo["fnc_m"](partials, *vals)
 
 

@@ -13,6 +13,7 @@ import os
 
 import numpy as np
 import pandas as pd
+import pytest
 from pytest import approx
 
 import motmetrics as mm
@@ -626,3 +627,46 @@ def test_hota():
     assert sum(deta) / len(deta) == approx(tud_combined_golden_ans["deta"])
     assert sum(assa) / len(assa) == approx(tud_combined_golden_ans["assa"])
     assert sum(hota) / len(hota) == approx(tud_combined_golden_ans["hota"])
+
+
+def test_compute_many_generate_overall_for_metric_without_merge_fn():
+    """Tests compute_many(..., generate_overall=True) for metrics lacking fnc_m."""
+    acc1 = mm.MOTAccumulator(auto_id=True)
+    acc1.update([1], [1], [[0.2]])
+
+    acc2 = mm.MOTAccumulator(auto_id=True)
+    acc2.update([1], [1], [[0.4]])
+    acc2.update([1], [1], [[0.6]])
+
+    mh = mm.metrics.create()
+
+    def avg_dist(df):
+        select = df.noraw.Type.isin(["MATCH", "SWITCH"])
+        subset = df.noraw[select]
+        return subset.D.sum() / subset.shape[0]
+
+    mh.register(avg_dist, deps="auto")
+
+    summary = mh.compute_many(
+        [acc1, acc2],
+        metrics=["avg_dist", "mota"],
+        names=["seq1", "seq2"],
+        generate_overall=True,
+    )
+
+    assert list(summary.index) == ["seq1", "seq2", "OVERALL"]
+    assert summary.loc["OVERALL", "avg_dist"] == approx(0.4)
+    assert summary.loc["OVERALL", "mota"] == approx(1.0)
+
+
+def test_compute_overall_rejects_metric_without_merge_fn():
+    """Tests compute_overall gives a clear error when fnc_m is None."""
+    acc = mm.MOTAccumulator(auto_id=True)
+    acc.update([1], [1], [[0.2]])
+
+    mh = mm.metrics.create()
+    mh.register(lambda df: 1.0, name="custom_no_merge")
+    partial = mh.compute(acc, metrics=["custom_no_merge"], return_dataframe=False)
+
+    with pytest.raises(AssertionError, match="merge function for metric custom_no_merge is None"):
+        mh.compute_overall([partial], metrics=["custom_no_merge"])
