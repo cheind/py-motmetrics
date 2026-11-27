@@ -60,11 +60,12 @@ def load_motchallenge(fname, **kwargs):
     ------
     sep : str
         Allowed field separators, defaults to '\s+|\t+|,'
-    min_confidence : float
+    min_confidence : float or None
         Rows with confidence less than this threshold are removed.
-        Defaults to -1. You should set this to 1 when loading
-        ground truth MOTChallenge data, so that invalid rectangles in
-        the ground truth are not considered during matching.
+        Defaults to -1. Pass ``None`` to disable threshold filtering, for
+        example when loading MOTChallenge ground truth where ``0`` marks
+        ignored entries and non-zero values (such as ``1`` or ``-1``) mark
+        active entries.
 
     Returns
     ------
@@ -93,7 +94,9 @@ def load_motchallenge(fname, **kwargs):
     del df['unused']
 
     # Remove all rows without sufficient confidence
-    return df[df['Confidence'] >= min_confidence]
+    if min_confidence is not None:
+        df = df[df['Confidence'] >= min_confidence]
+    return df
 
 
 def load_vatictxt(fname, **kwargs):
